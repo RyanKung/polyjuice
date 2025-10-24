@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polyjuice</title>
+        <style>
+            /* Google-style Design */
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #ffffff;
+                min-height: 100vh;
+            }
+
+            #main {
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* Google-style Layout */
+            .app-container {
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .search-page {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                padding: 20px;
+                text-align: center;
+            }
+
+            .search-header {
+                margin-bottom: 40px;
+            }
+
+            .search-content {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 30px;
+                width: 100%;
+                max-width: 600px;
+            }
+
+            /* Modern Logo */
+            .logo h1 {
+                font-size: 90px;
+                font-weight: 300;
+                font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                color: #ffffff;
+                margin-bottom: 20px;
+                line-height: 1;
+                letter-spacing: -2px;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            }
+
+            /* Modern Search Box */
+            .search-box {
+                display: flex;
+                align-items: center;
+                border: 2px solid rgba(255,255,255,0.3);
+                border-radius: 24px;
+                padding: 0 16px;
+                background: rgba(255,255,255,0.95);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+                max-width: 584px;
+                width: 100%;
+                height: 44px;
+                gap: 8px;
+                backdrop-filter: blur(10px);
+            }
+
+            .search-box:hover {
+                box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+                border-color: rgba(255,255,255,0.5);
+            }
+
+            .search-box:focus-within {
+                box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+                border-color: rgba(255,255,255,0.7);
+            }
+
+            .search-input {
+                flex: 1;
+                border: none;
+                outline: none;
+                font-size: 16px;
+                padding: 0;
+                background: transparent;
+                min-width: 0;
+            }
+
+            .search-button {
+                background: rgba(255,255,255,0.2);
+                border: none;
+                border-radius: 8px;
+                color: #ffffff;
+                font-size: 16px;
+                padding: 0 12px;
+                height: 36px;
+                cursor: pointer;
+                flex-shrink: 0;
+                font-weight: 500;
+                backdrop-filter: blur(10px);
+                transition: all 0.3s ease;
+            }
+
+            .search-button:hover {
+                background: rgba(255,255,255,0.3);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            }
+
+            /* Popular FIDs */
+            .search-suggestions {
+                text-align: center;
+            }
+
+            .suggestions-title {
+                font-size: 14px;
+                color: rgba(255,255,255,0.8);
+                margin-bottom: 15px;
+            }
+
+            .tagline {
+                color: rgba(255,255,255,0.9);
+                font-size: 16px;
+                margin-bottom: 0;
+            }
+
+            .suggestion-tags {
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .suggestion-tag {
+                background: rgba(255,255,255,0.2);
+                border: 1px solid rgba(255,255,255,0.3);
+                border-radius: 16px;
+                padding: 8px 16px;
+                font-size: 13px;
+                color: #ffffff;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                backdrop-filter: blur(10px);
+            }
+
+            .suggestion-tag:hover {
+                background: rgba(255,255,255,0.3);
+                border-color: rgba(255,255,255,0.5);
+                transform: translateY(-2px);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            }
+
+            /* Mobile First Design */
+            .search-page {
+                padding: 10px;
+                justify-content: flex-start;
+                padding-top: 20vh;
+            }
+
+            .search-header {
+                margin-bottom: 30px;
+            }
+
+            .search-content {
+                gap: 20px;
+                max-width: 100%;
+            }
+
+            .logo h1 {
+                font-size: 50px;
+                font-weight: 300;
+                letter-spacing: -1px;
+                margin-bottom: 15px;
+            }
+
+            .search-box {
+                max-width: 100%;
+                height: 50px;
+                padding: 0 20px;
+            }
+
+            .search-input {
+                font-size: 16px; /* Prevent zoom on iOS */
+            }
+
+            .search-button {
+                height: 40px;
+                font-size: 16px;
+                padding: 0 20px;
+            }
+
+            .suggestion-tags {
+                gap: 8px;
+                justify-content: center;
+            }
+
+            .suggestion-tag {
+                font-size: 14px;
+                padding: 10px 16px;
+                border-radius: 20px;
+            }
+
+            /* Desktop */
+            @media (min-width: 769px) {
+                .search-page {
+                    padding: 20px;
+                    justify-content: center;
+                    padding-top: 0;
+                }
+
+                .search-header {
+                    margin-bottom: 40px;
+                }
+
+                .search-content {
+                    gap: 30px;
+                    max-width: 600px;
+                }
+
+                .logo h1 {
+                    font-size: 90px;
+                    font-weight: 300;
+                    letter-spacing: -2px;
+                    margin-bottom: 20px;
+                }
+
+                .search-box {
+                    max-width: 584px;
+                    height: 44px;
+                    padding: 0 16px;
+                }
+
+                .search-button {
+                    height: 36px;
+                    font-size: 14px;
+                    padding: 0 16px;
+                }
+
+                .suggestion-tag {
+                    font-size: 13px;
+                    padding: 8px 16px;
+                    border-radius: 16px;
+                }
+            }
+        </style>
+</head>
+<body>
+    <div id="main"></div>
+</body>
+</html>
