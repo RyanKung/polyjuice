@@ -184,7 +184,6 @@ fn App() -> Html {
         Callback::from(move |_| {
             let input = (*search_input).clone();
             if input.trim().is_empty() {
-                error_message.set(Some("Please enter a FID or username.".to_string()));
                 return;
             }
 
@@ -212,12 +211,6 @@ fn App() -> Html {
                     // Remove @ prefix if present for username search
                     trimmed_input.trim_start_matches('@').to_string()
                 };
-                
-                let url = if is_fid {
-                    format!("{}/api/search?fid={}", api_url, search_query)
-                } else {
-                    format!("{}/api/search?username={}", api_url, search_query)
-                };
 
                 // Make API requests to get both profile and social data
                 let request_init = web_sys::RequestInit::new();
@@ -226,9 +219,16 @@ fn App() -> Html {
                 headers.set("Content-Type", "application/json").unwrap();
                 request_init.set_headers(&headers);
                 
+                // Choose API endpoint based on input type
+                let profile_url = if is_fid {
+                    format!("{}/api/profiles/{}", api_url, search_query)
+                } else {
+                    format!("{}/api/profiles/username/{}", api_url, search_query)
+                };
+                
                 // First, get profile data
                 let profile_request = web_sys::Request::new_with_str_and_init(
-                    &format!("{}/api/profiles/{}", api_url, search_query),
+                    &profile_url,
                     &request_init
                 ).unwrap();
 
@@ -261,9 +261,16 @@ fn App() -> Html {
                     Err(_) => None,
                 };
 
+                // Choose social API endpoint based on input type
+                let social_url = if is_fid {
+                    format!("{}/api/social/{}", api_url, search_query)
+                } else {
+                    format!("{}/api/social/username/{}", api_url, search_query)
+                };
+                
                 // Then, get social data
                 let social_request = web_sys::Request::new_with_str_and_init(
-                    &format!("{}/api/social/{}", api_url, search_query),
+                    &social_url,
                     &request_init
                 ).unwrap();
 
@@ -317,7 +324,11 @@ fn App() -> Html {
 
                         // Create chat session
                         let request = CreateChatRequest {
-                            user: search_query.clone(),
+                            user: if is_fid {
+                                search_query.clone()
+                            } else {
+                                format!("@{}", search_query)
+                            },
                             context_limit: 20,
                             temperature: 0.7,
                         };
