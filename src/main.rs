@@ -520,12 +520,17 @@ fn App() -> Html {
                 <div class="search-page">
                     <div class="search-header">
                         <div class="logo">
+                            // Logo Image
+                            <div class="logo-image">
+                                <img src="/logo.png" alt="Polyjuice Logo" />
+                            </div>
                             <h1>{"polyjuice"}</h1>
                             <p class="tagline">{"Discover & Chat with Farcaster Users"}</p>
                         </div>
-            </div>
+                    </div>
 
                     <div class="search-content">
+
                         <div class="search-box">
                             <input 
                                 type="text" 
@@ -552,6 +557,23 @@ fn App() -> Html {
                                         html! { "Searching..." }
                                     } else {
                                         html! { "🔍" }
+                                    }
+                                }
+                            </button>
+                        </div>
+
+                        // Mobile-only search button
+                        <div class="mobile-search-button">
+                            <button 
+                                class="mobile-search-btn"
+                                onclick={on_search.reform(|_| ())}
+                                disabled={*is_loading}
+                            >
+                                {
+                                    if *is_loading {
+                                        html! { "Searching..." }
+                                    } else {
+                                        html! { "Search" }
                                     }
                                 }
                             </button>

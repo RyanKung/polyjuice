@@ -55,16 +55,43 @@
                 max-width: 600px;
             }
 
-            /* Modern Logo */
+            /* Rainbow Logo */
             .logo h1 {
-                font-size: 90px;
+                font-size: 40px;
                 font-weight: 300;
                 font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-                color: #ffffff;
+                background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57, #ff9ff3, #54a0ff);
+                background-size: 400% 400%;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
                 margin-bottom: 20px;
                 line-height: 1;
                 letter-spacing: -2px;
-                text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                animation: rainbowShift 3s ease-in-out infinite;
+            }
+
+            @keyframes rainbowShift {
+                0% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+            }
+
+            /* Logo Image */
+            .logo-image {
+                margin-bottom: 4px;
+                display: flex;
+                justify-content: center;
+            }
+
+            .logo-image img {
+                max-width: 300px;
+                height: auto;
+                transition: all 0.3s ease;
+            }
+
+            .logo-image img:hover {
+                transform: scale(1.05);
             }
 
             /* Modern Search Box */
@@ -80,17 +107,22 @@
                 width: 100%;
                 height: 44px;
                 gap: 8px;
-                backdrop-filter: blur(10px);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
             }
 
             .search-box:hover {
                 box-shadow: 0 12px 40px rgba(0,0,0,0.3);
                 border-color: rgba(255,255,255,0.5);
+                backdrop-filter: blur(25px);
+                -webkit-backdrop-filter: blur(25px);
             }
 
             .search-box:focus-within {
                 box-shadow: 0 12px 40px rgba(0,0,0,0.3);
                 border-color: rgba(255,255,255,0.7);
+                backdrop-filter: blur(25px);
+                -webkit-backdrop-filter: blur(25px);
             }
 
             .search-input {
@@ -101,11 +133,12 @@
                 padding: 0;
                 background: transparent;
                 min-width: 0;
+                color: rgba(0, 0, 0, 0.6);
             }
 
             .search-button {
-                background: rgba(255,255,255,0.2);
-                border: none;
+                background: rgba(102, 126, 234, 0.8);
+                border: 1px solid rgba(102, 126, 234, 0.9);
                 border-radius: 8px;
                 color: #ffffff;
                 font-size: 16px;
@@ -114,14 +147,21 @@
                 cursor: pointer;
                 flex-shrink: 0;
                 font-weight: 500;
-                backdrop-filter: blur(10px);
                 transition: all 0.3s ease;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                box-shadow: 
+                    0 4px 15px rgba(102, 126, 234, 0.4),
+                    inset 0 1px 0 rgba(255,255,255,0.2);
             }
 
             .search-button:hover {
-                background: rgba(255,255,255,0.3);
+                background: rgba(102, 126, 234, 0.95);
+                border-color: rgba(102, 126, 234, 1);
                 transform: translateY(-1px);
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                text-shadow: 0 4px 8px rgba(0,0,0,0.4);
+                box-shadow: 
+                    0 6px 20px rgba(102, 126, 234, 0.5),
+                    inset 0 1px 0 rgba(255,255,255,0.3);
             }
 
             /* Popular FIDs */
@@ -139,6 +179,13 @@
                 color: rgba(255,255,255,0.9);
                 font-size: 16px;
                 margin-bottom: 0;
+                text-shadow: 
+                    0 1px 0 rgba(0,0,0,0.3),
+                    0 -1px 0 rgba(255,255,255,0.1),
+                    inset 0 1px 0 rgba(255,255,255,0.1),
+                    inset 0 -1px 0 rgba(0,0,0,0.1);
+                font-weight: 300;
+                letter-spacing: 0.5px;
             }
 
             .suggestion-tags {
@@ -167,6 +214,42 @@
                 box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             }
 
+            /* Mobile-only search button */
+            .mobile-search-button {
+                display: none;
+            }
+
+            .mobile-search-btn {
+                background: rgba(139, 92, 246, 0.2);
+                border: 1px solid rgba(139, 92, 246, 0.3);
+                border-radius: 12px;
+                color: #ffffff;
+                font-size: 16px;
+                font-weight: 600;
+                padding: 12px 32px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                box-shadow: 
+                    0 4px 15px rgba(139, 92, 246, 0.2),
+                    inset 0 1px 0 rgba(255,255,255,0.2);
+                text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            }
+
+            .mobile-search-btn:hover {
+                background: rgba(139, 92, 246, 0.3);
+                border-color: rgba(139, 92, 246, 0.4);
+                box-shadow: 
+                    0 6px 20px rgba(139, 92, 246, 0.3),
+                    inset 0 1px 0 rgba(255,255,255,0.3);
+                transform: translateY(-2px);
+            }
+
+            .mobile-search-btn:active {
+                transform: translateY(0);
+            }
+
             /* Mobile First Design */
             .search-page {
                 padding: 10px;
@@ -183,17 +266,33 @@
                 max-width: 100%;
             }
 
+            .logo-image img {
+                max-width: 150px;
+            }
+
+            .logo-image {
+                margin-bottom: 3px;
+            }
+
             .logo h1 {
-                font-size: 50px;
+                font-size: 28px;
                 font-weight: 300;
                 letter-spacing: -1px;
                 margin-bottom: 15px;
+                background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57, #ff9ff3, #54a0ff);
+                background-size: 400% 400%;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                animation: rainbowShift 3s ease-in-out infinite;
             }
 
             .search-box {
                 max-width: 100%;
                 height: 50px;
                 padding: 0 20px;
+                backdrop-filter: blur(25px);
+                -webkit-backdrop-filter: blur(25px);
             }
 
             .search-input {
@@ -215,6 +314,12 @@
                 font-size: 14px;
                 padding: 10px 16px;
                 border-radius: 20px;
+            }
+
+            /* Show mobile search button on mobile */
+            .mobile-search-button {
+                display: block;
+                margin-top: 20px;
             }
 
             /* Desktop */
@@ -239,6 +344,12 @@
                     font-weight: 300;
                     letter-spacing: -2px;
                     margin-bottom: 20px;
+                    background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57, #ff9ff3, #54a0ff);
+                    background-size: 400% 400%;
+                    -webkit-background-clip: text;
+                    background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    animation: rainbowShift 3s ease-in-out infinite;
                 }
 
                 .search-box {
@@ -258,10 +369,17 @@
                     padding: 8px 16px;
                     border-radius: 16px;
                 }
+
+                /* Hide mobile search button on desktop */
+                .mobile-search-button {
+                    display: none;
+                }
             }
         </style>
 </head>
 <body>
+    <link data-trunk rel="rust" data-wasm-opt="z"/>
+    <link data-trunk rel="copy-file" href="logo.png"/>
     <div id="main"></div>
 </body>
 </html>
