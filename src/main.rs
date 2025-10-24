@@ -22,12 +22,14 @@ struct ProfileData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SocialData {
     fid: i64,
-    following_count: u64,
-    followers_count: u64,
+    following_count: usize,
+    followers_count: usize,
     influence_score: f32,
+    top_followed_users: Vec<UserMention>,
+    top_followers: Vec<UserMention>,
+    most_mentioned_users: Vec<UserMention>,
     social_circles: SocialCircles,
     interaction_style: InteractionStyle,
-    most_mentioned_users: Vec<UserMention>,
     word_cloud: WordCloud,
 }
 
@@ -52,20 +54,21 @@ struct UserMention {
     fid: i64,
     username: Option<String>,
     display_name: Option<String>,
-    count: u32,
+    count: usize,
     category: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WordCloud {
     top_words: Vec<WordFrequency>,
+    top_phrases: Vec<WordFrequency>,
     signature_words: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WordFrequency {
     word: String,
-    count: u32,
+    count: usize,
     percentage: f32,
 }
 
@@ -164,6 +167,7 @@ fn App() -> Html {
     let chat_messages = use_state(|| Vec::<ChatMessage>::new());
     let is_chat_loading = use_state(|| false);
     let chat_error = use_state(|| None::<String>);
+    let current_view = use_state(|| "profile"); // "profile" or "chat"
 
     // Search handler
     let on_search = {
@@ -178,8 +182,9 @@ fn App() -> Html {
         let chat_error = chat_error.clone();
 
         Callback::from(move |_| {
-            let fid = (*search_input).clone();
-            if fid.trim().is_empty() {
+            let input = (*search_input).clone();
+            if input.trim().is_empty() {
+                error_message.set(Some("Please enter a FID or username.".to_string()));
                 return;
             }
 
@@ -196,14 +201,22 @@ fn App() -> Html {
                 is_loading.set(true);
                 error_message.set(None);
 
-                // Parse FID
-                let fid = match fid.trim().parse::<u64>() {
-                    Ok(fid) => fid,
-                    Err(_) => {
-                        error_message.set(Some("Invalid FID format. Please enter a valid number".to_string()));
-                        is_loading.set(false);
-                        return;
-                    }
+                // Determine if input is FID (numeric) or username (text)
+                let trimmed_input = input.trim();
+                let is_fid = trimmed_input.parse::<u64>().is_ok();
+                
+                // Handle username with @ prefix
+                let search_query = if is_fid {
+                    trimmed_input.to_string()
+                } else {
+                    // Remove @ prefix if present for username search
+                    trimmed_input.trim_start_matches('@').to_string()
+                };
+                
+                let url = if is_fid {
+                    format!("{}/api/search?fid={}", api_url, search_query)
+                } else {
+                    format!("{}/api/search?username={}", api_url, search_query)
                 };
 
                 // Make API requests to get both profile and social data
@@ -215,7 +228,7 @@ fn App() -> Html {
                 
                 // First, get profile data
                 let profile_request = web_sys::Request::new_with_str_and_init(
-                    &format!("{}/api/profiles/{}", api_url, fid),
+                    &format!("{}/api/profiles/{}", api_url, search_query),
                     &request_init
                 ).unwrap();
 
@@ -250,7 +263,7 @@ fn App() -> Html {
 
                 // Then, get social data
                 let social_request = web_sys::Request::new_with_str_and_init(
-                    &format!("{}/api/social/{}", api_url, fid),
+                    &format!("{}/api/social/{}", api_url, search_query),
                     &request_init
                 ).unwrap();
 
@@ -304,7 +317,7 @@ fn App() -> Html {
 
                         // Create chat session
                         let request = CreateChatRequest {
-                            user: fid.to_string(),
+                            user: search_query.clone(),
                             context_limit: 20,
                             temperature: 0.7,
                         };
@@ -392,7 +405,7 @@ fn App() -> Html {
         let search_result = search_result.clone();
         let search_input = search_input.clone();
         let error_message = error_message.clone();
-        Callback::from(move |_| {
+        Callback::from(move |_: ()| {
             search_result.set(None);
             search_input.set(String::new());
             error_message.set(None);
@@ -406,6 +419,55 @@ fn App() -> Html {
         Callback::from(move |fid: String| {
             search_input.set(fid.clone());
             on_search.emit(());
+        })
+    };
+
+    // View switching handler
+    let on_switch_to_chat = {
+        let current_view = current_view.clone();
+        Callback::from(move |_| {
+            current_view.set("chat");
+        })
+    };
+
+    let on_switch_to_profile = {
+        let current_view = current_view.clone();
+        Callback::from(move |_: ()| {
+            current_view.set("profile");
+        })
+    };
+
+    // Smart back button handler
+    let on_smart_back = {
+        let current_view = current_view.clone();
+        let search_result = search_result.clone();
+        let search_input = search_input.clone();
+        let error_message = error_message.clone();
+        let chat_session = chat_session.clone();
+        let chat_messages = chat_messages.clone();
+        Callback::from(move |_| {
+            match (*current_view).clone() {
+                "profile" => {
+                    // From profile back to search
+                    search_result.set(None);
+                    search_input.set(String::new());
+                    error_message.set(None);
+                    chat_session.set(None);
+                    chat_messages.set(Vec::new());
+                },
+                "chat" => {
+                    // From chat back to profile
+                    current_view.set("profile");
+                },
+                _ => {
+                    // Default: back to search
+                    search_result.set(None);
+                    search_input.set(String::new());
+                    error_message.set(None);
+                    chat_session.set(None);
+                    chat_messages.set(Vec::new());
+                }
+            }
         })
     };
 
@@ -602,24 +664,18 @@ fn App() -> Html {
             // Results Page (Profile + Chat cards)
             if (*search_result).is_some() {
                 <div class="results-page">
-                    // Back to Search Button
+                    // Smart Back Button
                     <div class="back-to-search">
-                        <button class="back-button" onclick={on_back_to_search}>
-                            {"← Back to Search"}
+                        <button class="back-button" onclick={on_smart_back}>
+                            {"←"}
                         </button>
                     </div>
                     
-                    // Profile Card
-                    <div class="card profile-card">
-                        <div class="card-header">
-                            <div class="card-title">
-                                <h2>{"Profile"}</h2>
-                                <p class="card-subtitle">{"Swipe up for chat"}</p>
-                            </div>
-                        </div>
-                        
-                        <div class="card-content">
-                            if let Some(result) = (*search_result).clone() {
+                    // Profile Card (only show if current_view is "profile")
+                    if (*current_view).clone() == "profile" {
+                        <div class="card profile-card">
+                            <div class="card-content">
+                                if let Some(result) = (*search_result).clone() {
                                 <div class="profile-info">
                                     <div class="profile-picture">
                                         if let Some(pfp_url) = &result.profile.pfp_url {
@@ -628,8 +684,8 @@ fn App() -> Html {
                                             <div class="profile-picture-placeholder">
                                                 {"👤"}
                                             </div>
-                        }
-                    </div>
+                                        }
+                                    </div>
 
                                     <div class="user-details">
                                         <h2>{result.profile.display_name.clone().unwrap_or_else(|| "Unknown".to_string())}</h2>
@@ -646,8 +702,6 @@ fn App() -> Html {
 
                                 if let Some(social) = &result.social {
                                     <div class="social-analysis">
-                                        <h3 class="social-title">{"Social Analysis"}</h3>
-                                        
                                         <div class="social-stats">
                                             <div class="stat-item">
                                                 <div class="stat-label">{"Following"}</div>
@@ -690,27 +744,107 @@ fn App() -> Html {
                                                 </div>
                                             </div>
                                         </div>
+
+                                        // Interaction Style
+                                        <div class="interaction-style">
+                                            <h4>{"Interaction Style"}</h4>
+                                            <div class="interaction-stats">
+                                                <div class="interaction-item">
+                                                    <span class="interaction-label">{"Reply Frequency"}</span>
+                                                    <div class="interaction-bar">
+                                                        <div class="interaction-fill" style={format!("width: {}%", social.interaction_style.reply_frequency * 100.0)}></div>
+                                                    </div>
+                                                </div>
+                                                <div class="interaction-item">
+                                                    <span class="interaction-label">{"Mention Frequency"}</span>
+                                                    <div class="interaction-bar">
+                                                        <div class="interaction-fill" style={format!("width: {}%", social.interaction_style.mention_frequency * 100.0)}></div>
+                                                    </div>
+                                                </div>
+                                                <div class="interaction-item">
+                                                    <span class="interaction-label">{"Network Connector"}</span>
+                                                    <span class="interaction-value">{if social.interaction_style.network_connector { "Yes" } else { "No" }}</span>
+                                                </div>
+                                                <div class="interaction-item">
+                                                    <span class="interaction-label">{"Community Role"}</span>
+                                                    <span class="interaction-value">{&social.interaction_style.community_role}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        // Most Mentioned Users
+                                        if !social.most_mentioned_users.is_empty() {
+                                            <div class="mentioned-users">
+                                                <h4>{"Most Mentioned Users"}</h4>
+                                                <div class="mentioned-list">
+                                                    {for social.most_mentioned_users.iter().take(5).map(|user| {
+                                                        html! {
+                                                            <div class="mentioned-item">
+                                                                <span class="mentioned-name">
+                                                                    {user.display_name.clone().unwrap_or_else(|| user.username.clone().unwrap_or_else(|| format!("FID {}", user.fid)))}
+                                                                </span>
+                                                                <span class="mentioned-count">{format!("{} mentions", user.count)}</span>
+                                                                <span class="mentioned-category">{&user.category}</span>
+                                                            </div>
+                                                        }
+                                                    })}
+                                                </div>
+                                            </div>
+                                        }
+
+                                        // Word Cloud
+                                        if !social.word_cloud.top_words.is_empty() {
+                                            <div class="word-cloud">
+                                                <h4>{"Top Words"}</h4>
+                                                <div class="word-tags">
+                                                    {for social.word_cloud.top_words.iter().take(10).map(|word| {
+                                                        html! {
+                                                            <span class="word-tag" style={format!("font-size: {}px", (word.percentage * 20.0 + 12.0).max(10.0).min(18.0))}>
+                                                                {&word.word}
+                                                            </span>
+                                                        }
+                                                    })}
+                                                </div>
+                                            </div>
+                                        }
+
+                                        // Signature Words
+                                        if !social.word_cloud.signature_words.is_empty() {
+                                            <div class="signature-words">
+                                                <h4>{"Signature Words"}</h4>
+                                                <div class="signature-tags">
+                                                    {for social.word_cloud.signature_words.iter().map(|word| {
+                                                        html! {
+                                                            <span class="signature-tag">{word}</span>
+                                                        }
+                                                    })}
+                                                </div>
+                                            </div>
+                                        }
                                     </div>
                                 }
-                        }
-                    </div>
-                </div>
-
-                    // Chat Card (only show if we have chat session)
-                    if (*chat_session).is_some() {
-                        <div class="card chat-card">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <h2>{"Chat"}</h2>
-                                    <p class="card-subtitle">{"Swipe down to go back"}</p>
-                                </div>
+                            }
                             </div>
-                            
+                        </div>
+                    }
+
+                    // Chat Card (only show if current_view is "chat" and we have chat session)
+                    if (*current_view).clone() == "chat" && (*chat_session).is_some() {
+                        <div class="card chat-card">
                             <div class="card-content">
                                 if let Some(session) = (*chat_session).clone() {
                                     <div class="chat-user-info">
-                                        <h3>{session.display_name.clone().unwrap_or_else(|| "Unknown".to_string())}</h3>
-                                        <p>{"FID: "}{session.fid}</p>
+                                        <div class="chat-user-avatar">
+                                            {session.display_name.clone().unwrap_or_else(|| "Unknown".to_string()).chars().next().unwrap_or('?').to_uppercase().collect::<String>()}
+                                        </div>
+                                        <div class="chat-user-details">
+                                            <h3>{session.display_name.clone().unwrap_or_else(|| "Unknown".to_string())}</h3>
+                                            <p>{"FID: "}{session.fid}</p>
+                                        </div>
+                                        <div class="chat-status">
+                                            <div class="chat-status-dot"></div>
+                                            {"Online"}
+                                        </div>
                                     </div>
 
                                     <div class="chat-messages">
@@ -770,8 +904,8 @@ fn App() -> Html {
                                                 onclick={on_send_chat_message.reform(|_| ())}
                                                 disabled={*is_chat_loading}
                                             >
-                                                {"Send"}
-                                        </button>
+                                                {"➤"}
+                                            </button>
                                         </div>
                                     </div>
 
@@ -789,6 +923,13 @@ fn App() -> Html {
                                                 </div>
                     }
                 </div>
+
+                // Floating Chat Button (only show on results page when profile is visible)
+                if (*search_result).is_some() && (*current_view).clone() == "profile" && (*chat_session).is_some() {
+                    <div class="floating-chat-button" onclick={on_switch_to_chat}>
+                        {"💬"}
+                    </div>
+                }
             }
         </div>
     }
