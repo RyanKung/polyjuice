@@ -166,6 +166,14 @@ async fn handle_payment(
 
     // Create EIP-712 typed data
     let typed_data = payment::create_eip712_typed_data(requirements, payer, &nonce, timestamp)?;
+    
+    // Debug: Log the typed data string
+    web_sys::console::log_1(&format!("Typed data string: {}", typed_data).into());
+    
+    // Validate JSON parsing
+    let parsed_check: serde_json::Value = serde_json::from_str(&typed_data)
+        .map_err(|e| format!("Failed to parse typed data as JSON: {}", e))?;
+    web_sys::console::log_1(&format!("Typed data validation successful").into());
 
     // Sign with MetaMask
     let signature = wallet::sign_eip712(&typed_data)
@@ -176,10 +184,18 @@ async fn handle_payment(
     let payment_payload =
         payment::create_payment_payload(requirements, payer, &signature, &nonce, timestamp);
 
+    // Debug: Log payment payload as JSON
+    let payment_json = serde_json::to_string(&payment_payload)
+        .unwrap_or_else(|_| "Failed to serialize payment payload".to_string());
+    web_sys::console::log_1(&format!("Payment payload JSON: {}", payment_json).into());
+
     // Encode to base64
     let payment_header = payment_payload
         .to_base64()
         .map_err(|e| format!("Failed to encode payment: {}", e))?;
+
+    // Debug: Log payment header
+    web_sys::console::log_1(&format!("Payment header: {}", payment_header).into());
 
     // Retry request with payment
     api::make_request(api_url, endpoint, body, Some(payment_header))
@@ -356,6 +372,9 @@ fn App() -> Html {
                             // Try to handle payment automatically
                             if let Some(account) = (*wallet_account).clone() {
                                 if account.is_connected {
+                                    // Show payment processing message
+                                    error_message.set(Some("Processing payment... Please confirm in MetaMask".to_string()));
+                                    
                                     // Parse payment requirements
                                     if let Ok(payment_resp) = serde_json::from_str::<payment::PaymentRequirementsResponse>(&resp.body) {
                                         if let Some(requirements) = payment_resp.accepts.first() {
@@ -385,6 +404,9 @@ fn App() -> Html {
                                                             let social_data = match api::make_request(&api_url, &social_endpoint, None, None).await {
                                                                 Ok(social_resp) => {
                                                                     if social_resp.status == 402 {
+                                                                        // Show payment processing message for social data
+                                                                        error_message.set(Some("Processing payment for social data... Please confirm in MetaMask".to_string()));
+                                                                        
                                                                         // Try payment for social data too
                                                                         if let Ok(social_payment_resp) = serde_json::from_str::<payment::PaymentRequirementsResponse>(&social_resp.body) {
                                                                             if let Some(social_requirements) = social_payment_resp.accepts.first() {
@@ -465,7 +487,7 @@ fn App() -> Html {
                                                                                             match handle_payment(chat_requirements, &account, &api_url, &chat_endpoint, Some(request_json)).await {
                                                                                                 Ok(chat_paid_resp) => {
                                                                                                     if let Ok(api_response) = serde_json::from_str::<ApiResponse<CreateChatResponse>>(&chat_paid_resp.body) {
-                                            if api_response.success && api_response.data.is_some() {
+                                    if api_response.success && api_response.data.is_some() {
                                                 let chat_data = api_response.data.unwrap();
                                                 let session = ChatSession {
                                                     session_id: chat_data.session_id,
@@ -479,7 +501,7 @@ fn App() -> Html {
                                                 chat_session.set(Some(session));
                                                 chat_messages.set(Vec::new());
                                                 chat_error.set(None);
-                } else {
+                                    } else {
                                                 chat_error.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
                                                                                                         }
                                                                                                     } else {
@@ -580,43 +602,43 @@ fn App() -> Html {
                                             None
                                         } else if let Ok(social_api_response) = serde_json::from_str::<ApiResponse<SocialData>>(&social_resp.body) {
                                             social_api_response.data
-                                        } else {
-                                            None
-                                        }
-                                    }
-                                    Err(_) => None,
-                                };
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None,
+                };
 
-                                search_result.set(Some(SearchResult {
-                                    profile,
-                                    social: social_data,
-                                }));
-                                error_message.set(None);
+                    search_result.set(Some(SearchResult {
+                        profile,
+                        social: social_data,
+                    }));
+                    error_message.set(None);
 
                                 // Auto-create chat session after successful search (non-payment branch)
-                                let chat_session = chat_session.clone();
-                                let chat_messages = chat_messages.clone();
-                                let is_chat_loading = is_chat_loading.clone();
-                                let chat_error = chat_error.clone();
-                                let api_url = api_url.clone();
+                    let chat_session = chat_session.clone();
+                    let chat_messages = chat_messages.clone();
+                    let is_chat_loading = is_chat_loading.clone();
+                    let chat_error = chat_error.clone();
+                    let api_url = api_url.clone();
                                 let wallet_account = wallet_account.clone();
 
-                                spawn_local(async move {
-                                    is_chat_loading.set(true);
-                                    chat_error.set(None);
+                    spawn_local(async move {
+                        is_chat_loading.set(true);
+                        chat_error.set(None);
 
-                                    // Create chat session
-                                    let request = CreateChatRequest {
-                                        user: if is_fid {
-                                            search_query.clone()
-                                        } else {
-                                            format!("@{}", search_query)
-                                        },
-                                        context_limit: 20,
-                                        temperature: 0.7,
-                                    };
+                        // Create chat session
+                        let request = CreateChatRequest {
+                            user: if is_fid {
+                                search_query.clone()
+                            } else {
+                                format!("@{}", search_query)
+                            },
+                            context_limit: 20,
+                            temperature: 0.7,
+                        };
 
-                                    let request_json = serde_json::to_string(&request).unwrap();
+                        let request_json = serde_json::to_string(&request).unwrap();
                                     let chat_endpoint = api::EndpointInfo {
                                         path: "/api/chat/create".to_string(),
                                         method: "POST".to_string(),
@@ -633,38 +655,41 @@ fn App() -> Html {
                                                 // Try payment for chat creation
                                                 if let Some(account) = (*wallet_account).clone() {
                                                     if account.is_connected {
+                                                        // Show payment processing message for chat creation
+                                                        chat_error.set(Some("Processing payment for chat creation... Please confirm in MetaMask".to_string()));
+                                                        
                                                         if let Ok(chat_payment_resp) = serde_json::from_str::<payment::PaymentRequirementsResponse>(&chat_resp.body) {
                                                             if let Some(chat_requirements) = chat_payment_resp.accepts.first() {
                                                                 let request_json = serde_json::to_string(&request).unwrap();
                                                                 match handle_payment(chat_requirements, &account, &api_url, &chat_endpoint, Some(request_json)).await {
                                                                     Ok(chat_paid_resp) => {
                                                                         if let Ok(api_response) = serde_json::from_str::<ApiResponse<CreateChatResponse>>(&chat_paid_resp.body) {
-                                                                            if api_response.success && api_response.data.is_some() {
-                                                                                let chat_data = api_response.data.unwrap();
-                                                                                let session = ChatSession {
-                                                                                    session_id: chat_data.session_id,
-                                                                                    fid: chat_data.fid,
-                                                                                    username: chat_data.username,
-                                                                                    display_name: chat_data.display_name,
-                                                                                    conversation_history: Vec::new(),
-                                                                                    created_at: 0,
-                                                                                    last_activity: 0,
-                                                                                };
-                                                                                chat_session.set(Some(session));
-                                                                                chat_messages.set(Vec::new());
-                                                                                chat_error.set(None);
-                                                                            } else {
-                                                                                chat_error.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
+                                            if api_response.success && api_response.data.is_some() {
+                                                let chat_data = api_response.data.unwrap();
+                                                let session = ChatSession {
+                                                    session_id: chat_data.session_id,
+                                                    fid: chat_data.fid,
+                                                    username: chat_data.username,
+                                                    display_name: chat_data.display_name,
+                                                    conversation_history: Vec::new(),
+                                                    created_at: 0,
+                                                    last_activity: 0,
+                                                };
+                                                chat_session.set(Some(session));
+                                                chat_messages.set(Vec::new());
+                                                chat_error.set(None);
+                } else {
+                                                chat_error.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
                                                                             }
                                                                         } else {
                                                                             chat_error.set(Some("Failed to parse chat response".to_string()));
-                                                                        }
-                                                                    }
-                                                                    Err(e) => {
+                                            }
+                                        }
+                                        Err(e) => {
                                                                         chat_error.set(Some(format!("Chat payment failed: {}", e)));
-                                                                    }
-                                                                }
-                                                            } else {
+                                        }
+                                    }
+                                } else {
                                                                 chat_error.set(Some("No payment requirements for chat".to_string()));
                                                             }
                                                         } else {
@@ -696,15 +721,15 @@ fn App() -> Html {
                                                 }
                                             } else {
                                                 chat_error.set(Some("Failed to parse chat response".to_string()));
-                                            }
-                                        }
-                                        Err(e) => {
+                        }
+                    }
+                    Err(e) => {
                                             chat_error.set(Some(format!("Chat request failed: {}", e)));
-                                        }
-                                    }
-                                    is_chat_loading.set(false);
-                                });
-                            } else {
+                            }
+                    }
+                        is_chat_loading.set(false);
+                    });
+                } else {
                                 error_message.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
                             }
                         } else {
@@ -997,13 +1022,7 @@ fn App() -> Html {
                                 onclick={on_search.reform(|_| ())}
                                 disabled={*is_loading}
                             >
-                                {
-                                    if *is_loading {
-                                        html! { "Searching..." }
-                                    } else {
-                                        html! { "⌕" }
-                                    }
-                                }
+                                {"⌕"}
                             </button>
                         </div>
 
@@ -1014,13 +1033,7 @@ fn App() -> Html {
                                 onclick={on_search.reform(|_| ())}
                                 disabled={*is_loading}
                             >
-                                {
-                                    if *is_loading {
-                                        html! { "Searching..." }
-                                    } else {
-                                        html! { "Search" }
-                                    }
-                                }
+                                {"Search"}
                             </button>
                         </div>
 
@@ -1036,6 +1049,16 @@ fn App() -> Html {
                         if let Some(error) = (*error_message).clone() {
                             <div class="error-message">
                                 <p>{error}</p>
+                                        </div>
+                        }
+
+                        // Loading overlay
+                        if *is_loading {
+                            <div class="loading-overlay">
+                                <div class="loading-content">
+                                    <div class="loading-spinner"></div>
+                                    <div class="loading-text">{"Searching..."}</div>
+                                </div>
                                         </div>
                         }
                     </div>
@@ -1305,15 +1328,15 @@ fn App() -> Html {
                                     if let Some(error) = (*chat_error).clone() {
                                         <div class="error-message">
                                             <p>{error}</p>
-                                        </div>
-                                    }
-                                } else {
+                                                                </div>
+                                                            }
+                                                        } else {
                                     <div class="no-chat-session">
                                         <p>{"No chat session available. Please try searching again."}</p>
-                                    </div>
-                                }
-                            </div>
-                        </div>
+                                                                                </div>
+                                                                    }
+                                                                </div>
+                                                </div>
                     }
                 </div>
 

@@ -245,9 +245,9 @@ pub async fn make_request(
         .map_err(|e| format!("Failed to set Content-Type: {:?}", e))?;
 
     // Add payment header if provided
-    if let Some(payment) = payment_header {
+    if let Some(ref payment) = payment_header {
         headers
-            .set("X-PAYMENT", &payment)
+            .set("X-PAYMENT", payment)
             .map_err(|e| format!("Failed to set X-PAYMENT header: {:?}", e))?;
     }
 
@@ -262,6 +262,13 @@ pub async fn make_request(
 
     let status = resp.status();
     let status_text = resp.status_text();
+
+    // Debug: Log request details
+    web_sys::console::log_1(&format!("API Request: {} {}", endpoint.method, url).into());
+    if let Some(payment) = payment_header {
+        web_sys::console::log_1(&format!("X-PAYMENT header: {}", payment).into());
+    }
+    web_sys::console::log_1(&format!("Response status: {} {}", status, status_text).into());
 
     // Get response headers
     let mut response_headers = Vec::new();
@@ -287,6 +294,9 @@ pub async fn make_request(
         .map_err(|e| format!("Failed to get text: {:?}", e))?;
 
     let body = text.as_string().unwrap_or_default();
+
+    // Debug: Log response body
+    web_sys::console::log_1(&format!("Response body: {}", body).into());
 
     Ok(ApiResponse {
         status,

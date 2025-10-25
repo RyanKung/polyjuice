@@ -72,20 +72,20 @@ pub fn create_eip712_typed_data(
 
     let typed_data = serde_json::json!({
         "types": {
-            "EIP712Domain": [
-                {"name": "name", "type": "string"},
-                {"name": "version", "type": "string"},
-                {"name": "chainId", "type": "uint256"}
-            ],
-            "Payment": [
-                {"name": "payer", "type": "address"},
-                {"name": "payee", "type": "address"},
-                {"name": "asset", "type": "address"},
-                {"name": "amount", "type": "uint256"},
-                {"name": "nonce", "type": "string"},
-                {"name": "timestamp", "type": "uint256"},
-                {"name": "resource", "type": "string"}
-            ]
+            "EIP712Domain": {
+                "name": {"type": "string"},
+                "version": {"type": "string"},
+                "chainId": {"type": "uint256"}
+            },
+            "Payment": {
+                "payer": {"type": "address"},
+                "payee": {"type": "address"},
+                "asset": {"type": "address"},
+                "amount": {"type": "uint256"},
+                "nonce": {"type": "string"},
+                "timestamp": {"type": "uint256"},
+                "resource": {"type": "string"}
+            }
         },
         "primaryType": "Payment",
         "domain": {
@@ -104,8 +104,15 @@ pub fn create_eip712_typed_data(
         }
     });
 
-    serde_json::to_string(&typed_data)
-        .map_err(|e| format!("Failed to serialize typed data: {}", e))
+    // Serialize to JSON string
+    let json_string = serde_json::to_string(&typed_data)
+        .map_err(|e| format!("Failed to serialize typed data: {}", e))?;
+    
+    // Validate the serialized JSON by parsing it back
+    let _validation: serde_json::Value = serde_json::from_str(&json_string)
+        .map_err(|e| format!("Serialized JSON is invalid: {}", e))?;
+    
+    Ok(json_string)
 }
 
 /// Normalize Ethereum address (lowercase with 0x prefix)
@@ -120,12 +127,8 @@ fn normalize_address(addr: &str) -> String {
 
 /// Generate a random nonce
 pub fn generate_nonce() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
+    // Use WASM-compatible timestamp (milliseconds since epoch)
+    let timestamp = js_sys::Date::now() as u64;
     
     // Use timestamp + random number for nonce
     let random = (js_sys::Math::random() * 1_000_000.0) as u64;

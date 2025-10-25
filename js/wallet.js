@@ -1,23 +1,19 @@
 /**
- * Multi-Wallet Integration
- * Supports MetaMask, WalletConnect, and other wallet providers
+ * MetaMask Wallet Integration
+ * Simple MetaMask connector using window.ethereum
  */
 
 let ethereum = null;
-let walletConnect = null;
 let currentAccount = null;
 let currentChainId = null;
-let currentConnector = null;
 
 /**
- * Initialize wallet connections
+ * Initialize MetaMask connection
  */
 export async function initWallet() {
     try {
-        // Try MetaMask first
         if (typeof window.ethereum !== 'undefined') {
             ethereum = window.ethereum;
-            currentConnector = 'MetaMask';
             
             // Setup event listeners
             ethereum.on('accountsChanged', handleAccountsChanged);
@@ -33,7 +29,7 @@ export async function initWallet() {
                 
                 currentChainId = await ethereum.request({ method: 'eth_chainId' });
             } catch (err) {
-                console.warn('Could not get initial MetaMask state:', err);
+                console.warn('Could not get initial state:', err);
             }
             
             return {
@@ -42,24 +38,9 @@ export async function initWallet() {
                 data: null
             };
         } else {
-            // Try WalletConnect
-            try {
-                // Check if WalletConnect is available
-                if (typeof window.WalletConnect !== 'undefined') {
-                    currentConnector = 'WalletConnect';
-                    return {
-                        success: true,
-                        error: null,
-                        data: null
-                    };
-                }
-            } catch (err) {
-                console.warn('WalletConnect not available:', err);
-            }
-            
             return {
                 success: false,
-                error: 'No wallet provider found. Please install MetaMask or use WalletConnect.',
+                error: 'MetaMask is not installed',
                 data: null
             };
         }
@@ -83,7 +64,7 @@ export async function getWalletAccount() {
             is_connecting: false,
             is_disconnected: !currentAccount,
             chain_id: currentChainId ? parseInt(currentChainId, 16) : null,
-            connector: currentConnector || 'Unknown'
+            connector: 'MetaMask'
         };
         
         return {
@@ -105,70 +86,28 @@ export async function getWalletAccount() {
  */
 export async function connectWallet() {
     try {
-        // Try MetaMask first
-        if (ethereum && currentConnector === 'MetaMask') {
-            const accounts = await ethereum.request({ 
-                method: 'eth_requestAccounts' 
-            });
+        if (!ethereum) {
+            throw new Error('MetaMask not initialized');
+        }
+        
+        const accounts = await ethereum.request({ 
+            method: 'eth_requestAccounts' 
+        });
+        
+        if (accounts.length > 0) {
+            currentAccount = accounts[0];
+            currentChainId = await ethereum.request({ method: 'eth_chainId' });
             
-            if (accounts.length > 0) {
-                currentAccount = accounts[0];
-                currentChainId = await ethereum.request({ method: 'eth_chainId' });
-                
-                return {
-                    success: true,
-                    error: null,
-                    data: JSON.stringify({
-                        address: currentAccount,
-                        chain_id: parseInt(currentChainId, 16),
-                        connector: 'MetaMask'
-                    })
-                };
-            } else {
-                throw new Error('No accounts found');
-            }
-        } else if (currentConnector === 'WalletConnect') {
-            // WalletConnect implementation would go here
-            // For now, show a message to use MetaMask
             return {
-                success: false,
-                error: 'WalletConnect integration coming soon. Please use MetaMask for now.',
-                data: null
+                success: true,
+                error: null,
+                data: JSON.stringify({
+                    address: currentAccount,
+                    chain_id: parseInt(currentChainId, 16)
+                })
             };
         } else {
-            // Try to detect and connect to any available wallet
-            if (typeof window.ethereum !== 'undefined') {
-                ethereum = window.ethereum;
-                currentConnector = 'MetaMask';
-                
-                // Setup event listeners
-                ethereum.on('accountsChanged', handleAccountsChanged);
-                ethereum.on('chainChanged', handleChainChanged);
-                ethereum.on('disconnect', handleDisconnect);
-                
-                const accounts = await ethereum.request({ 
-                    method: 'eth_requestAccounts' 
-                });
-                
-                if (accounts.length > 0) {
-                    currentAccount = accounts[0];
-                    currentChainId = await ethereum.request({ method: 'eth_chainId' });
-                    
-                    return {
-                        success: true,
-                        error: null,
-                        data: JSON.stringify({
-                            address: currentAccount,
-                            chain_id: parseInt(currentChainId, 16),
-                            connector: 'MetaMask'
-                        })
-                    };
-                } else {
-                    throw new Error('No accounts found');
-                }
-            } else {
-                throw new Error('No wallet provider found');
-            }
+            throw new Error('No accounts found');
         }
     } catch (error) {
         return {
@@ -184,21 +123,7 @@ export async function connectWallet() {
  */
 export async function disconnectWallet() {
     try {
-        if (currentConnector === 'MetaMask' && ethereum) {
-            // MetaMask doesn't have a disconnect method, just clear local state
-            currentAccount = null;
-            currentChainId = null;
-        } else if (currentConnector === 'WalletConnect' && walletConnect) {
-            // WalletConnect disconnect would go here
-            await walletConnect.killSession();
-            currentAccount = null;
-            currentChainId = null;
-        } else {
-            // Clear state for any other connector
-            currentAccount = null;
-            currentChainId = null;
-        }
-        
+        currentAccount = null;
         return {
             success: true,
             error: null,
@@ -283,27 +208,58 @@ export async function signWalletMessage(message) {
  */
 export async function signTypedData(typedData) {
     try {
-        if (!currentAccount) {
+        if (!ethereum || !currentAccount) {
             throw new Error('Wallet not connected');
         }
-
-        if (currentConnector === 'MetaMask' && ethereum) {
-            const signature = await ethereum.request({
-                method: 'eth_signTypedData_v4',
-                params: [currentAccount, typedData],
-            });
-            
-            return {
-                success: true,
-                error: null,
-                data: signature
-            };
-        } else if (currentConnector === 'WalletConnect' && walletConnect) {
-            // WalletConnect signing would go here
-            throw new Error('WalletConnect signing not implemented yet');
+        
+        // Parse the JSON string to object for MetaMask
+        let parsedTypedData;
+        if (typeof typedData === 'string') {
+            parsedTypedData = JSON.parse(typedData);
         } else {
-            throw new Error('Unsupported wallet connector');
+            parsedTypedData = typedData;
         }
+        
+        console.log('signTypedData received:', typeof typedData, typedData);
+        console.log('Parsed typedData:', parsedTypedData);
+        
+        // Strict validation of parsed data
+        if (!parsedTypedData.domain || !parsedTypedData.message || !parsedTypedData.types) {
+            throw new Error('Invalid typed data structure');
+        }
+        
+        // Check if parsedTypedData is properly serializable
+        try {
+            const testSerialization = JSON.stringify(parsedTypedData);
+            console.log('Serialization test successful, length:', testSerialization.length);
+            console.log('Serialized data preview:', testSerialization.substring(0, 200) + '...');
+        } catch (e) {
+            console.error('Serialization test failed:', e);
+            throw new Error('Typed data is not properly serializable: ' + e.message);
+        }
+        
+        // Validate specific fields
+        if (typeof parsedTypedData.domain.chainId !== 'number') {
+            console.warn('chainId is not a number:', typeof parsedTypedData.domain.chainId, parsedTypedData.domain.chainId);
+        }
+        
+        console.log('Calling MetaMask eth_signTypedData_v4...');
+        
+        // Try to create a clean copy using deep clone to avoid any reference issues
+        const cleanTypedData = JSON.parse(JSON.stringify(parsedTypedData));
+        
+        console.log('Clean typed data created:', cleanTypedData);
+        
+        const signature = await ethereum.request({
+            method: 'eth_signTypedData_v4',
+            params: [currentAccount, cleanTypedData],
+        });
+        
+        return {
+            success: true,
+            error: null,
+            data: signature
+        };
     } catch (error) {
         return {
             success: false,
@@ -320,12 +276,12 @@ function handleAccountsChanged(accounts) {
     } else {
         currentAccount = accounts[0];
     }
-    console.log('Account changed:', currentAccount, 'via', currentConnector);
+    console.log('Account changed:', currentAccount);
 }
 
 function handleChainChanged(chainId) {
     currentChainId = chainId;
-    console.log('Chain changed:', chainId, 'via', currentConnector);
+    console.log('Chain changed:', chainId);
     // Reload page on chain change (recommended by MetaMask)
     window.location.reload();
 }
@@ -333,7 +289,7 @@ function handleChainChanged(chainId) {
 function handleDisconnect() {
     currentAccount = null;
     currentChainId = null;
-    console.log('Disconnected from', currentConnector);
+    console.log('Disconnected');
 }
 
 /**
@@ -341,20 +297,11 @@ function handleDisconnect() {
  */
 export async function cleanupWallet() {
     try {
-        if (currentConnector === 'MetaMask' && ethereum) {
+        if (ethereum) {
             ethereum.removeListener('accountsChanged', handleAccountsChanged);
             ethereum.removeListener('chainChanged', handleChainChanged);
             ethereum.removeListener('disconnect', handleDisconnect);
-        } else if (currentConnector === 'WalletConnect' && walletConnect) {
-            // WalletConnect cleanup would go here
-            await walletConnect.killSession();
         }
-        
-        // Reset state
-        currentAccount = null;
-        currentChainId = null;
-        currentConnector = null;
-        
         return {
             success: true,
             error: null,

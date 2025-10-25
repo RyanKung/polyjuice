@@ -39,4 +39,4 @@ logs/*
 
 !README.md
 *.md
-
+node_modules/
