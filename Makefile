@@ -27,7 +27,7 @@ clean:
 .PHONY: serve
 serve:
 	@echo "Starting Trunk development server..."
-	@echo "Server will be available at: http://127.0.0.1:8080"
+	@echo "Server will be available at: http://127.0.0.1:8080/polyjuice/"
 	@echo "Press Ctrl+C to stop the server"
 	unset NO_COLOR && trunk serve --port 8080 --address 127.0.0.1 --disable-address-lookup
 
@@ -35,7 +35,7 @@ serve:
 .PHONY: serve-dev
 serve-dev:
 	@echo "Starting Trunk development server on port 8081..."
-	@echo "Server will be available at: http://127.0.0.1:8081"
+	@echo "Server will be available at: http://127.0.0.1:8081/polyjuice/"
 	@echo "Press Ctrl+C to stop the server"
 	unset NO_COLOR && trunk serve --port 8081 --address 127.0.0.1 --disable-address-lookup
 
@@ -103,8 +103,8 @@ clippy:
 .PHONY: help
 help:
 	@echo "Available commands:"
-	@echo "  make serve      - Start development server on port 8080"
-	@echo "  make serve-dev  - Start development server on port 8081"
+	@echo "  make serve      - Start development server on port 8080 (http://127.0.0.1:8080/polyjuice/)"
+	@echo "  make serve-dev  - Start development server on port 8081 (http://127.0.0.1:8081/polyjuice/)"
 	@echo "  make build      - Build WebAssembly application"
 	@echo "  make build-prod - Build for production (uses SNAPRAG_API_URL if set)"
 	@echo "  make build-prod-custom - Build for production with required SNAPRAG_API_URL"
