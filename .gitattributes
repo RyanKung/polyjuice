@@ -1,0 +1,13 @@
+# Treat JavaScript files as binary to prevent Git from modifying them
+*.js binary
+*.wasm binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.svg binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
