@@ -37,6 +37,8 @@ Thumbs.db
 
 logs/*
 
-!README.md
+# Documentation (allow README.md)
 *.md
+!README.md
+!DEPLOYMENT.md
 node_modules/
