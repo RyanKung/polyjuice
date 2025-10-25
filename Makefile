@@ -63,7 +63,7 @@ build-prod-custom:
 build-deploy:
 	@echo "Building for production deployment..."
 	@echo "Using API URL: https://snaprag.0xbase.ai/"
-	TRUNK_PUBLIC_URL=/polyjuice/ SNAPRAG_API_URL=https://snaprag.0xbase.ai/ unset NO_COLOR && trunk build --release
+	SNAPRAG_API_URL=https://snaprag.0xbase.ai/ unset NO_COLOR && trunk build --release
 
 # Deploy to GitHub Pages (local build + git push)
 .PHONY: deploy

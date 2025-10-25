@@ -59,7 +59,7 @@ jobs:
       - name: Build
         env:
           SNAPRAG_API_URL: https://snaprag.0xbase.ai/
-        run: TRUNK_PUBLIC_URL=/polyjuice/ trunk build --release
+        run: trunk build --release
 
       - name: Setup Pages
         uses: actions/configure-pages@v3

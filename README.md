@@ -27,7 +27,7 @@ Polyjuice is a beautiful, modern web application that provides a search engine-l
 
 ## 🚀 Live Demo
 
-Visit **[polyjuice.0xbase.ai](https://polyjuice.0xbase.ai)** to try Polyjuice right now!
+Visit **[polyjuice.0xbase.ai](http://polyjuice.0xbase.ai)** to try Polyjuice right now!
 
 ## 🛠️ Technology Stack
 
@@ -217,7 +217,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
-- **Live Demo**: [polyjuice.0xbase.ai](https://polyjuice.0xbase.ai)
+- **Live Demo**: [polyjuice.0xbase.ai](http://polyjuice.0xbase.ai)
 - **SnapRAG API**: [snaprag.0xbase.ai](https://snaprag.0xbase.ai)
 - **GitHub Repository**: [github.com/RyanKung/polyjuice](https://github.com/RyanKung/polyjuice)
 - **Deployment Status**: [GitHub Actions](https://github.com/RyanKung/polyjuice/actions)
