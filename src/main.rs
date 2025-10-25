@@ -218,7 +218,7 @@ fn App() -> Html {
     let api_url = use_state(|| {
         // Try to get API URL from environment variable, fallback to default
         std::env::var("SNAPRAG_API_URL")
-            .unwrap_or_else(|_| "https://snaprag.0xbase.ai/".to_string())
+            .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string())
     });
     
     // Chat state management
