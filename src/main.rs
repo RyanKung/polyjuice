@@ -215,7 +215,11 @@ fn App() -> Html {
     let search_result = use_state(|| None::<SearchResult>);
     let is_loading = use_state(|| false);
     let error_message = use_state(|| None::<String>);
-    let api_url = use_state(|| "http://127.0.0.1:3000".to_string());
+    let api_url = use_state(|| {
+        // Try to get API URL from environment variable, fallback to default
+        std::env::var("SNAPRAG_API_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string())
+    });
     
     // Chat state management
     let chat_session = use_state(|| None::<ChatSession>);
