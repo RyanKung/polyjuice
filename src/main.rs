@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::KeyboardEvent;
 use web_sys::InputEvent;
-use wasm_bindgen::JsCast;
+
+mod api;
+mod payment;
+mod wallet;
 
 // Data structures
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -143,8 +146,54 @@ struct ChatMessageResponse {
     conversation_length: usize,
 }
 
+/// Handle payment flow: sign and retry request with payment header
+async fn handle_payment(
+    requirements: &payment::PaymentRequirements,
+    account: &wallet::WalletAccount,
+    api_url: &str,
+    endpoint: &api::EndpointInfo,
+    body: Option<String>,
+) -> Result<api::ApiResponse, String> {
+    // Generate nonce and timestamp
+    let nonce = payment::generate_nonce();
+    let timestamp = payment::get_timestamp();
+
+    // Get payer address
+    let payer = account
+        .address
+        .as_ref()
+        .ok_or("No wallet address available")?;
+
+    // Create EIP-712 typed data
+    let typed_data = payment::create_eip712_typed_data(requirements, payer, &nonce, timestamp)?;
+
+    // Sign with MetaMask
+    let signature = wallet::sign_eip712(&typed_data)
+        .await
+        .map_err(|e| format!("Failed to sign payment: {}", e))?;
+
+    // Create payment payload
+    let payment_payload =
+        payment::create_payment_payload(requirements, payer, &signature, &nonce, timestamp);
+
+    // Encode to base64
+    let payment_header = payment_payload
+        .to_base64()
+        .map_err(|e| format!("Failed to encode payment: {}", e))?;
+
+    // Retry request with payment
+    api::make_request(api_url, endpoint, body, Some(payment_header))
+        .await
+        .map_err(|e| format!("Request with payment failed: {}", e))
+}
+
 #[function_component]
 fn App() -> Html {
+    // Wallet state
+    let wallet_account = use_state(|| None::<wallet::WalletAccount>);
+    let wallet_initialized = use_state(|| false);
+    let wallet_error = use_state(|| None::<String>);
+
     // State management
     let search_input = use_state(|| String::new());
     let search_result = use_state(|| None::<SearchResult>);
@@ -160,6 +209,85 @@ fn App() -> Html {
     let chat_error = use_state(|| None::<String>);
     let current_view = use_state(|| "profile"); // "profile" or "chat"
 
+    // Initialize wallet on mount
+    {
+        let wallet_initialized = wallet_initialized.clone();
+        let wallet_account = wallet_account.clone();
+        let wallet_error = wallet_error.clone();
+
+        use_effect_with((), move |_| {
+            spawn_local(async move {
+                match wallet::initialize().await {
+                    Ok(_) => {
+                        wallet_initialized.set(true);
+                        if let Ok(account) = wallet::get_account().await {
+                            wallet_account.set(Some(account));
+                        }
+                    }
+                    Err(e) => {
+                        wallet_initialized.set(true); // Set initialized even on error
+                        wallet_error.set(Some(e));
+                    }
+                }
+            });
+            || ()
+        });
+    }
+
+    // Poll wallet account state
+    {
+        let wallet_account = wallet_account.clone();
+
+        use_effect_with((), move |_| {
+            let interval = gloo_timers::callback::Interval::new(1000, move || {
+                let wallet_account = wallet_account.clone();
+                spawn_local(async move {
+                    if let Ok(account) = wallet::get_account().await {
+                        wallet_account.set(Some(account));
+                    }
+                });
+            });
+
+            move || drop(interval)
+        });
+    }
+
+    // Wallet handlers
+    let on_connect_wallet = {
+        let wallet_error = wallet_error.clone();
+        let wallet_account = wallet_account.clone();
+        
+        Callback::from(move |_| {
+            let wallet_error = wallet_error.clone();
+            let wallet_account = wallet_account.clone();
+            spawn_local(async move {
+                match wallet::connect().await {
+                    Ok(_) => {
+                        wallet_error.set(None);
+                        if let Ok(account) = wallet::get_account().await {
+                            wallet_account.set(Some(account));
+                        }
+                    }
+                    Err(e) => {
+                        wallet_error.set(Some(e));
+                    }
+                }
+            });
+        })
+    };
+
+    let on_disconnect_wallet = {
+        let wallet_account = wallet_account.clone();
+        
+        Callback::from(move |_| {
+            let wallet_account = wallet_account.clone();
+            spawn_local(async move {
+                let _ = wallet::disconnect().await;
+                wallet_account.set(None);
+            });
+        })
+    };
+
     // Search handler
     let on_search = {
         let search_input = search_input.clone();
@@ -171,6 +299,7 @@ fn App() -> Html {
         let chat_messages = chat_messages.clone();
         let is_chat_loading = is_chat_loading.clone();
         let chat_error = chat_error.clone();
+        let wallet_account = wallet_account.clone();
 
         Callback::from(move |_| {
             let input = (*search_input).clone();
@@ -186,6 +315,7 @@ fn App() -> Html {
             let chat_messages = chat_messages.clone();
             let is_chat_loading = is_chat_loading.clone();
             let chat_error = chat_error.clone();
+            let wallet_account = wallet_account.clone();
 
             spawn_local(async move {
                 is_loading.set(true);
@@ -203,42 +333,65 @@ fn App() -> Html {
                     trimmed_input.trim_start_matches('@').to_string()
                 };
 
-                // Make API requests to get both profile and social data
-                let request_init = web_sys::RequestInit::new();
-                request_init.set_method("GET");
-                let headers = web_sys::Headers::new().unwrap();
-                headers.set("Content-Type", "application/json").unwrap();
-                request_init.set_headers(&headers);
-                
-                // Choose API endpoint based on input type
-                let profile_url = if is_fid {
-                    format!("{}/api/profiles/{}", api_url, search_query)
+                // Create endpoint info for profile request
+                let profile_endpoint = api::EndpointInfo {
+                    path: if is_fid {
+                        format!("/api/profiles/{}", search_query)
                 } else {
-                    format!("{}/api/profiles/username/{}", api_url, search_query)
+                        format!("/api/profiles/username/{}", search_query)
+                    },
+                    method: "GET".to_string(),
+                    name: "Get Profile".to_string(),
+                    description: "Get user profile".to_string(),
+                    tier: "Basic".to_string(),
+                    requires_payment: true,
+                    default_body: None,
                 };
-                
-                // First, get profile data
-                let profile_request = web_sys::Request::new_with_str_and_init(
-                    &profile_url,
-                    &request_init
-                ).unwrap();
 
-                let profile_response = wasm_bindgen_futures::JsFuture::from(
-                    web_sys::window()
-                        .unwrap()
-                        .fetch_with_request(&profile_request)
-                ).await;
+                // Make profile request with payment support
+                match api::make_request(&api_url, &profile_endpoint, None, None).await {
+                    Ok(resp) => {
+                        // Check if payment is required (402)
+                        if resp.status == 402 {
+                            // Try to handle payment automatically
+                            if let Some(account) = (*wallet_account).clone() {
+                                if account.is_connected {
+                                    // Parse payment requirements
+                                    if let Ok(payment_resp) = serde_json::from_str::<payment::PaymentRequirementsResponse>(&resp.body) {
+                                        if let Some(requirements) = payment_resp.accepts.first() {
+                                            // Attempt payment
+                                            match handle_payment(requirements, &account, &api_url, &profile_endpoint, None).await {
+                                                Ok(paid_resp) => {
+                                                    // Parse successful response
+                                                    if let Ok(api_response) = serde_json::from_str::<ApiResponse<ProfileData>>(&paid_resp.body) {
+                                                        if api_response.success && api_response.data.is_some() {
+                                                            let profile = api_response.data.unwrap();
+                                                            
+                                                            // Now get social data
+                                                            let social_endpoint = api::EndpointInfo {
+                                                                path: if is_fid {
+                                                                    format!("/api/social/{}", search_query)
+                                                                } else {
+                                                                    format!("/api/social/username/{}", search_query)
+                                                                },
+                                                                method: "GET".to_string(),
+                                                                name: "Get Social Data".to_string(),
+                                                                description: "Get social analysis".to_string(),
+                                                                tier: "Premium".to_string(),
+                                                                requires_payment: true,
+                                                                default_body: None,
+                                                            };
 
-                let profile_data = match profile_response {
-                    Ok(response) => {
-                        let response: web_sys::Response = response.dyn_into().unwrap();
-                        if response.ok() {
-                            match wasm_bindgen_futures::JsFuture::from(response.json().unwrap()).await {
-                                Ok(result) => {
-                                    let api_response: ApiResponse<ProfileData> = serde_wasm_bindgen::from_value(result).unwrap_or_else(|_| ApiResponse::error("Failed to parse API response".to_string()));
-                                    
-                                    if api_response.success && api_response.data.is_some() {
-                                        Some(api_response.data.unwrap())
+                                                            let social_data = match api::make_request(&api_url, &social_endpoint, None, None).await {
+                                                                Ok(social_resp) => {
+                                                                    if social_resp.status == 402 {
+                                                                        // Try payment for social data too
+                                                                        if let Ok(social_payment_resp) = serde_json::from_str::<payment::PaymentRequirementsResponse>(&social_resp.body) {
+                                                                            if let Some(social_requirements) = social_payment_resp.accepts.first() {
+                                                                                match handle_payment(social_requirements, &account, &api_url, &social_endpoint, None).await {
+                                                                                    Ok(social_paid_resp) => {
+                                                                                        if let Ok(social_api_response) = serde_json::from_str::<ApiResponse<SocialData>>(&social_paid_resp.body) {
+                                                                                            social_api_response.data
                                     } else {
                                         None
                                     }
@@ -248,45 +401,11 @@ fn App() -> Html {
                         } else {
                             None
                         }
-                    }
-                    Err(_) => None,
-                };
-
-                // Choose social API endpoint based on input type
-                let social_url = if is_fid {
-                    format!("{}/api/social/{}", api_url, search_query)
-                } else {
-                    format!("{}/api/social/username/{}", api_url, search_query)
-                };
-                
-                // Then, get social data
-                let social_request = web_sys::Request::new_with_str_and_init(
-                    &social_url,
-                    &request_init
-                ).unwrap();
-
-                let social_response = wasm_bindgen_futures::JsFuture::from(
-                    web_sys::window()
-                        .unwrap()
-                        .fetch_with_request(&social_request)
-                ).await;
-
-                let social_data = match social_response {
-                    Ok(response) => {
-                        let response: web_sys::Response = response.dyn_into().unwrap();
-                        if response.ok() {
-                            match wasm_bindgen_futures::JsFuture::from(response.json().unwrap()).await {
-                                Ok(result) => {
-                                    let api_response: ApiResponse<SocialData> = serde_wasm_bindgen::from_value(result).unwrap_or_else(|_| ApiResponse::error("Failed to parse API response".to_string()));
-                                    
-                                    if api_response.success && api_response.data.is_some() {
-                                        Some(api_response.data.unwrap())
                                     } else {
                                         None
                                     }
-                                }
-                                Err(_) => None,
-                            }
+                                                                    } else if let Ok(social_api_response) = serde_json::from_str::<ApiResponse<SocialData>>(&social_resp.body) {
+                                                                        social_api_response.data
                         } else {
                             None
                         }
@@ -294,8 +413,6 @@ fn App() -> Html {
                     Err(_) => None,
                 };
 
-                // Combine the results
-                if let Some(profile) = profile_data {
                     search_result.set(Some(SearchResult {
                         profile,
                         social: social_data,
@@ -308,6 +425,7 @@ fn App() -> Html {
                     let is_chat_loading = is_chat_loading.clone();
                     let chat_error = chat_error.clone();
                     let api_url = api_url.clone();
+                                                            let wallet_account = wallet_account.clone();
 
                     spawn_local(async move {
                         is_chat_loading.set(true);
@@ -325,31 +443,28 @@ fn App() -> Html {
                         };
 
                         let request_json = serde_json::to_string(&request).unwrap();
-                        let request_init = web_sys::RequestInit::new();
-                        request_init.set_method("POST");
-                        let headers = web_sys::Headers::new().unwrap();
-                        headers.set("Content-Type", "application/json").unwrap();
-                        request_init.set_headers(&headers);
-                        request_init.set_body(&request_json.into());
+                                                                let chat_endpoint = api::EndpointInfo {
+                                                                    path: "/api/chat/create".to_string(),
+                                                                    method: "POST".to_string(),
+                                                                    name: "Create Chat".to_string(),
+                                                                    description: "Create chat session".to_string(),
+                                                                    tier: "Premium".to_string(),
+                                                                    requires_payment: false,
+                                                                    default_body: None,
+                                                                };
 
-                        let chat_request = web_sys::Request::new_with_str_and_init(
-                            &format!("{}/api/chat/create", api_url),
-                            &request_init
-                        ).unwrap();
-
-                        match wasm_bindgen_futures::JsFuture::from(
-                            web_sys::window()
-                                .unwrap()
-                                .fetch_with_request(&chat_request)
-                        ).await
-                        {
-                            Ok(response) => {
-                                let response: web_sys::Response = response.dyn_into().unwrap();
-                                if response.ok() {
-                                    match wasm_bindgen_futures::JsFuture::from(response.json().unwrap()).await {
-                                        Ok(result) => {
-                                            let api_response: ApiResponse<CreateChatResponse> = serde_wasm_bindgen::from_value(result).unwrap_or_else(|_| ApiResponse::error("Failed to parse API response".to_string()));
-                                            
+                                                                match api::make_request(&api_url, &chat_endpoint, Some(request_json), None).await {
+                                                                    Ok(chat_resp) => {
+                                                                        if chat_resp.status == 402 {
+                                                                            // Try payment for chat creation
+                                                                            if let Some(account) = (*wallet_account).clone() {
+                                                                                if account.is_connected {
+                                                                                    if let Ok(chat_payment_resp) = serde_json::from_str::<payment::PaymentRequirementsResponse>(&chat_resp.body) {
+                                                                                        if let Some(chat_requirements) = chat_payment_resp.accepts.first() {
+                                                                                            let request_json = serde_json::to_string(&request).unwrap();
+                                                                                            match handle_payment(chat_requirements, &account, &api_url, &chat_endpoint, Some(request_json)).await {
+                                                                                                Ok(chat_paid_resp) => {
+                                                                                                    if let Ok(api_response) = serde_json::from_str::<ApiResponse<CreateChatResponse>>(&chat_paid_resp.body) {
                                             if api_response.success && api_response.data.is_some() {
                                                 let chat_data = api_response.data.unwrap();
                                                 let session = ChatSession {
@@ -366,25 +481,239 @@ fn App() -> Html {
                                                 chat_error.set(None);
                 } else {
                                                 chat_error.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
+                                                                                                        }
+                                                                                                    } else {
+                                                                                                        chat_error.set(Some("Failed to parse chat response".to_string()));
                                             }
                                         }
                                         Err(e) => {
-                                            chat_error.set(Some(format!("Failed to parse response: {:?}", e)));
+                                                                                                    chat_error.set(Some(format!("Chat payment failed: {}", e)));
                                         }
                                     }
                                 } else {
-                                    chat_error.set(Some("Failed to create chat session".to_string()));
+                                                                                            chat_error.set(Some("No payment requirements for chat".to_string()));
+                                                                                        }
+                                                                                    } else {
+                                                                                        chat_error.set(Some("Failed to parse chat payment requirements".to_string()));
+                                                                                    }
+                                                                                } else {
+                                                                                    chat_error.set(Some("Wallet not connected for chat".to_string()));
+                                                                                }
+                                                                            } else {
+                                                                                chat_error.set(Some("No wallet for chat".to_string()));
+                                                                            }
+                                                                        } else if let Ok(api_response) = serde_json::from_str::<ApiResponse<CreateChatResponse>>(&chat_resp.body) {
+                                                                            if api_response.success && api_response.data.is_some() {
+                                                                                let chat_data = api_response.data.unwrap();
+                                                                                let session = ChatSession {
+                                                                                    session_id: chat_data.session_id,
+                                                                                    fid: chat_data.fid,
+                                                                                    username: chat_data.username,
+                                                                                    display_name: chat_data.display_name,
+                                                                                    conversation_history: Vec::new(),
+                                                                                    created_at: 0,
+                                                                                    last_activity: 0,
+                                                                                };
+                                                                                chat_session.set(Some(session));
+                                                                                chat_messages.set(Vec::new());
+                                                                                chat_error.set(None);
+                                                                            } else {
+                                                                                chat_error.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
+                                                                            }
+                                                                        } else {
+                                                                            chat_error.set(Some("Failed to parse chat response".to_string()));
                         }
                     }
                     Err(e) => {
-                                chat_error.set(Some(format!("Network error: {:?}", e)));
+                                                                        chat_error.set(Some(format!("Chat request failed: {}", e)));
                             }
                     }
 
                         is_chat_loading.set(false);
                     });
                 } else {
-                    error_message.set(Some("User not found or API error".to_string()));
+                                                            error_message.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
+                                                        }
+                                                    } else {
+                                                        error_message.set(Some("Failed to parse profile response".to_string()));
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    error_message.set(Some(format!("Payment failed: {}", e)));
+                                                }
+                                            }
+                                        } else {
+                                            error_message.set(Some("No payment requirements found".to_string()));
+                                        }
+                                    } else {
+                                        error_message.set(Some("Failed to parse payment requirements".to_string()));
+                                    }
+                                } else {
+                                    error_message.set(Some("Wallet not connected. Please connect your wallet to access paid features.".to_string()));
+                                }
+                            } else {
+                                error_message.set(Some("No wallet connected. Please connect MetaMask to access paid features.".to_string()));
+                            }
+                        } else if let Ok(api_response) = serde_json::from_str::<ApiResponse<ProfileData>>(&resp.body) {
+                            if api_response.success && api_response.data.is_some() {
+                                let profile = api_response.data.unwrap();
+                                
+                                // Get social data (free)
+                                let social_endpoint = api::EndpointInfo {
+                                    path: if is_fid {
+                                        format!("/api/social/{}", search_query)
+                                    } else {
+                                        format!("/api/social/username/{}", search_query)
+                                    },
+                                    method: "GET".to_string(),
+                                    name: "Get Social Data".to_string(),
+                                    description: "Get social analysis".to_string(),
+                                    tier: "Premium".to_string(),
+                                    requires_payment: true,
+                                    default_body: None,
+                                };
+
+                                let social_data = match api::make_request(&api_url, &social_endpoint, None, None).await {
+                                    Ok(social_resp) => {
+                                        if social_resp.status == 402 {
+                                            // Social data requires payment, skip for now
+                                            None
+                                        } else if let Ok(social_api_response) = serde_json::from_str::<ApiResponse<SocialData>>(&social_resp.body) {
+                                            social_api_response.data
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    Err(_) => None,
+                                };
+
+                                search_result.set(Some(SearchResult {
+                                    profile,
+                                    social: social_data,
+                                }));
+                                error_message.set(None);
+
+                                // Auto-create chat session after successful search (non-payment branch)
+                                let chat_session = chat_session.clone();
+                                let chat_messages = chat_messages.clone();
+                                let is_chat_loading = is_chat_loading.clone();
+                                let chat_error = chat_error.clone();
+                                let api_url = api_url.clone();
+                                let wallet_account = wallet_account.clone();
+
+                                spawn_local(async move {
+                                    is_chat_loading.set(true);
+                                    chat_error.set(None);
+
+                                    // Create chat session
+                                    let request = CreateChatRequest {
+                                        user: if is_fid {
+                                            search_query.clone()
+                                        } else {
+                                            format!("@{}", search_query)
+                                        },
+                                        context_limit: 20,
+                                        temperature: 0.7,
+                                    };
+
+                                    let request_json = serde_json::to_string(&request).unwrap();
+                                    let chat_endpoint = api::EndpointInfo {
+                                        path: "/api/chat/create".to_string(),
+                                        method: "POST".to_string(),
+                                        name: "Create Chat".to_string(),
+                                        description: "Create chat session".to_string(),
+                                        tier: "Premium".to_string(),
+                                        requires_payment: false,
+                                        default_body: None,
+                                    };
+
+                                    match api::make_request(&api_url, &chat_endpoint, Some(request_json), None).await {
+                                        Ok(chat_resp) => {
+                                            if chat_resp.status == 402 {
+                                                // Try payment for chat creation
+                                                if let Some(account) = (*wallet_account).clone() {
+                                                    if account.is_connected {
+                                                        if let Ok(chat_payment_resp) = serde_json::from_str::<payment::PaymentRequirementsResponse>(&chat_resp.body) {
+                                                            if let Some(chat_requirements) = chat_payment_resp.accepts.first() {
+                                                                let request_json = serde_json::to_string(&request).unwrap();
+                                                                match handle_payment(chat_requirements, &account, &api_url, &chat_endpoint, Some(request_json)).await {
+                                                                    Ok(chat_paid_resp) => {
+                                                                        if let Ok(api_response) = serde_json::from_str::<ApiResponse<CreateChatResponse>>(&chat_paid_resp.body) {
+                                                                            if api_response.success && api_response.data.is_some() {
+                                                                                let chat_data = api_response.data.unwrap();
+                                                                                let session = ChatSession {
+                                                                                    session_id: chat_data.session_id,
+                                                                                    fid: chat_data.fid,
+                                                                                    username: chat_data.username,
+                                                                                    display_name: chat_data.display_name,
+                                                                                    conversation_history: Vec::new(),
+                                                                                    created_at: 0,
+                                                                                    last_activity: 0,
+                                                                                };
+                                                                                chat_session.set(Some(session));
+                                                                                chat_messages.set(Vec::new());
+                                                                                chat_error.set(None);
+                                                                            } else {
+                                                                                chat_error.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
+                                                                            }
+                                                                        } else {
+                                                                            chat_error.set(Some("Failed to parse chat response".to_string()));
+                                                                        }
+                                                                    }
+                                                                    Err(e) => {
+                                                                        chat_error.set(Some(format!("Chat payment failed: {}", e)));
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                chat_error.set(Some("No payment requirements for chat".to_string()));
+                                                            }
+                                                        } else {
+                                                            chat_error.set(Some("Failed to parse chat payment requirements".to_string()));
+                                                        }
+                                                    } else {
+                                                        chat_error.set(Some("Wallet not connected for chat".to_string()));
+                                                    }
+                                                } else {
+                                                    chat_error.set(Some("No wallet for chat".to_string()));
+                                                }
+                                            } else if let Ok(api_response) = serde_json::from_str::<ApiResponse<CreateChatResponse>>(&chat_resp.body) {
+                                                if api_response.success && api_response.data.is_some() {
+                                                    let chat_data = api_response.data.unwrap();
+                                                    let session = ChatSession {
+                                                        session_id: chat_data.session_id,
+                                                        fid: chat_data.fid,
+                                                        username: chat_data.username,
+                                                        display_name: chat_data.display_name,
+                                                        conversation_history: Vec::new(),
+                                                        created_at: 0,
+                                                        last_activity: 0,
+                                                    };
+                                                    chat_session.set(Some(session));
+                                                    chat_messages.set(Vec::new());
+                                                    chat_error.set(None);
+                                                } else {
+                                                    chat_error.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
+                                                }
+                                            } else {
+                                                chat_error.set(Some("Failed to parse chat response".to_string()));
+                                            }
+                                        }
+                                        Err(e) => {
+                                            chat_error.set(Some(format!("Chat request failed: {}", e)));
+                                        }
+                                    }
+                                    is_chat_loading.set(false);
+                                });
+                            } else {
+                                error_message.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
+                            }
+                        } else {
+                            error_message.set(Some("Failed to parse profile response".to_string()));
+                        }
+                    }
+                    Err(e) => {
+                        error_message.set(Some(format!("Request failed: {}", e)));
+                    }
                 }
 
                 is_loading.set(false);
@@ -464,6 +793,7 @@ fn App() -> Html {
         let is_chat_loading = is_chat_loading.clone();
         let chat_error = chat_error.clone();
         let api_url = api_url.clone();
+        let wallet_account = wallet_account.clone();
 
         Callback::from(move |_| {
             let message = (*chat_message).clone();
@@ -477,6 +807,7 @@ fn App() -> Html {
                 let is_chat_loading = is_chat_loading.clone();
                 let chat_error = chat_error.clone();
             let api_url = (*api_url).clone();
+                let wallet_account = wallet_account.clone();
 
             spawn_local(async move {
                     is_chat_loading.set(true);
@@ -499,31 +830,28 @@ fn App() -> Html {
                     };
 
                     let request_json = serde_json::to_string(&request).unwrap();
-                    let request_init = web_sys::RequestInit::new();
-                    request_init.set_method("POST");
-                    let headers = web_sys::Headers::new().unwrap();
-                    headers.set("Content-Type", "application/json").unwrap();
-                    request_init.set_headers(&headers);
-                    request_init.set_body(&request_json.into());
+                    let chat_endpoint = api::EndpointInfo {
+                        path: "/api/chat/message".to_string(),
+                        method: "POST".to_string(),
+                        name: "Send Chat Message".to_string(),
+                        description: "Send chat message".to_string(),
+                        tier: "Premium".to_string(),
+                        requires_payment: true,
+                        default_body: None,
+                    };
 
-                    let chat_request = web_sys::Request::new_with_str_and_init(
-                        &format!("{}/api/chat/message", api_url),
-                        &request_init
-                    ).unwrap();
-
-                    match wasm_bindgen_futures::JsFuture::from(
-                        web_sys::window()
-                            .unwrap()
-                            .fetch_with_request(&chat_request)
-                    ).await
-                    {
-                        Ok(response) => {
-                            let response: web_sys::Response = response.dyn_into().unwrap();
-                            if response.ok() {
-                                match wasm_bindgen_futures::JsFuture::from(response.json().unwrap()).await {
-                                    Ok(result) => {
-                                        let api_response: ApiResponse<ChatMessageResponse> = serde_wasm_bindgen::from_value(result).unwrap_or_else(|_| ApiResponse::error("Failed to parse API response".to_string()));
-                                        
+                    match api::make_request(&api_url, &chat_endpoint, Some(request_json), None).await {
+                        Ok(resp) => {
+                            if resp.status == 402 {
+                                // Try payment for chat message
+                                if let Some(account) = (*wallet_account).clone() {
+                                    if account.is_connected {
+                                        if let Ok(chat_payment_resp) = serde_json::from_str::<payment::PaymentRequirementsResponse>(&resp.body) {
+                                            if let Some(chat_requirements) = chat_payment_resp.accepts.first() {
+                                                let request_json = serde_json::to_string(&request).unwrap();
+                                                match handle_payment(chat_requirements, &account, &api_url, &chat_endpoint, Some(request_json)).await {
+                                                    Ok(chat_paid_resp) => {
+                                                        if let Ok(api_response) = serde_json::from_str::<ApiResponse<ChatMessageResponse>>(&chat_paid_resp.body) {
                                         if api_response.success && api_response.data.is_some() {
                                             let chat_data = api_response.data.unwrap();
                                             let assistant_message = ChatMessage {
@@ -537,18 +865,48 @@ fn App() -> Html {
                                             chat_error.set(None);
                                         } else {
                                             chat_error.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
+                                                            }
+                                                        } else {
+                                                            chat_error.set(Some("Failed to parse chat response".to_string()));
                                         }
                                     }
                                     Err(e) => {
-                                        chat_error.set(Some(format!("Failed to parse response: {:?}", e)));
+                                                        chat_error.set(Some(format!("Chat payment failed: {}", e)));
                                     }
                                 }
                             } else {
-                                chat_error.set(Some("Failed to send message".to_string()));
+                                                chat_error.set(Some("No payment requirements for chat message".to_string()));
+                                            }
+                                        } else {
+                                            chat_error.set(Some("Failed to parse chat payment requirements".to_string()));
+                                        }
+                                    } else {
+                                        chat_error.set(Some("Wallet not connected for chat message".to_string()));
+                                    }
+                                } else {
+                                    chat_error.set(Some("No wallet for chat message".to_string()));
+                                }
+                            } else if let Ok(api_response) = serde_json::from_str::<ApiResponse<ChatMessageResponse>>(&resp.body) {
+                                if api_response.success && api_response.data.is_some() {
+                                    let chat_data = api_response.data.unwrap();
+                                    let assistant_message = ChatMessage {
+                                        role: "assistant".to_string(),
+                                        content: chat_data.message,
+                                        timestamp: 0,
+                                    };
+                                    let mut messages = (*chat_messages).clone();
+                                    messages.push(assistant_message);
+                                    chat_messages.set(messages);
+                                    chat_error.set(None);
+                                } else {
+                                    chat_error.set(Some(api_response.error.unwrap_or_else(|| "Unknown error".to_string())));
+                                }
+                            } else {
+                                chat_error.set(Some("Failed to parse chat response".to_string()));
                             }
                         }
                         Err(e) => {
-                            chat_error.set(Some(format!("Network error: {:?}", e)));
+                            chat_error.set(Some(format!("Chat request failed: {}", e)));
                         }
                     }
 
@@ -573,6 +931,47 @@ fn App() -> Html {
                             <h1>{"polyjuice"}</h1>
                             <p class="tagline">{"Discover & Chat with Farcaster Users"}</p>
                         </div>
+                        
+                        // Wallet Status - Only show if wallet is available
+                        {
+                            if *wallet_initialized && (*wallet_error).is_none() {
+                                html! {
+                                    <div class="wallet-section">
+                                        {
+                                            if let Some(account) = (*wallet_account).clone() {
+                                                if account.is_connected {
+                                                    html! {
+                                                        <div class="wallet-status connected" onclick={on_disconnect_wallet.clone()} style="cursor: pointer;">
+                                                            <span style="font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace; font-size: 14px;">
+                                                                {format!("{}...{}", 
+                                                                    account.address.as_ref().map(|a| &a[..4]).unwrap_or(""),
+                                                                    account.address.as_ref().map(|a| &a[a.len()-4..]).unwrap_or("")
+                                                                )}
+                                                            </span>
+                                                            <span style="margin-left: 8px; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">{"✕"}</span>
+                                                        </div>
+                                                    }
+                                                } else {
+                                                    html! {
+                                                        <button onclick={on_connect_wallet} class="wallet-button">
+                                                            {"Connect"}
+                                                        </button>
+                                                    }
+                                                }
+                                            } else {
+                                                html! {
+                                                    <button onclick={on_connect_wallet} class="wallet-button">
+                                                        {"Connect"}
+                                                    </button>
+                                                }
+                                            }
+                                        }
+                                    </div>
+                                }
+                            } else {
+                                html! {}
+                            }
+                        }
                     </div>
 
                     <div class="search-content">
@@ -602,7 +1001,7 @@ fn App() -> Html {
                                     if *is_loading {
                                         html! { "Searching..." }
                                     } else {
-                                        html! { "🔍" }
+                                        html! { "⌕" }
                                     }
                                 }
                             </button>
@@ -810,8 +1209,8 @@ fn App() -> Html {
                         </div>
                     }
 
-                    // Chat Card (only show if current_view is "chat" and we have chat session)
-                    if *current_view == "chat" && (*chat_session).is_some() {
+                    // Chat Card (only show if current_view is "chat")
+                    if *current_view == "chat" {
                         <div class="card chat-card">
                             <div class="card-content">
                                 if let Some(session) = (*chat_session).clone() {
@@ -906,22 +1305,22 @@ fn App() -> Html {
                                     if let Some(error) = (*chat_error).clone() {
                                         <div class="error-message">
                                             <p>{error}</p>
-                                                                </div>
-                                                            }
-                                                        } else {
+                                        </div>
+                                    }
+                                } else {
                                     <div class="no-chat-session">
-                                        <p>{"No chat session available"}</p>
-                                                                                </div>
-                                                                    }
-                                                                </div>
-                                                </div>
+                                        <p>{"No chat session available. Please try searching again."}</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
                     }
                 </div>
 
                 // Floating Chat Button (only show on results page when profile is visible)
                 if (*search_result).is_some() && *current_view == "profile" {
                     <div class="floating-chat-button" onclick={on_switch_to_chat}>
-                        {"💬"}
+                        {"💭"}
                     </div>
                 }
             }
