@@ -1,6 +1,5 @@
 use yew::prelude::*;
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::KeyboardEvent;
 use web_sys::InputEvent;
@@ -86,14 +85,6 @@ struct ApiResponse<T> {
 }
 
 impl<T> ApiResponse<T> {
-    fn success(data: T) -> Self {
-        Self {
-            success: true,
-            data: Some(data),
-            error: None,
-        }
-    }
-
     fn error(error: String) -> Self {
         Self {
             success: false,
@@ -411,17 +402,6 @@ fn App() -> Html {
         })
     };
 
-    // Back to search handler
-    let on_back_to_search = {
-        let search_result = search_result.clone();
-        let search_input = search_input.clone();
-        let error_message = error_message.clone();
-        Callback::from(move |_: ()| {
-            search_result.set(None);
-            search_input.set(String::new());
-            error_message.set(None);
-        })
-    };
 
     // Popular FID handler
     let on_popular_fid = {
@@ -441,12 +421,6 @@ fn App() -> Html {
         })
     };
 
-    let on_switch_to_profile = {
-        let current_view = current_view.clone();
-        Callback::from(move |_: ()| {
-            current_view.set("profile");
-        })
-    };
 
     // Smart back button handler
     let on_smart_back = {
@@ -457,7 +431,7 @@ fn App() -> Html {
         let chat_session = chat_session.clone();
         let chat_messages = chat_messages.clone();
         Callback::from(move |_| {
-            match (*current_view).clone() {
+            match *current_view {
                 "profile" => {
                     // From profile back to search
                     search_result.set(None);
@@ -498,7 +472,6 @@ fn App() -> Html {
             }
 
             if let Some(session) = (*chat_session).clone() {
-                let chat_session = chat_session.clone();
                 let chat_message = chat_message.clone();
                 let chat_messages = chat_messages.clone();
                 let is_chat_loading = is_chat_loading.clone();
@@ -653,13 +626,11 @@ fn App() -> Html {
                         </div>
 
                         <div class="search-suggestions">
-                            <p class="suggestions-title">{"Popular FIDs:"}</p>
+                            <p class="suggestions-title">{"Popular:"}</p>
                             <div class="suggestion-tags">
-                                <button class="suggestion-tag" onclick={on_popular_fid.clone().reform(|_| "1".to_string())}>{"1"}</button>
-                                <button class="suggestion-tag" onclick={on_popular_fid.clone().reform(|_| "2".to_string())}>{"2"}</button>
-                                <button class="suggestion-tag" onclick={on_popular_fid.clone().reform(|_| "99".to_string())}>{"99"}</button>
-                                <button class="suggestion-tag" onclick={on_popular_fid.clone().reform(|_| "100".to_string())}>{"100"}</button>
-                                <button class="suggestion-tag" onclick={on_popular_fid.clone().reform(|_| "1000".to_string())}>{"1000"}</button>
+                                <button class="suggestion-tag" onclick={on_popular_fid.clone().reform(|_| "vitalik.eth".to_string())}>{"@vitalik.eth"}</button>
+                                <button class="suggestion-tag" onclick={on_popular_fid.clone().reform(|_| "jesse.base.eth".to_string())}>{"@jesse.base.eth"}</button>
+                                <button class="suggestion-tag" onclick={on_popular_fid.clone().reform(|_| "ryankung.base.eth".to_string())}>{"@ryankung.base.eth"}</button>
                             </div>
                         </div>
 
@@ -683,7 +654,7 @@ fn App() -> Html {
                     </div>
                     
                     // Profile Card (only show if current_view is "profile")
-                    if (*current_view).clone() == "profile" {
+                    if *current_view == "profile" {
                         <div class="card profile-card">
                             <div class="card-content">
                                 if let Some(result) = (*search_result).clone() {
@@ -840,13 +811,25 @@ fn App() -> Html {
                     }
 
                     // Chat Card (only show if current_view is "chat" and we have chat session)
-                    if (*current_view).clone() == "chat" && (*chat_session).is_some() {
+                    if *current_view == "chat" && (*chat_session).is_some() {
                         <div class="card chat-card">
                             <div class="card-content">
                                 if let Some(session) = (*chat_session).clone() {
                                     <div class="chat-user-info">
                                         <div class="chat-user-avatar">
-                                            {session.display_name.clone().unwrap_or_else(|| "Unknown".to_string()).chars().next().unwrap_or('?').to_uppercase().collect::<String>()}
+                                            if let Some(result) = (*search_result).clone() {
+                                                if let Some(pfp_url) = &result.profile.pfp_url {
+                                                    <img src={pfp_url.clone()} alt="Profile" />
+                                                } else {
+                                                    <div class="chat-avatar-placeholder">
+                                                        {session.display_name.clone().unwrap_or_else(|| "Unknown".to_string()).chars().next().unwrap_or('?').to_uppercase().collect::<String>()}
+                                                    </div>
+                                                }
+                                            } else {
+                                                <div class="chat-avatar-placeholder">
+                                                    {session.display_name.clone().unwrap_or_else(|| "Unknown".to_string()).chars().next().unwrap_or('?').to_uppercase().collect::<String>()}
+                                                </div>
+                                            }
                                         </div>
                                         <div class="chat-user-details">
                                             <h3>{session.display_name.clone().unwrap_or_else(|| "Unknown".to_string())}</h3>
@@ -936,7 +919,7 @@ fn App() -> Html {
                 </div>
 
                 // Floating Chat Button (only show on results page when profile is visible)
-                if (*search_result).is_some() && (*current_view).clone() == "profile" && (*chat_session).is_some() {
+                if (*search_result).is_some() && *current_view == "profile" {
                     <div class="floating-chat-button" onclick={on_switch_to_chat}>
                         {"💬"}
                     </div>
