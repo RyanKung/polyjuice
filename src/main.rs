@@ -28,27 +28,12 @@ fn App() -> Html {
     let is_loading = use_state(|| false);
     let error_message = use_state(|| None::<String>);
     let api_url = use_state(|| {
-        // Try to get API URL from URL parameter, then build-time env, then default
-        let default_url = option_env!("SNAPRAG_API_URL")
-            .unwrap_or("https://snaprag.0xbase.ai");
+        // Get API URL from build-time environment variable, fallback to default
+        let url = option_env!("SNAPRAG_API_URL")
+            .unwrap_or("https://snaprag.0xbase.ai")
+            .trim_end_matches('/')
+            .to_string();
         
-        // Check if API URL is in browser URL parameters
-        if let Some(window) = web_sys::window() {
-            if let Some(href) = window.document().and_then(|d| d.location()).and_then(|l| l.href().ok()) {
-                if let Ok(url_obj) = web_sys::Url::new(&href) {
-                    if let Ok(search_params) = web_sys::UrlSearchParams::new_with_str(&url_obj.search()) {
-                        if let Some(param_url) = search_params.get("api_url") {
-                            if !param_url.is_empty() {
-                                web_sys::console::log_1(&format!("🌐 Using API Server from URL param: {}", param_url).into());
-                                return param_url;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        let url = default_url.to_string();
         web_sys::console::log_1(&format!("🌐 Using API Server: {}", url).into());
         url
     });
