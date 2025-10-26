@@ -1,7 +1,11 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, RequestMode, Response};
+use web_sys::Request;
+use web_sys::RequestInit;
+use web_sys::RequestMode;
+use web_sys::Response;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiResponse {
@@ -21,7 +25,6 @@ pub struct EndpointInfo {
     pub requires_payment: bool,
     pub default_body: Option<String>,
 }
-
 
 pub async fn make_request(
     base_url: &str,
@@ -80,7 +83,7 @@ pub async fn make_request(
     // Get response headers
     let mut response_headers = Vec::new();
     let headers_iter = resp.headers().entries();
-    
+
     if let Some(iterator) = js_sys::try_iter(&headers_iter).ok().flatten() {
         for entry in iterator {
             if let Ok(entry) = entry {
@@ -96,9 +99,12 @@ pub async fn make_request(
     }
 
     // Get response body
-    let text = JsFuture::from(resp.text().map_err(|e| format!("No text method: {:?}", e))?)
-        .await
-        .map_err(|e| format!("Failed to get text: {:?}", e))?;
+    let text = JsFuture::from(
+        resp.text()
+            .map_err(|e| format!("No text method: {:?}", e))?,
+    )
+    .await
+    .map_err(|e| format!("Failed to get text: {:?}", e))?;
 
     let body = text.as_string().unwrap_or_default();
 

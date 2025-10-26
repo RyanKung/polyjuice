@@ -1,10 +1,11 @@
-use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::KeyboardEvent;
 use web_sys::InputEvent;
+use web_sys::KeyboardEvent;
+use yew::prelude::*;
 
 use crate::models::*;
 use crate::services::*;
+use crate::wallet;
 use crate::wallet::WalletAccount;
 
 /// Create wallet connect handler
@@ -80,7 +81,7 @@ pub fn create_search_handler(
             // Determine if input is FID (numeric) or username (text)
             let trimmed_input = input.trim();
             let is_fid = trimmed_input.parse::<u64>().is_ok();
-            
+
             // Handle username with @ prefix
             let search_query = if is_fid {
                 trimmed_input.to_string()
@@ -91,11 +92,25 @@ pub fn create_search_handler(
 
             // Get profile data
             let profile_endpoint = create_profile_endpoint(&search_query, is_fid);
-            match make_request_with_payment::<ProfileData>(&api_url, &profile_endpoint, None, wallet_account.as_ref()).await {
+            match make_request_with_payment::<ProfileData>(
+                &api_url,
+                &profile_endpoint,
+                None,
+                wallet_account.as_ref(),
+            )
+            .await
+            {
                 Ok(profile) => {
                     // Get social data
                     let social_endpoint = create_social_endpoint(&search_query, is_fid);
-                    let social_data = match make_request_with_payment::<SocialData>(&api_url, &social_endpoint, None, wallet_account.as_ref()).await {
+                    let social_data = match make_request_with_payment::<SocialData>(
+                        &api_url,
+                        &social_endpoint,
+                        None,
+                        wallet_account.as_ref(),
+                    )
+                    .await
+                    {
                         Ok(social) => Some(social),
                         Err(_) => None, // Social data is optional
                     };
@@ -116,7 +131,8 @@ pub fn create_search_handler(
                         is_chat_loading.clone(),
                         chat_error.clone(),
                         wallet_account.clone(),
-                    ).await;
+                    )
+                    .await;
                 }
                 Err(e) => {
                     error_message.set(Some(e));
@@ -156,7 +172,14 @@ async fn create_chat_session_after_search(
     let request_json = serde_json::to_string(&request).unwrap();
     let chat_endpoint = create_chat_session_endpoint();
 
-    match make_request_with_payment::<CreateChatResponse>(api_url, &chat_endpoint, Some(request_json), wallet_account.as_ref()).await {
+    match make_request_with_payment::<CreateChatResponse>(
+        api_url,
+        &chat_endpoint,
+        Some(request_json),
+        wallet_account.as_ref(),
+    )
+    .await
+    {
         Ok(chat_data) => {
             let session = ChatSession {
                 session_id: chat_data.session_id,
@@ -226,7 +249,14 @@ pub fn create_chat_message_handler(
                 let request_json = serde_json::to_string(&request).unwrap();
                 let chat_endpoint = create_chat_message_endpoint();
 
-                match make_request_with_payment::<ChatMessageResponse>(&api_url, &chat_endpoint, Some(request_json), wallet_account.as_ref()).await {
+                match make_request_with_payment::<ChatMessageResponse>(
+                    &api_url,
+                    &chat_endpoint,
+                    Some(request_json),
+                    wallet_account.as_ref(),
+                )
+                .await
+                {
                     Ok(chat_data) => {
                         let assistant_message = ChatMessage {
                             role: "assistant".to_string(),
@@ -305,11 +335,11 @@ pub fn create_smart_back_handler(
                 error_message.set(None);
                 chat_session.set(None);
                 chat_messages.set(Vec::new());
-            },
+            }
             "chat" => {
                 // From chat back to profile
                 current_view.set("profile".to_string());
-            },
+            }
             _ => {
                 // Default: back to search
                 search_result.set(None);
@@ -328,5 +358,58 @@ pub fn create_input_change_handler(input_state: UseStateHandle<String>) -> Callb
         if let Some(input) = e.target_dyn_into::<web_sys::HtmlInputElement>() {
             input_state.set(input.value());
         }
+    })
+}
+
+/// Create endpoint fetch handler
+pub fn create_endpoint_fetch_handler(
+    endpoint_data: UseStateHandle<Option<EndpointData>>,
+    is_loading: UseStateHandle<bool>,
+    error: UseStateHandle<Option<String>>,
+    ping_results: UseStateHandle<Vec<(String, Option<f64>)>>,
+) -> Callback<()> {
+    Callback::from(move |_| {
+        let endpoint_data = endpoint_data.clone();
+        let is_loading = is_loading.clone();
+        let error = error.clone();
+        let ping_results = ping_results.clone();
+
+        // Contract address from user request
+        let contract_address = "0xf16e03526d1be6d120cfbf5a24e1ac78a8192663";
+        let rpc_url = "https://sepolia.base.org"; // Base Sepolia RPC
+
+        spawn_local(async move {
+            is_loading.set(true);
+            error.set(None);
+
+            match wallet::get_endpoints(contract_address, rpc_url).await {
+                Ok(data) => {
+                    endpoint_data.set(Some(data.clone()));
+                    error.set(None);
+                    is_loading.set(false);
+
+            // Ping all endpoints and collect results
+            let endpoints = data.endpoints.clone();
+            let ping_results_handle = ping_results.clone();
+            
+            spawn_local(async move {
+                let mut results = Vec::new();
+                
+                // Ping all endpoints sequentially (avoids race conditions)
+                for endpoint in &endpoints {
+                    let result = wallet::ping_endpoint_service(endpoint).await.ok();
+                    results.push((endpoint.clone(), result));
+                }
+                
+                ping_results_handle.set(results);
+            });
+                }
+                Err(e) => {
+                    error.set(Some(e));
+                    endpoint_data.set(None);
+                    is_loading.set(false);
+                }
+            }
+        });
     })
 }

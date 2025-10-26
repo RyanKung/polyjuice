@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use web_sys::InputEvent;
+use yew::prelude::*;
 
 use crate::wallet::WalletAccount;
 
@@ -27,7 +27,7 @@ pub fn WalletStatus(props: &WalletStatusProps) -> Html {
                         html! {
                             <div class="wallet-status connected" onclick={props.on_disconnect.clone().reform(|_| ())} style="cursor: pointer;">
                                 <span style="font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace; font-size: 14px;">
-                                    {format!("{}...{}", 
+                                    {format!("{}...{}",
                                         account.address.as_ref().map(|a| &a[..4]).unwrap_or(""),
                                         account.address.as_ref().map(|a| &a[a.len()-4..]).unwrap_or("")
                                     )}
@@ -68,15 +68,15 @@ pub struct SearchBoxProps {
 pub fn SearchBox(props: &SearchBoxProps) -> Html {
     html! {
         <div class="search-box">
-            <input 
-                type="text" 
+            <input
+                type="text"
                 class="search-input"
                 placeholder="give me a fid/username"
                 value={props.search_input.clone()}
                 oninput={props.on_input_change.clone()}
                 onkeypress={props.on_keypress.clone()}
             />
-            <button 
+            <button
                 class="search-button"
                 onclick={props.on_search.clone().reform(|_| ())}
                 disabled={props.is_loading}
@@ -98,7 +98,7 @@ pub struct MobileSearchButtonProps {
 pub fn MobileSearchButton(props: &MobileSearchButtonProps) -> Html {
     html! {
         <div class="mobile-search-button">
-            <button 
+            <button
                 class="mobile-search-btn"
                 onclick={props.on_search.clone().reform(|_| ())}
                 disabled={props.is_loading}
@@ -199,6 +199,23 @@ pub fn FloatingChatButton(props: &FloatingChatButtonProps) -> Html {
     html! {
         <div class="floating-chat-button" onclick={props.on_switch_to_chat.clone().reform(|_| ())}>
             {"💭"}
+        </div>
+    }
+}
+
+#[derive(Properties, PartialEq, Clone)]
+pub struct LinkButtonProps {
+    pub on_click: Callback<()>,
+}
+
+/// Link button component (top left)
+#[function_component]
+pub fn LinkButton(props: &LinkButtonProps) -> Html {
+    html! {
+        <div class="link-button-container">
+            <button class="link-button" onclick={props.on_click.clone().reform(|_| ())}>
+                {"🔗"}
+            </button>
         </div>
     }
 }

@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use hex;
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,7 +63,10 @@ impl PaymentPayload {
     pub fn to_base64(&self) -> Result<String, String> {
         let json = serde_json::to_string(self)
             .map_err(|e| format!("Failed to serialize payment: {}", e))?;
-        Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, json.as_bytes()))
+        Ok(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            json.as_bytes(),
+        ))
     }
 }
 
@@ -85,7 +89,7 @@ pub fn create_eip712_typed_data(
     // Normalize addresses (lowercase, with 0x prefix)
     let payer_normalized = normalize_address(payer);
     let payee_normalized = normalize_address(&requirements.pay_to);
-    
+
     // Calculate valid_after and valid_before
     let valid_after = timestamp;
     let valid_before = timestamp + requirements.max_timeout_seconds.unwrap_or(60) as u64;
@@ -136,33 +140,38 @@ pub fn create_eip712_typed_data(
     // Serialize to JSON string with proper formatting
     let json_string = serde_json::to_string_pretty(&typed_data)
         .map_err(|e| format!("Failed to serialize typed data: {}", e))?;
-    
+
     // Validate the serialized JSON by parsing it back
     let _validation: serde_json::Value = serde_json::from_str(&json_string)
         .map_err(|e| format!("Serialized JSON is invalid: {}", e))?;
-    
+
     // Additional validation: ensure all required fields are present
     let parsed_validation: serde_json::Value = serde_json::from_str(&json_string)
         .map_err(|e| format!("Failed to parse for validation: {}", e))?;
-    
+
     // Check domain (EIP-3009 TransferWithAuthorization)
-    if !parsed_validation["domain"]["name"].is_string() || 
-       !parsed_validation["domain"]["version"].is_string() ||
-       (!parsed_validation["domain"]["chainId"].is_number() && !parsed_validation["domain"]["chainId"].is_string()) ||
-       !parsed_validation["domain"]["verifyingContract"].is_string() {
+    if !parsed_validation["domain"]["name"].is_string()
+        || !parsed_validation["domain"]["version"].is_string()
+        || (!parsed_validation["domain"]["chainId"].is_number()
+            && !parsed_validation["domain"]["chainId"].is_string())
+        || !parsed_validation["domain"]["verifyingContract"].is_string()
+    {
         return Err("Invalid domain structure in typed data".to_string());
     }
-    
+
     // Check message (EIP-3009 TransferWithAuthorization)
-    if !parsed_validation["message"]["from"].is_string() ||
-       !parsed_validation["message"]["to"].is_string() ||
-       !parsed_validation["message"]["value"].is_string() ||
-       (!parsed_validation["message"]["validAfter"].is_number() && !parsed_validation["message"]["validAfter"].is_string()) ||
-       (!parsed_validation["message"]["validBefore"].is_number() && !parsed_validation["message"]["validBefore"].is_string()) ||
-       !parsed_validation["message"]["nonce"].is_string() {
+    if !parsed_validation["message"]["from"].is_string()
+        || !parsed_validation["message"]["to"].is_string()
+        || !parsed_validation["message"]["value"].is_string()
+        || (!parsed_validation["message"]["validAfter"].is_number()
+            && !parsed_validation["message"]["validAfter"].is_string())
+        || (!parsed_validation["message"]["validBefore"].is_number()
+            && !parsed_validation["message"]["validBefore"].is_string())
+        || !parsed_validation["message"]["nonce"].is_string()
+    {
         return Err("Invalid message structure in typed data".to_string());
     }
-    
+
     Ok(json_string)
 }
 
@@ -182,13 +191,13 @@ pub fn generate_nonce() -> String {
     // Since we're in WASM, we'll use the available random functionality
     // to generate a hex string that represents a 32-byte value
     let mut bytes: Vec<u8> = Vec::with_capacity(32);
-    
+
     for _ in 0..32 {
         // Generate random byte (0-255)
         let random = js_sys::Math::random() * 256.0;
         bytes.push(random as u8);
     }
-    
+
     // Convert to hex string with 0x prefix
     format!("0x{}", hex::encode(bytes))
 }
@@ -208,8 +217,9 @@ pub fn create_payment_payload(
 ) -> PaymentPayload {
     // Calculate valid_after and valid_before timestamps
     let valid_after = timestamp.to_string();
-    let valid_before = (timestamp + requirements.max_timeout_seconds.unwrap_or(60) as u64).to_string();
-    
+    let valid_before =
+        (timestamp + requirements.max_timeout_seconds.unwrap_or(60) as u64).to_string();
+
     PaymentPayload {
         x402_version: 1,
         scheme: requirements.scheme.clone(),
@@ -234,17 +244,8 @@ mod tests {
 
     #[test]
     fn test_normalize_address() {
-        assert_eq!(
-            normalize_address("0xABCD1234"),
-            "0xabcd1234"
-        );
-        assert_eq!(
-            normalize_address("ABCD1234"),
-            "0xabcd1234"
-        );
-        assert_eq!(
-            normalize_address("0X1234"),
-            "0x1234"
-        );
+        assert_eq!(normalize_address("0xABCD1234"), "0xabcd1234");
+        assert_eq!(normalize_address("ABCD1234"), "0xabcd1234");
+        assert_eq!(normalize_address("0X1234"), "0x1234");
     }
 }

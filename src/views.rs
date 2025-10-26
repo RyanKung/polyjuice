@@ -1,3 +1,4 @@
+use web_sys::InputEvent;
 use yew::prelude::*;
 
 use crate::models::*;
@@ -31,7 +32,7 @@ pub fn ProfileView(props: &ProfileViewProps) -> Html {
                                 <p class="username">{"@"}{username}</p>
                             }
                             <div class="fid-badge">{"FID: "}{result.profile.fid}</div>
-                            
+
                             if let Some(bio) = &result.profile.bio {
                                 <p class="bio">{bio}</p>
                             }
@@ -200,7 +201,7 @@ pub fn ChatView(props: &ChatViewProps) -> Html {
                 if let Some(session) = &props.chat_session {
                     <ChatHeader session={session.clone()} search_result={props.search_result.clone()} />
                     <ChatMessages messages={props.chat_messages.clone()} is_loading={props.is_chat_loading} />
-                    <ChatInput 
+                    <ChatInput
                         message={props.chat_message.clone()}
                         is_loading={props.is_chat_loading}
                         on_input_change={props.on_input_change.clone()}
@@ -283,7 +284,7 @@ fn ChatMessages(props: &ChatMessagesProps) -> Html {
                     </div>
                 }
             })}
-            
+
             if props.is_loading {
                 <div class="assistant-message">
                     <div class="message-content loading">
@@ -315,15 +316,15 @@ fn ChatInput(props: &ChatInputProps) -> Html {
     html! {
         <div class="chat-input">
             <div class="chat-input-box">
-                <input 
-                    type="text" 
+                <input
+                    type="text"
                     class="chat-input-field"
                     placeholder="Ask me anything"
                     value={props.message.clone()}
                     oninput={props.on_input_change.clone()}
                     onkeypress={props.on_keypress.clone()}
                 />
-                <button 
+                <button
                     class="chat-send-button"
                     onclick={props.on_send_message.clone().reform(|_| ())}
                     disabled={props.is_loading}
@@ -331,6 +332,122 @@ fn ChatInput(props: &ChatInputProps) -> Html {
                     {"➤"}
                 </button>
             </div>
+        </div>
+    }
+}
+
+#[derive(Properties, PartialEq, Clone)]
+pub struct EndpointViewProps {
+    pub endpoint_data: Option<EndpointData>,
+    pub is_loading: bool,
+    pub error: Option<String>,
+    pub ping_results: Vec<(String, Option<f64>)>,
+    pub selected_endpoint: Option<String>,
+    pub on_select_endpoint: Callback<String>,
+}
+
+#[derive(Properties, PartialEq, Clone)]
+pub struct EndpointItemProps {
+    pub index: usize,
+    pub endpoint: String,
+    pub latency: Option<f64>,
+    pub is_selected: bool,
+    pub on_select: Callback<String>,
+}
+
+/// Endpoint view component
+#[function_component]
+pub fn EndpointView(props: &EndpointViewProps) -> Html {
+    html! {
+        <div class="card endpoint-card">
+            <div class="card-content">
+                if let Some(data) = &props.endpoint_data {
+                    <div class="endpoint-header">
+                        <h2>{"PolyEndpoint Registry"}</h2>
+                        <div class="endpoint-info">
+                            <div class="endpoint-info-item">
+                                <span class="endpoint-label">{"Contract:"}</span>
+                                <span class="endpoint-value">{&data.contract_address}</span>
+                            </div>
+                            <div class="endpoint-info-item">
+                                <span class="endpoint-label">{"Network:"}</span>
+                                <span class="endpoint-value">{&data.network}</span>
+                            </div>
+                            <div class="endpoint-info-item">
+                                <span class="endpoint-label">{"Endpoints:"}</span>
+                                <span class="endpoint-value">{format!("{}", data.endpoints.len())}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="endpoints-list">
+                        <h3>{"Registered Endpoints"}</h3>
+                        if data.endpoints.is_empty() {
+                            <div class="no-endpoints">
+                                <p>{"No endpoints registered yet."}</p>
+                            </div>
+                        } else {
+                            <div class="endpoints-container">
+                                {for data.endpoints.iter().enumerate().map(|(index, endpoint)| {
+                                    let latency = props.ping_results.iter()
+                                        .find(|(url, _)| url == endpoint)
+                                        .and_then(|(_, latency)| *latency);
+                                    let is_selected = props.selected_endpoint.as_ref()
+                                        .map(|s| s == endpoint)
+                                        .unwrap_or(false);
+                                    html! {
+                                        <EndpointItem
+                                            index={index}
+                                            endpoint={endpoint.clone()}
+                                            latency={latency}
+                                            is_selected={is_selected}
+                                            on_select={props.on_select_endpoint.clone()}
+                                        />
+                                    }
+                                })}
+                            </div>
+                        }
+                    </div>
+                } else if props.is_loading {
+                    <div class="endpoint-loading">
+                        <div class="loading-spinner"></div>
+                        <p>{"Loading endpoints..."}</p>
+                    </div>
+                } else if let Some(error) = &props.error {
+                    <div class="error-message">
+                        <p>{error}</p>
+                    </div>
+                } else {
+                    <div class="no-endpoint-data">
+                        <p>{"Click the link button to load endpoints"}</p>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+}
+
+/// Individual endpoint item with ping status
+#[function_component]
+fn EndpointItem(props: &EndpointItemProps) -> Html {
+    let class_name = if props.is_selected { "endpoint-item selected" } else { "endpoint-item" };
+    let endpoint = props.endpoint.clone();
+    let on_select = props.on_select.clone();
+    
+    html! {
+        <div class={class_name} onclick={Callback::from(move |_| on_select.emit(endpoint.clone()))}>
+            <span class="endpoint-index">{format!("{}", props.index + 1)}</span>
+            <span class="endpoint-url">{&props.endpoint}</span>
+            if props.is_selected {
+                <span class="endpoint-selected-indicator">{"✓"} </span>
+            }
+            if let Some(latency) = props.latency {
+                <span class="endpoint-latency">
+                    {format!("{:.0}ms", latency)}
+                </span>
+            } else {
+                <span class="endpoint-latency checking">{"checking..."}</span>
+            }
         </div>
     }
 }

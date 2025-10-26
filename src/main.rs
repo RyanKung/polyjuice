@@ -1,18 +1,18 @@
-use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use yew::prelude::*;
 
 mod api;
-mod payment;
-mod wallet;
-mod models;
-mod services;
-mod handlers;
 mod components;
+mod handlers;
+mod models;
+mod payment;
+mod services;
 mod views;
+mod wallet;
 
-use models::*;
-use handlers::*;
 use components::*;
+use handlers::*;
+use models::*;
 use views::*;
 
 #[function_component]
@@ -33,11 +33,11 @@ fn App() -> Html {
             .unwrap_or("https://snaprag.0xbase.ai")
             .trim_end_matches('/')
             .to_string();
-        
+
         web_sys::console::log_1(&format!("🌐 Using API Server: {}", url).into());
         url
     });
-    
+
     // Chat state management
     let chat_session = use_state(|| None::<ChatSession>);
     let chat_message = use_state(|| String::new());
@@ -45,6 +45,14 @@ fn App() -> Html {
     let is_chat_loading = use_state(|| false);
     let chat_error = use_state(|| None::<String>);
     let current_view = use_state(|| "profile".to_string()); // "profile" or "chat"
+
+    // Endpoint state management
+    let endpoint_data = use_state(|| None::<EndpointData>);
+    let is_endpoint_loading = use_state(|| false);
+    let endpoint_error = use_state(|| None::<String>);
+    let show_endpoint = use_state(|| false);
+    let ping_results = use_state(|| Vec::<(String, Option<f64>)>::new());
+    let selected_endpoint = use_state(|| None::<String>); // Currently selected endpoint
 
     // Initialize wallet on mount
     {
@@ -90,9 +98,10 @@ fn App() -> Html {
     }
 
     // Create handlers
-    let on_connect_wallet = create_wallet_connect_handler(wallet_error.clone(), wallet_account.clone());
+    let on_connect_wallet =
+        create_wallet_connect_handler(wallet_error.clone(), wallet_account.clone());
     let on_disconnect_wallet = create_wallet_disconnect_handler(wallet_account.clone());
-    
+
     let on_search = create_search_handler(
         search_input.clone(),
         search_result.clone(),
@@ -132,11 +141,76 @@ fn App() -> Html {
     let on_search_input_change = create_input_change_handler(search_input.clone());
     let on_chat_input_change = create_input_change_handler(chat_message.clone());
 
+    let on_fetch_endpoints = create_endpoint_fetch_handler(
+        endpoint_data.clone(),
+        is_endpoint_loading.clone(),
+        endpoint_error.clone(),
+        ping_results.clone(),
+    );
+
+    let on_show_endpoint = {
+        let show_endpoint = show_endpoint.clone();
+        let endpoint_data = endpoint_data.clone();
+        let is_endpoint_loading = is_endpoint_loading.clone();
+        Callback::from(move |_| {
+            show_endpoint.set(true);
+            // Fetch endpoints if not already loaded
+            if endpoint_data.is_none() && !*is_endpoint_loading {
+                on_fetch_endpoints.emit(());
+            }
+        })
+    };
+
+    let on_back_from_endpoint = {
+        let show_endpoint = show_endpoint.clone();
+        Callback::from(move |_| {
+            show_endpoint.set(false);
+        })
+    };
+
+    // Handler for selecting an endpoint
+    let on_select_endpoint = {
+        let api_url = api_url.clone();
+        let show_endpoint = show_endpoint.clone();
+        let selected_endpoint = selected_endpoint.clone();
+        Callback::from(move |endpoint: String| {
+            let endpoint_clone = endpoint.clone();
+            api_url.set(endpoint_clone.clone().trim_end_matches('/').to_string());
+            selected_endpoint.set(Some(endpoint_clone.clone()));
+            show_endpoint.set(false);
+            web_sys::console::log_1(&format!("✅ Selected endpoint: {}", &endpoint).into());
+        })
+    };
+
     html! {
         <div class="app-container">
+            // Link Button - Only visible in search page (top left)
+            if !*show_endpoint && (*search_result).is_none() {
+                <LinkButton on_click={on_show_endpoint} />
+            }
+
+            // Endpoint View (show when show_endpoint is true)
+            if *show_endpoint {
+                <div class="endpoint-page">
+                    <div class="back-to-search">
+                        <button class="back-button" onclick={on_back_from_endpoint}>
+                            {"←"}
+                        </button>
+                    </div>
+                    <EndpointView
+                        endpoint_data={(*endpoint_data).clone()}
+                        is_loading={*is_endpoint_loading}
+                        error={(*endpoint_error).clone()}
+                        ping_results={(*ping_results).clone()}
+                        selected_endpoint={(*selected_endpoint).clone()}
+                        on_select_endpoint={on_select_endpoint.clone()}
+                    />
+                </div>
+            } else {
             // Search Page (only show if no search results)
             if (*search_result).is_none() {
                 <div class="search-page">
+
                     <div class="search-header">
                         <div class="logo">
                             // Logo Image
@@ -146,8 +220,8 @@ fn App() -> Html {
                             <h1>{"polyjuice"}</h1>
                             <p class="tagline">{"Discover & Chat with Farcaster Users"}</p>
                         </div>
-                        
-                        <WalletStatus 
+
+                        <WalletStatus
                             wallet_account={(*wallet_account).clone()}
                             wallet_initialized={*wallet_initialized}
                             wallet_error={(*wallet_error).clone()}
@@ -157,7 +231,7 @@ fn App() -> Html {
                     </div>
 
                     <div class="search-content">
-                        <SearchBox 
+                        <SearchBox
                             search_input={(*search_input).clone()}
                             is_loading={*is_loading}
                             on_input_change={on_search_input_change}
@@ -165,7 +239,7 @@ fn App() -> Html {
                             on_search={on_search.clone()}
                         />
 
-                        <MobileSearchButton 
+                        <MobileSearchButton
                             is_loading={*is_loading}
                             on_search={on_search.clone()}
                         />
@@ -183,7 +257,7 @@ fn App() -> Html {
             if (*search_result).is_some() {
                 <div class="results-page">
                     <BackButton on_back={on_smart_back} />
-                    
+
                     // Profile Card (only show if current_view is "profile")
                     if (*current_view).as_str() == "profile" {
                         <ProfileView search_result={(*search_result).clone()} />
@@ -191,7 +265,7 @@ fn App() -> Html {
 
                     // Chat Card (only show if current_view is "chat")
                     if (*current_view).as_str() == "chat" {
-                        <ChatView 
+                        <ChatView
                             chat_session={(*chat_session).clone()}
                             chat_messages={(*chat_messages).clone()}
                             chat_message={(*chat_message).clone()}
@@ -209,6 +283,7 @@ fn App() -> Html {
                 if (*search_result).is_some() && (*current_view).as_str() == "profile" {
                     <FloatingChatButton on_switch_to_chat={on_switch_to_chat} />
                 }
+            }
             }
         </div>
     }

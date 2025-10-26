@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 // Profile and Social Data Structures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -80,8 +81,7 @@ pub struct ApiResponse<T> {
     pub error: Option<String>,
 }
 
-impl<T> ApiResponse<T> {
-}
+impl<T> ApiResponse<T> {}
 
 // Chat-related Structures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -131,4 +131,19 @@ pub struct ChatMessageResponse {
     pub message: String,
     pub relevant_casts_count: usize,
     pub conversation_length: usize,
+}
+
+// Endpoint-related Structures
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EndpointData {
+    pub endpoints: Vec<String>,
+    pub contract_address: String,
+    pub network: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EndpointWithPing {
+    pub url: String,
+    pub latency_ms: Option<f64>,
+    pub status: String, // "online", "offline", "checking"
 }

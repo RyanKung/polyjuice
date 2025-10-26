@@ -1,5 +1,6 @@
+use crate::api::ApiResponse as RawApiResponse;
+use crate::api::EndpointInfo;
 use crate::models::*;
-use crate::api::{ApiResponse as RawApiResponse, EndpointInfo};
 use crate::payment::PaymentRequirements;
 use crate::wallet::WalletAccount;
 
@@ -22,11 +23,12 @@ pub async fn handle_payment(
         .ok_or("No wallet address available")?;
 
     // Create EIP-712 typed data
-    let typed_data = crate::payment::create_eip712_typed_data(requirements, payer, &nonce, timestamp)?;
-    
+    let typed_data =
+        crate::payment::create_eip712_typed_data(requirements, payer, &nonce, timestamp)?;
+
     // Debug: Log the typed data string
     web_sys::console::log_1(&format!("Typed data string: {}", typed_data).into());
-    
+
     // Validate JSON parsing
     let _parsed_check: serde_json::Value = serde_json::from_str(&typed_data)
         .map_err(|e| format!("Failed to parse typed data as JSON: {}", e))?;
@@ -79,19 +81,30 @@ where
                 if let Some(account) = wallet_account {
                     if account.is_connected {
                         // Parse payment requirements
-                        if let Ok(payment_resp) = serde_json::from_str::<crate::payment::PaymentRequirementsResponse>(&resp.body) {
+                        if let Ok(payment_resp) = serde_json::from_str::<
+                            crate::payment::PaymentRequirementsResponse,
+                        >(&resp.body)
+                        {
                             if let Some(requirements) = payment_resp.accepts.first() {
                                 // Attempt payment
-                                match handle_payment(requirements, account, api_url, endpoint, body).await {
+                                match handle_payment(requirements, account, api_url, endpoint, body)
+                                    .await
+                                {
                                     Ok(paid_resp) => {
                                         // Parse successful response
                                         serde_json::from_str::<ApiResponse<T>>(&paid_resp.body)
                                             .map_err(|e| format!("Failed to parse response: {}", e))
                                             .and_then(|api_response| {
                                                 if api_response.success {
-                                                    api_response.data.ok_or_else(|| api_response.error.unwrap_or_else(|| "No data returned".to_string()))
+                                                    api_response.data.ok_or_else(|| {
+                                                        api_response.error.unwrap_or_else(|| {
+                                                            "No data returned".to_string()
+                                                        })
+                                                    })
                                                 } else {
-                                                    Err(api_response.error.unwrap_or_else(|| "Unknown error".to_string()))
+                                                    Err(api_response.error.unwrap_or_else(|| {
+                                                        "Unknown error".to_string()
+                                                    }))
                                                 }
                                             })
                                     }
@@ -107,7 +120,10 @@ where
                         Err("Wallet not connected. Please connect your wallet to access paid features.".to_string())
                     }
                 } else {
-                    Err("No wallet connected. Please connect MetaMask to access paid features.".to_string())
+                    Err(
+                        "No wallet connected. Please connect MetaMask to access paid features."
+                            .to_string(),
+                    )
                 }
             } else {
                 // Parse successful response
@@ -115,9 +131,15 @@ where
                     .map_err(|e| format!("Failed to parse response: {}", e))
                     .and_then(|api_response| {
                         if api_response.success {
-                            api_response.data.ok_or_else(|| api_response.error.unwrap_or_else(|| "No data returned".to_string()))
+                            api_response.data.ok_or_else(|| {
+                                api_response
+                                    .error
+                                    .unwrap_or_else(|| "No data returned".to_string())
+                            })
                         } else {
-                            Err(api_response.error.unwrap_or_else(|| "Unknown error".to_string()))
+                            Err(api_response
+                                .error
+                                .unwrap_or_else(|| "Unknown error".to_string()))
                         }
                     })
             }
