@@ -32,6 +32,7 @@ pub struct PaymentPayload {
     pub x402_version: u32,
     pub scheme: String,
     pub network: String,
+    pub resource: String,
     pub payload: ExactPayload,
 }
 
@@ -224,6 +225,7 @@ pub fn create_payment_payload(
         x402_version: 1,
         scheme: requirements.scheme.clone(),
         network: requirements.network.clone(),
+        resource: requirements.resource.clone(),
         payload: ExactPayload {
             signature: signature.to_string(),
             authorization: Authorization {

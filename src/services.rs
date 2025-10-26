@@ -22,9 +22,16 @@ pub async fn handle_payment(
         .as_ref()
         .ok_or("No wallet address available")?;
 
+    // Build the full resource URI from current endpoint
+    let full_resource = format!("{}{}", api_url, endpoint.path);
+    
+    // Create a new requirements with the actual resource URI
+    let mut updated_requirements = requirements.clone();
+    updated_requirements.resource = full_resource;
+
     // Create EIP-712 typed data
     let typed_data =
-        crate::payment::create_eip712_typed_data(requirements, payer, &nonce, timestamp)?;
+        crate::payment::create_eip712_typed_data(&updated_requirements, payer, &nonce, timestamp)?;
 
     // Debug: Log the typed data string
     web_sys::console::log_1(&format!("Typed data string: {}", typed_data).into());
@@ -39,9 +46,9 @@ pub async fn handle_payment(
         .await
         .map_err(|e| format!("Failed to sign payment: {}", e))?;
 
-    // Create payment payload
+    // Create payment payload with updated resource
     let payment_payload =
-        crate::payment::create_payment_payload(requirements, payer, &signature, &nonce, timestamp);
+        crate::payment::create_payment_payload(&updated_requirements, payer, &signature, &nonce, timestamp);
 
     // Debug: Log payment payload as JSON
     let payment_json = serde_json::to_string(&payment_payload)
