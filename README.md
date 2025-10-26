@@ -116,18 +116,41 @@ make help           # Show all commands
 
 ### Environment Configuration
 
-Configure the API server URL using the `SNAPRAG_API_URL` environment variable:
+Configure the API server URL using **one of three methods**:
 
+#### Method 1: Browser URL Parameter (Recommended for Testing)
+Add `?api_url=YOUR_URL` to the browser URL:
+```
+http://localhost:8080/?api_url=http://127.0.0.1:3000
+```
+
+#### Method 2: Build-Time Environment Variable
+Set environment variable during build:
 ```bash
 # Development with custom API URL
 SNAPRAG_API_URL=http://192.168.1.100:3000 make serve
 
 # Production build with custom API URL
-SNAPRAG_API_URL=https://api.yourdomain.com make build-prod-custom
-
-# Build for deployment (uses snaprag.0xbase.ai)
-make build-deploy
+SNAPRAG_API_URL=https://api.yourdomain.com make build-prod
 ```
+
+#### Method 3: .env File (Build-time)
+1. **Copy the example file**:
+```bash
+cp .env.example .env
+```
+
+2. **Edit `.env`** to set your API URL:
+```bash
+SNAPRAG_API_URL=http://127.0.0.1:3000
+```
+
+3. **Run**:
+```bash
+make serve
+```
+
+**Priority**: URL parameter > Environment variable > Build-time env > Default production URL
 
 ## 🚀 Deployment
 

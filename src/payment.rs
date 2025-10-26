@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +44,7 @@ impl PaymentPayload {
     pub fn to_base64(&self) -> Result<String, String> {
         let json = serde_json::to_string(self)
             .map_err(|e| format!("Failed to serialize payment: {}", e))?;
-        Ok(base64::encode(json.as_bytes()))
+        Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, json.as_bytes()))
     }
 }
 

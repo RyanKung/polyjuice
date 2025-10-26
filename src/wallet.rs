@@ -111,36 +111,6 @@ pub async fn disconnect() -> Result<(), String> {
     }
 }
 
-// Switch to chain
-pub async fn switch_chain(chain_id: u64) -> Result<(), String> {
-    let chain_id_hex = format!("0x{:x}", chain_id);
-    let result = switch_to_chain(&chain_id_hex).await;
-    let response: WalletResponse = serde_wasm_bindgen::from_value(result)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
-
-    if response.success {
-        Ok(())
-    } else {
-        Err(response
-            .error
-            .unwrap_or_else(|| "Unknown error".to_string()))
-    }
-}
-
-// Sign a message
-pub async fn sign_message(message: &str) -> Result<String, String> {
-    let result = sign_wallet_message(message).await;
-    let response: WalletResponse = serde_wasm_bindgen::from_value(result)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
-
-    if response.success {
-        Ok(response.data.unwrap_or_default())
-    } else {
-        Err(response
-            .error
-            .unwrap_or_else(|| "Unknown error".to_string()))
-    }
-}
 
 // Sign typed data (EIP-712)
 pub async fn sign_eip712(typed_data: &str) -> Result<String, String> {
