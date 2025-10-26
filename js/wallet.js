@@ -212,47 +212,31 @@ export async function signTypedData(typedData) {
             throw new Error('Wallet not connected');
         }
         
-        // Parse the JSON string to object for MetaMask
+        console.log('signTypedData received:', typeof typedData);
+        
+        // Parse the JSON string to an object
         let parsedTypedData;
         if (typeof typedData === 'string') {
             parsedTypedData = JSON.parse(typedData);
-        } else {
+        } else if (typeof typedData === 'object' && typedData !== null) {
             parsedTypedData = typedData;
+        } else {
+            throw new Error('Invalid typed data type: ' + typeof typedData);
         }
         
-        console.log('signTypedData received:', typeof typedData, typedData);
-        console.log('Parsed typedData:', parsedTypedData);
+        console.log('Parsed typedData:', JSON.stringify(parsedTypedData, null, 2));
         
-        // Strict validation of parsed data
+        // Validation
         if (!parsedTypedData.domain || !parsedTypedData.message || !parsedTypedData.types) {
-            throw new Error('Invalid typed data structure');
-        }
-        
-        // Check if parsedTypedData is properly serializable
-        try {
-            const testSerialization = JSON.stringify(parsedTypedData);
-            console.log('Serialization test successful, length:', testSerialization.length);
-            console.log('Serialized data preview:', testSerialization.substring(0, 200) + '...');
-        } catch (e) {
-            console.error('Serialization test failed:', e);
-            throw new Error('Typed data is not properly serializable: ' + e.message);
-        }
-        
-        // Validate specific fields
-        if (typeof parsedTypedData.domain.chainId !== 'number') {
-            console.warn('chainId is not a number:', typeof parsedTypedData.domain.chainId, parsedTypedData.domain.chainId);
+            throw new Error('Invalid typed data structure - missing required fields');
         }
         
         console.log('Calling MetaMask eth_signTypedData_v4...');
         
-        // Try to create a clean copy using deep clone to avoid any reference issues
-        const cleanTypedData = JSON.parse(JSON.stringify(parsedTypedData));
-        
-        console.log('Clean typed data created:', cleanTypedData);
-        
+        // Pass the parsed data directly to MetaMask
         const signature = await ethereum.request({
             method: 'eth_signTypedData_v4',
-            params: [currentAccount, cleanTypedData],
+            params: [currentAccount, parsedTypedData],
         });
         
         return {
@@ -261,6 +245,7 @@ export async function signTypedData(typedData) {
             data: signature
         };
     } catch (error) {
+        console.error('signTypedData error:', error);
         return {
             success: false,
             error: error.message,

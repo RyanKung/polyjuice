@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use hex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,18 +27,35 @@ pub struct PaymentRequirementsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentPayload {
-    pub version: String,
+    #[serde(rename = "x402Version")]
+    pub x402_version: u32,
     pub scheme: String,
     pub network: String,
-    pub payer: String,
-    pub payee: String,
-    pub asset: String,
-    pub amount: String,
-    pub nonce: String,
-    pub timestamp: u64,
+    pub payload: ExactPayload,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExactPayload {
     pub signature: String,
-    pub resource: String,
-    pub extra: Option<serde_json::Value>,
+    pub authorization: Authorization,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Authorization {
+    /// Payer's wallet address
+    pub from: String,
+    /// Recipient's wallet address
+    pub to: String,
+    /// Payment amount in atomic units
+    pub value: String,
+    /// Unix timestamp when authorization becomes valid
+    #[serde(rename = "validAfter")]
+    pub valid_after: String,
+    /// Unix timestamp when authorization expires
+    #[serde(rename = "validBefore")]
+    pub valid_before: String,
+    /// 32-byte random nonce to prevent replay attacks
+    pub nonce: String,
 }
 
 impl PaymentPayload {
@@ -48,7 +66,7 @@ impl PaymentPayload {
     }
 }
 
-/// Create EIP-712 typed data for x402 payment
+/// Create EIP-712 typed data for EIP-3009 TransferWithAuthorization
 pub fn create_eip712_typed_data(
     requirements: &PaymentRequirements,
     payer: &str,
@@ -67,49 +85,83 @@ pub fn create_eip712_typed_data(
     // Normalize addresses (lowercase, with 0x prefix)
     let payer_normalized = normalize_address(payer);
     let payee_normalized = normalize_address(&requirements.pay_to);
-    let asset_normalized = normalize_address(&requirements.asset);
+    
+    // Calculate valid_after and valid_before
+    let valid_after = timestamp;
+    let valid_before = timestamp + requirements.max_timeout_seconds.unwrap_or(60) as u64;
+
+    // Determine the verifying contract based on the asset (USDC)
+    let verifying_contract = normalize_address(&requirements.asset);
 
     let typed_data = serde_json::json!({
         "types": {
-            "EIP712Domain": {
-                "name": {"type": "string"},
-                "version": {"type": "string"},
-                "chainId": {"type": "uint256"}
-            },
-            "Payment": {
-                "payer": {"type": "address"},
-                "payee": {"type": "address"},
-                "asset": {"type": "address"},
-                "amount": {"type": "uint256"},
-                "nonce": {"type": "string"},
-                "timestamp": {"type": "uint256"},
-                "resource": {"type": "string"}
-            }
+            "EIP712Domain": [
+                {"name": "name", "type": "string"},
+                {"name": "version", "type": "string"},
+                {"name": "chainId", "type": "uint256"},
+                {"name": "verifyingContract", "type": "address"}
+            ],
+            "TransferWithAuthorization": [
+                {"name": "from", "type": "address"},
+                {"name": "to", "type": "address"},
+                {"name": "value", "type": "uint256"},
+                {"name": "validAfter", "type": "uint256"},
+                {"name": "validBefore", "type": "uint256"},
+                {"name": "nonce", "type": "bytes32"}
+            ]
         },
-        "primaryType": "Payment",
+        "primaryType": "TransferWithAuthorization",
         "domain": {
-            "name": "x402-payment",
-            "version": "1",
-            "chainId": chain_id
+            "name": requirements.extra.as_ref()
+                .and_then(|e| e.get("name"))
+                .and_then(|n| n.as_str())
+                .unwrap_or("USD Coin"),
+            "version": requirements.extra.as_ref()
+                .and_then(|e| e.get("version"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("2"),
+            "chainId": chain_id,
+            "verifyingContract": verifying_contract
         },
         "message": {
-            "payer": payer_normalized,
-            "payee": payee_normalized,
-            "asset": asset_normalized,
-            "amount": requirements.max_amount_required,
-            "nonce": nonce,
-            "timestamp": timestamp,
-            "resource": requirements.resource
+            "from": payer_normalized,
+            "to": payee_normalized,
+            "value": requirements.max_amount_required,
+            "validAfter": valid_after,
+            "validBefore": valid_before,
+            "nonce": nonce
         }
     });
 
-    // Serialize to JSON string
-    let json_string = serde_json::to_string(&typed_data)
+    // Serialize to JSON string with proper formatting
+    let json_string = serde_json::to_string_pretty(&typed_data)
         .map_err(|e| format!("Failed to serialize typed data: {}", e))?;
     
     // Validate the serialized JSON by parsing it back
     let _validation: serde_json::Value = serde_json::from_str(&json_string)
         .map_err(|e| format!("Serialized JSON is invalid: {}", e))?;
+    
+    // Additional validation: ensure all required fields are present
+    let parsed_validation: serde_json::Value = serde_json::from_str(&json_string)
+        .map_err(|e| format!("Failed to parse for validation: {}", e))?;
+    
+    // Check domain (EIP-3009 TransferWithAuthorization)
+    if !parsed_validation["domain"]["name"].is_string() || 
+       !parsed_validation["domain"]["version"].is_string() ||
+       (!parsed_validation["domain"]["chainId"].is_number() && !parsed_validation["domain"]["chainId"].is_string()) ||
+       !parsed_validation["domain"]["verifyingContract"].is_string() {
+        return Err("Invalid domain structure in typed data".to_string());
+    }
+    
+    // Check message (EIP-3009 TransferWithAuthorization)
+    if !parsed_validation["message"]["from"].is_string() ||
+       !parsed_validation["message"]["to"].is_string() ||
+       !parsed_validation["message"]["value"].is_string() ||
+       (!parsed_validation["message"]["validAfter"].is_number() && !parsed_validation["message"]["validAfter"].is_string()) ||
+       (!parsed_validation["message"]["validBefore"].is_number() && !parsed_validation["message"]["validBefore"].is_string()) ||
+       !parsed_validation["message"]["nonce"].is_string() {
+        return Err("Invalid message structure in typed data".to_string());
+    }
     
     Ok(json_string)
 }
@@ -124,14 +176,21 @@ fn normalize_address(addr: &str) -> String {
     }
 }
 
-/// Generate a random nonce
+/// Generate a random nonce (32 bytes for bytes32)
 pub fn generate_nonce() -> String {
-    // Use WASM-compatible timestamp (milliseconds since epoch)
-    let timestamp = js_sys::Date::now() as u64;
+    // Generate a 32-byte random nonce
+    // Since we're in WASM, we'll use the available random functionality
+    // to generate a hex string that represents a 32-byte value
+    let mut bytes: Vec<u8> = Vec::with_capacity(32);
     
-    // Use timestamp + random number for nonce
-    let random = (js_sys::Math::random() * 1_000_000.0) as u64;
-    format!("{}-{}", timestamp, random)
+    for _ in 0..32 {
+        // Generate random byte (0-255)
+        let random = js_sys::Math::random() * 256.0;
+        bytes.push(random as u8);
+    }
+    
+    // Convert to hex string with 0x prefix
+    format!("0x{}", hex::encode(bytes))
 }
 
 /// Get current Unix timestamp in seconds
@@ -147,19 +206,25 @@ pub fn create_payment_payload(
     nonce: &str,
     timestamp: u64,
 ) -> PaymentPayload {
+    // Calculate valid_after and valid_before timestamps
+    let valid_after = timestamp.to_string();
+    let valid_before = (timestamp + requirements.max_timeout_seconds.unwrap_or(60) as u64).to_string();
+    
     PaymentPayload {
-        version: "1".to_string(),
+        x402_version: 1,
         scheme: requirements.scheme.clone(),
         network: requirements.network.clone(),
-        payer: normalize_address(payer),
-        payee: normalize_address(&requirements.pay_to),
-        asset: normalize_address(&requirements.asset),
-        amount: requirements.max_amount_required.clone(),
-        nonce: nonce.to_string(),
-        timestamp,
-        signature: signature.to_string(),
-        resource: requirements.resource.clone(),
-        extra: requirements.extra.clone(),
+        payload: ExactPayload {
+            signature: signature.to_string(),
+            authorization: Authorization {
+                from: normalize_address(payer),
+                to: normalize_address(&requirements.pay_to),
+                value: requirements.max_amount_required.clone(),
+                valid_after,
+                valid_before,
+                nonce: nonce.to_string(),
+            },
+        },
     }
 }
 
