@@ -140,10 +140,3 @@ pub struct EndpointData {
     pub contract_address: String,
     pub network: String,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct EndpointWithPing {
-    pub url: String,
-    pub latency_ms: Option<f64>,
-    pub status: String, // "online", "offline", "checking"
-}
