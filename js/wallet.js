@@ -562,12 +562,33 @@ export async function pingEndpoint(endpoint) {
                     data: null
                 };
             }
+            // Check for CORS errors
+            if (fetchError.message && (
+                fetchError.message.includes('CORS') ||
+                fetchError.message.includes('cors') ||
+                fetchError.message.includes('Access-Control-Allow-Origin') ||
+                fetchError.message.includes('cross-origin')
+            )) {
+                return {
+                    success: false,
+                    error: 'CORS policy blocked the request. The server must allow cross-origin requests.',
+                    data: null
+                };
+            }
             throw fetchError;
         }
     } catch (error) {
+        // Check for CORS errors in the outer catch
+        let errorMessage = error.message || 'Unknown error';
+        if (errorMessage.includes('CORS') || 
+            errorMessage.includes('cors') || 
+            errorMessage.includes('Access-Control-Allow-Origin') ||
+            errorMessage.includes('cross-origin')) {
+            errorMessage = 'CORS policy blocked the request. The server must allow cross-origin requests.';
+        }
         return {
             success: false,
-            error: error.message,
+            error: errorMessage,
             data: null
         };
     }

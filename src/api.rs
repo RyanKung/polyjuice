@@ -56,12 +56,19 @@ pub async fn make_request(
 
     // Add payment header if provided
     if let Some(ref payment) = payment_header {
+        web_sys::console::log_1(
+            &format!("🔐 Setting X-PAYMENT header (length: {})", payment.len()).into(),
+        );
         headers
             .set("X-PAYMENT", payment)
             .map_err(|e| format!("Failed to set X-PAYMENT header: {:?}", e))?;
+        web_sys::console::log_1(&"✅ X-PAYMENT header set successfully".into());
+    } else {
+        web_sys::console::log_1(&"ℹ️ No payment header provided".into());
     }
 
     let window = web_sys::window().ok_or("No window object")?;
+    web_sys::console::log_1(&format!("🌐 Making request: {} {}", endpoint.method, url).into());
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
         .await
         .map_err(|e| format!("Fetch failed: {:?}", e))?;

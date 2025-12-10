@@ -67,11 +67,46 @@ pub struct WordFrequency {
     pub percentage: f32,
 }
 
+// MBTI Personality Structures
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MbtiProfile {
+    pub fid: i64,
+    pub mbti_type: String,          // e.g., "INTJ", "ENFP"
+    pub confidence: f32,            // 0.0-1.0 confidence score
+    pub dimensions: MbtiDimensions, // Individual dimension scores
+    pub traits: Vec<String>,        // Key personality traits
+    pub analysis: String,           // Detailed analysis
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MbtiDimensions {
+    pub ei_score: f32,      // 0.0 = E (Extravert), 1.0 = I (Introvert)
+    pub sn_score: f32,      // 0.0 = S (Sensing), 1.0 = N (Intuition)
+    pub tf_score: f32,      // 0.0 = T (Thinking), 1.0 = F (Feeling)
+    pub jp_score: f32,      // 0.0 = J (Judging), 1.0 = P (Perceiving)
+    pub ei_confidence: f32, // Confidence for E/I dimension
+    pub sn_confidence: f32,
+    pub tf_confidence: f32,
+    pub jp_confidence: f32,
+}
+
 // Search and API Response Structures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SearchResult {
     pub profile: ProfileData,
     pub social: Option<SocialData>,
+    pub mbti: Option<MbtiProfile>,
+    pub pending_jobs: Option<Vec<PendingJob>>,
+}
+
+/// Pending job information
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PendingJob {
+    pub job_key: String,
+    pub job_type: String, // "social", "mbti", etc.
+    pub status: Option<String>, // "pending", "processing", "completed", "failed"
+    pub started_at: Option<u64>, // Timestamp
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +117,24 @@ pub struct ApiResponse<T> {
 }
 
 impl<T> ApiResponse<T> {}
+
+/// Pending job response structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
+pub struct PendingResponse {
+    pub status: String,
+    pub job_key: Option<String>,
+    pub message: Option<String>,
+}
+
+/// Job status response structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
+pub struct JobStatusResponse {
+    pub job_key: String,
+    pub status: String,
+    pub result: Option<serde_json::Value>,
+}
 
 // Chat-related Structures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

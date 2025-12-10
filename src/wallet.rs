@@ -1,7 +1,9 @@
-use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
-use crate::models::EndpointData;
 use polyendpoint_sdk::PolyEndpointClient;
+use serde::Deserialize;
+use serde::Serialize;
+use wasm_bindgen::prelude::*;
+
+use crate::models::EndpointData;
 
 #[wasm_bindgen(module = "/js/wallet.js")]
 extern "C" {
@@ -122,7 +124,6 @@ pub async fn disconnect() -> Result<(), String> {
     }
 }
 
-
 // Sign typed data (EIP-712)
 pub async fn sign_eip712(typed_data: &str) -> Result<String, String> {
     let result = sign_typed_data(typed_data).await;
@@ -140,11 +141,13 @@ pub async fn sign_eip712(typed_data: &str) -> Result<String, String> {
 
 // Get PolyEndpoint contract data
 pub async fn get_endpoints(contract_address: &str, rpc_url: &str) -> Result<EndpointData, String> {
-    web_sys::console::log_1(&format!("📋 Fetching endpoints from contract: {}", contract_address).into());
-    
+    web_sys::console::log_1(
+        &format!("📋 Fetching endpoints from contract: {}", contract_address).into(),
+    );
+
     // Create SDK client
     let client = PolyEndpointClient::new(contract_address);
-    
+
     // Use network name from RPC URL or default to base-sepolia
     let network = if rpc_url.contains("sepolia") {
         "base-sepolia"
@@ -154,13 +157,15 @@ pub async fn get_endpoints(contract_address: &str, rpc_url: &str) -> Result<Endp
         // Fallback to using RPC URL directly
         rpc_url
     };
-    
+
     // Fetch endpoints using SDK
     match client.get_endpoints(network).await {
         Ok(endpoints) => {
             let urls: Vec<String> = endpoints.iter().map(|e| e.url.clone()).collect();
-            web_sys::console::log_1(&format!("✅ Fetched {} endpoints from SDK", urls.len()).into());
-            
+            web_sys::console::log_1(
+                &format!("✅ Fetched {} endpoints from SDK", urls.len()).into(),
+            );
+
             Ok(EndpointData {
                 endpoints: urls,
                 contract_address: contract_address.to_string(),
@@ -203,4 +208,3 @@ pub async fn ping_endpoint_service(url: &str) -> Result<f64, String> {
             .unwrap_or_else(|| "Unknown error".to_string()))
     }
 }
-

@@ -148,28 +148,6 @@ pub fn ErrorMessage(props: &ErrorMessageProps) -> Html {
     }
 }
 
-#[derive(Properties, PartialEq, Clone)]
-pub struct LoadingOverlayProps {
-    pub is_loading: bool,
-    pub text: String,
-}
-
-/// Loading overlay component
-#[function_component]
-pub fn LoadingOverlay(props: &LoadingOverlayProps) -> Html {
-    if props.is_loading {
-        html! {
-            <div class="loading-overlay">
-                <div class="loading-content">
-                    <div class="loading-spinner"></div>
-                    <div class="loading-text">{&props.text}</div>
-                </div>
-            </div>
-        }
-    } else {
-        html! {}
-    }
-}
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct BackButtonProps {

@@ -25,7 +25,7 @@ fn App() -> Html {
     // State management
     let search_input = use_state(|| String::new());
     let search_result = use_state(|| None::<SearchResult>);
-    let is_loading = use_state(|| false);
+    let loading_tasks = use_state(|| std::collections::HashSet::<String>::new()); // Multiple loading tasks
     let error_message = use_state(|| None::<String>);
     let api_url = use_state(|| {
         // Get API URL from build-time environment variable, fallback to default
@@ -53,6 +53,10 @@ fn App() -> Html {
     let show_endpoint = use_state(|| false);
     let ping_results = use_state(|| Vec::<(String, Option<f64>)>::new());
     let selected_endpoint = use_state(|| None::<String>); // Currently selected endpoint
+    let custom_endpoints = use_state(|| Vec::<String>::new()); // Custom endpoints added by user
+    let custom_url_input = use_state(|| String::new()); // Input for custom URL
+    let custom_endpoint_error = use_state(|| None::<String>); // Error message for custom endpoint
+    let is_adding_endpoint = use_state(|| false); // Whether we're currently adding an endpoint
 
     // Initialize wallet on mount
     {
@@ -97,6 +101,107 @@ fn App() -> Html {
         });
     }
 
+    // Restore state from URL path on mount and handle browser navigation
+    {
+        let search_input = search_input.clone();
+        let search_result = search_result.clone();
+        let loading_tasks = loading_tasks.clone();
+        let error_message = error_message.clone();
+        let api_url = api_url.clone();
+        let chat_session = chat_session.clone();
+        let chat_messages = chat_messages.clone();
+        let is_chat_loading = is_chat_loading.clone();
+        let chat_error = chat_error.clone();
+        let wallet_account = wallet_account.clone();
+        let current_view = current_view.clone();
+
+        // Function to restore state from URL path
+        let restore_from_path = {
+            let search_input = search_input.clone();
+            let search_result = search_result.clone();
+            let loading_tasks = loading_tasks.clone();
+            let error_message = error_message.clone();
+            let api_url = api_url.clone();
+            let chat_session = chat_session.clone();
+            let chat_messages = chat_messages.clone();
+            let is_chat_loading = is_chat_loading.clone();
+            let chat_error = chat_error.clone();
+            let wallet_account = wallet_account.clone();
+            let current_view = current_view.clone();
+            
+            move |query: String, view: String| {
+                web_sys::console::log_1(
+                    &format!("📍 Restoring from URL path: {} (view: {})", query, view).into(),
+                );
+                
+                // Set the search input
+                let query_for_input = query.trim_start_matches('@').to_string();
+                search_input.set(query_for_input.clone());
+                
+                // Determine if it's a FID or username
+                let is_fid = query_for_input.parse::<u64>().is_ok();
+                
+                // Set the view (will be updated by perform_search, but set it here for immediate feedback)
+                current_view.set(view.clone());
+                
+                // Use the shared perform_search function to restore state
+                let search_result_clone = search_result.clone();
+                let loading_tasks_clone = loading_tasks.clone();
+                let error_message_clone = error_message.clone();
+                let api_url_clone = (*api_url).clone();
+                let chat_session_clone = chat_session.clone();
+                let chat_messages_clone = chat_messages.clone();
+                let is_chat_loading_clone = is_chat_loading.clone();
+                let chat_error_clone = chat_error.clone();
+                let wallet_account_clone = wallet_account.clone();
+                let current_view_clone = current_view.clone();
+                
+                spawn_local(async move {
+                    crate::handlers::perform_search(
+                        query_for_input,
+                        is_fid,
+                        search_result_clone,
+                        loading_tasks_clone,
+                        error_message_clone,
+                        api_url_clone,
+                        chat_session_clone,
+                        chat_messages_clone,
+                        is_chat_loading_clone,
+                        chat_error_clone,
+                        wallet_account_clone,
+                        current_view_clone,
+                    ).await;
+                });
+            }
+        };
+
+        use_effect_with((), move |_| {
+            // Check if there's a URL path to restore from on initial load
+            if let Some((query, view)) = crate::services::get_url_path() {
+                restore_from_path(query, view);
+            }
+            
+            // Set up popstate listener for browser back/forward navigation
+            let loading_tasks_for_popstate = loading_tasks.clone();
+            crate::services::setup_popstate_listener(move |path| {
+                if let Some((query, view)) = path {
+                    restore_from_path(query, view);
+                } else {
+                    // Returned to home page - clear all state
+                    search_result.set(None);
+                    search_input.set(String::new());
+                    error_message.set(None);
+                    chat_session.set(None);
+                    chat_messages.set(Vec::new());
+                    loading_tasks_for_popstate.set(std::collections::HashSet::new()); // Important: reset loading state
+                    current_view.set("profile".to_string());
+                }
+            });
+            
+            || ()
+        });
+    }
+
     // Create handlers
     let on_connect_wallet =
         create_wallet_connect_handler(wallet_error.clone(), wallet_account.clone());
@@ -105,7 +210,7 @@ fn App() -> Html {
     let on_search = create_search_handler(
         search_input.clone(),
         search_result.clone(),
-        is_loading.clone(),
+        loading_tasks.clone(),
         error_message.clone(),
         api_url.clone(),
         chat_session.clone(),
@@ -113,11 +218,12 @@ fn App() -> Html {
         is_chat_loading.clone(),
         chat_error.clone(),
         wallet_account.clone(),
+        current_view.clone(),
     );
 
     let on_keypress = create_search_keypress_handler(on_search.clone());
     let on_popular_fid = create_popular_fid_handler(search_input.clone(), on_search.clone());
-    let on_switch_to_chat = create_view_switch_handler(current_view.clone());
+    let on_switch_to_chat = create_view_switch_handler(current_view.clone(), search_result.clone());
     let on_smart_back = create_smart_back_handler(
         current_view.clone(),
         search_result.clone(),
@@ -125,6 +231,7 @@ fn App() -> Html {
         error_message.clone(),
         chat_session.clone(),
         chat_messages.clone(),
+        loading_tasks.clone(),
     );
 
     let on_send_chat_message = create_chat_message_handler(
@@ -182,6 +289,92 @@ fn App() -> Html {
         })
     };
 
+    // Handler for adding custom endpoint
+    let on_add_custom_endpoint = {
+        let custom_endpoints = custom_endpoints.clone();
+        let custom_url_input = custom_url_input.clone();
+        let ping_results = ping_results.clone();
+        let custom_endpoint_error = custom_endpoint_error.clone();
+        let is_adding_endpoint = is_adding_endpoint.clone();
+        Callback::from(move |_| {
+            let url = (*custom_url_input).clone().trim().to_string();
+            if url.is_empty() {
+                return;
+            }
+
+            // Validate URL format
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                custom_endpoint_error.set(Some(
+                    "Invalid URL format. Must start with http:// or https://".to_string(),
+                ));
+                return;
+            }
+
+            let normalized_url = url.trim_end_matches('/').to_string();
+
+            // Check if endpoint already exists
+            let endpoints = (*custom_endpoints).clone();
+            if endpoints.contains(&normalized_url) {
+                custom_endpoint_error.set(Some("Endpoint already exists".to_string()));
+                return;
+            }
+
+            // Clear previous error
+            custom_endpoint_error.set(None);
+            is_adding_endpoint.set(true);
+
+            // Ping the endpoint first before adding
+            let custom_endpoints_clone = custom_endpoints.clone();
+            let custom_url_input_clone = custom_url_input.clone();
+            let ping_results_clone = ping_results.clone();
+            let custom_endpoint_error_clone = custom_endpoint_error.clone();
+            let is_adding_endpoint_clone = is_adding_endpoint.clone();
+            let normalized_url_for_ping = normalized_url.clone();
+            let normalized_url_for_log = normalized_url.clone();
+
+            wasm_bindgen_futures::spawn_local(async move {
+                // Try to ping the endpoint
+                match wallet::ping_endpoint_service(&normalized_url_for_ping).await {
+                    Ok(latency) => {
+                        // Ping successful, add the endpoint
+                        let mut endpoints = (*custom_endpoints_clone).clone();
+                        endpoints.push(normalized_url_for_ping.clone());
+                        custom_endpoints_clone.set(endpoints);
+                        custom_url_input_clone.set(String::new());
+
+                        // Add ping result
+                        let mut current_results = (*ping_results_clone).clone();
+                        current_results.push((normalized_url_for_ping, Some(latency)));
+                        ping_results_clone.set(current_results);
+
+                        custom_endpoint_error_clone.set(None);
+                        web_sys::console::log_1(
+                            &format!("✅ Added custom endpoint: {}", &normalized_url_for_log)
+                                .into(),
+                        );
+                    }
+                    Err(e) => {
+                        // Ping failed (likely CORS), don't add the endpoint
+                        let error_msg = if e.contains("CORS") || e.contains("cors") {
+                            "Cannot add endpoint: CORS policy blocked the request. The server must allow cross-origin requests from your origin.".to_string()
+                        } else {
+                            format!("Cannot add endpoint: Ping failed ({})", e)
+                        };
+                        custom_endpoint_error_clone.set(Some(error_msg));
+                        web_sys::console::log_1(
+                            &format!("❌ Failed to add endpoint: {}", &normalized_url_for_log)
+                                .into(),
+                        );
+                    }
+                }
+                is_adding_endpoint_clone.set(false);
+            });
+        })
+    };
+
+    // Handler for custom URL input change
+    let on_custom_url_input_change = create_input_change_handler(custom_url_input.clone());
+
     html! {
         <div class="app-container">
             // Link Button - Only visible in search page (top left)
@@ -204,6 +397,12 @@ fn App() -> Html {
                         ping_results={(*ping_results).clone()}
                         selected_endpoint={(*selected_endpoint).clone()}
                         on_select_endpoint={on_select_endpoint.clone()}
+                        custom_endpoints={(*custom_endpoints).clone()}
+                        custom_url_input={(*custom_url_input).clone()}
+                        on_custom_url_input_change={on_custom_url_input_change.clone()}
+                        on_add_custom_endpoint={on_add_custom_endpoint.clone()}
+                        custom_endpoint_error={(*custom_endpoint_error).clone()}
+                        is_adding_endpoint={*is_adding_endpoint}
                     />
                 </div>
             } else {
@@ -233,22 +432,20 @@ fn App() -> Html {
                     <div class="search-content">
                         <SearchBox
                             search_input={(*search_input).clone()}
-                            is_loading={*is_loading}
+                            is_loading={!(*loading_tasks).is_empty()}
                             on_input_change={on_search_input_change}
                             on_keypress={on_keypress}
                             on_search={on_search.clone()}
                         />
 
                         <MobileSearchButton
-                            is_loading={*is_loading}
+                            is_loading={!(*loading_tasks).is_empty()}
                             on_search={on_search.clone()}
                         />
 
                         <SearchSuggestions on_popular_fid={on_popular_fid} />
 
                         <ErrorMessage error={(*error_message).clone()} />
-
-                        <LoadingOverlay is_loading={*is_loading} text={"Searching...".to_string()} />
                     </div>
                 </div>
             }
