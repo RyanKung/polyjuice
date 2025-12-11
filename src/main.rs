@@ -23,9 +23,9 @@ fn App() -> Html {
     let wallet_error = use_state(|| None::<String>);
 
     // State management
-    let search_input = use_state(|| String::new());
+    let search_input = use_state(String::new);
     let search_result = use_state(|| None::<SearchResult>);
-    let loading_tasks = use_state(|| std::collections::HashSet::<String>::new()); // Multiple loading tasks
+    let loading_tasks = use_state(std::collections::HashSet::<String>::new); // Multiple loading tasks
     let error_message = use_state(|| None::<String>);
     let api_url = use_state(|| {
         // Get API URL from build-time environment variable, fallback to default
@@ -40,8 +40,8 @@ fn App() -> Html {
 
     // Chat state management
     let chat_session = use_state(|| None::<ChatSession>);
-    let chat_message = use_state(|| String::new());
-    let chat_messages = use_state(|| Vec::<ChatMessage>::new());
+    let chat_message = use_state(String::new);
+    let chat_messages = use_state(Vec::<ChatMessage>::new);
     let is_chat_loading = use_state(|| false);
     let chat_error = use_state(|| None::<String>);
     let current_view = use_state(|| "profile".to_string()); // "profile" or "chat"
@@ -51,10 +51,10 @@ fn App() -> Html {
     let is_endpoint_loading = use_state(|| false);
     let endpoint_error = use_state(|| None::<String>);
     let show_endpoint = use_state(|| false);
-    let ping_results = use_state(|| Vec::<(String, Option<f64>)>::new());
+    let ping_results = use_state(Vec::<(String, Option<f64>)>::new);
     let selected_endpoint = use_state(|| None::<String>); // Currently selected endpoint
-    let custom_endpoints = use_state(|| Vec::<String>::new()); // Custom endpoints added by user
-    let custom_url_input = use_state(|| String::new()); // Input for custom URL
+    let custom_endpoints = use_state(Vec::<String>::new); // Custom endpoints added by user
+    let custom_url_input = use_state(String::new); // Input for custom URL
     let custom_endpoint_error = use_state(|| None::<String>); // Error message for custom endpoint
     let is_adding_endpoint = use_state(|| false); // Whether we're currently adding an endpoint
 
@@ -128,22 +128,22 @@ fn App() -> Html {
             let chat_error = chat_error.clone();
             let wallet_account = wallet_account.clone();
             let current_view = current_view.clone();
-            
+
             move |query: String, view: String| {
                 web_sys::console::log_1(
                     &format!("📍 Restoring from URL path: {} (view: {})", query, view).into(),
                 );
-                
+
                 // Set the search input
                 let query_for_input = query.trim_start_matches('@').to_string();
                 search_input.set(query_for_input.clone());
-                
+
                 // Determine if it's a FID or username
                 let is_fid = query_for_input.parse::<u64>().is_ok();
-                
+
                 // Set the view (will be updated by perform_search, but set it here for immediate feedback)
                 current_view.set(view.clone());
-                
+
                 // Use the shared perform_search function to restore state
                 let search_result_clone = search_result.clone();
                 let loading_tasks_clone = loading_tasks.clone();
@@ -155,7 +155,7 @@ fn App() -> Html {
                 let chat_error_clone = chat_error.clone();
                 let wallet_account_clone = wallet_account.clone();
                 let current_view_clone = current_view.clone();
-                
+
                 spawn_local(async move {
                     crate::handlers::perform_search(
                         query_for_input,
@@ -170,7 +170,8 @@ fn App() -> Html {
                         chat_error_clone,
                         wallet_account_clone,
                         current_view_clone,
-                    ).await;
+                    )
+                    .await;
                 });
             }
         };
@@ -180,7 +181,7 @@ fn App() -> Html {
             if let Some((query, view)) = crate::services::get_url_path() {
                 restore_from_path(query, view);
             }
-            
+
             // Set up popstate listener for browser back/forward navigation
             let loading_tasks_for_popstate = loading_tasks.clone();
             crate::services::setup_popstate_listener(move |path| {
@@ -197,7 +198,7 @@ fn App() -> Html {
                     current_view.set("profile".to_string());
                 }
             });
-            
+
             || ()
         });
     }

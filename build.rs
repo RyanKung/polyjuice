@@ -23,6 +23,13 @@ fn main() {
                     println!("cargo:rustc-env=SNAPRAG_API_URL={}", value);
                     println!("cargo:warning=Loaded SNAPRAG_API_URL from .env: {}", value);
                 }
+                if key == "WALLETCONNECT_PROJECT_ID" {
+                    println!("cargo:rustc-env=WALLETCONNECT_PROJECT_ID={}", value);
+                    println!(
+                        "cargo:warning=Loaded WALLETCONNECT_PROJECT_ID from .env: {}",
+                        value
+                    );
+                }
             }
         }
     }

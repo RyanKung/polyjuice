@@ -1,9 +1,10 @@
+use std::rc::Rc;
+
+use futures::future::join;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::InputEvent;
 use web_sys::KeyboardEvent;
 use yew::prelude::*;
-use futures::future::join;
-use std::rc::Rc;
 
 use crate::models::*;
 use crate::services::*;
@@ -24,7 +25,7 @@ fn update_pending_job(
 ) {
     if let Some(current_result) = search_result.as_ref() {
         let mut pending_jobs = current_result.pending_jobs.clone().unwrap_or_default();
-        
+
         // Update or add job
         if let Some(existing_job) = pending_jobs.iter_mut().find(|j| j.job_type == job_type) {
             existing_job.status = Some(status.clone());
@@ -39,7 +40,7 @@ fn update_pending_job(
                 message: Some(message.clone()),
             });
         }
-        
+
         let updated_result = SearchResult {
             pending_jobs: Some(pending_jobs),
             ..current_result.clone()
@@ -59,39 +60,48 @@ fn create_polling_status_callback(
 }
 
 /// Parse JOB_STATUS error message format: "JOB_STATUS:{status}:JOB_KEY:{job_key}:MESSAGE:{message}"
-fn parse_job_status_error(error: &str, default_job_key: String) -> Option<(String, String, String)> {
+fn parse_job_status_error(
+    error: &str,
+    default_job_key: String,
+) -> Option<(String, String, String)> {
     if !error.starts_with("JOB_STATUS:") {
         return None;
     }
-    
+
     let parts: Vec<&str> = error.split(":JOB_KEY:").collect();
     if parts.len() != 2 {
         return None;
     }
-    
+
     let status_part = parts[0].strip_prefix("JOB_STATUS:").unwrap_or("");
     let rest = parts[1];
     let key_parts: Vec<&str> = rest.split(":MESSAGE:").collect();
-    
+
     let status = if !status_part.is_empty() {
         status_part.to_string()
     } else {
         "pending".to_string()
     };
-    
-    let job_key = if key_parts.len() >= 1 && !key_parts[0].is_empty() {
+
+    let job_key = if !key_parts.is_empty() && !key_parts[0].is_empty() {
         key_parts[0].to_string()
     } else {
         default_job_key
     };
-    
+
     let message = if key_parts.len() >= 2 {
         key_parts[1].to_string()
     } else {
-        format!("{} analysis is still processing. You can come back later to check the results.", 
-            if job_key.starts_with("social") { "Social" } else { "MBTI" })
+        format!(
+            "{} analysis is still processing. You can come back later to check the results.",
+            if job_key.starts_with("social") {
+                "Social"
+            } else {
+                "MBTI"
+            }
+        )
     };
-    
+
     Some((status, job_key, message))
 }
 
@@ -109,9 +119,15 @@ fn process_analysis_result<T>(
         }
         Err(e) => {
             // Check for JOB_STATUS error format
-            if let Some((status, job_key, message)) = parse_job_status_error(&e, format!("{}:{}", job_type, fid)) {
+            if let Some((status, job_key, message)) =
+                parse_job_status_error(&e, format!("{}:{}", job_type, fid))
+            {
                 web_sys::console::log_1(
-                    &format!("⏳ {} analysis status: {} (job_key: {})", job_type, status, job_key).into()
+                    &format!(
+                        "⏳ {} analysis status: {} (job_key: {})",
+                        job_type, status, job_key
+                    )
+                    .into(),
                 );
                 let pending_job = PendingJob {
                     job_key,
@@ -122,7 +138,7 @@ fn process_analysis_result<T>(
                 };
                 return (None, Some(pending_job));
             }
-            
+
             // Check for timeout errors
             if e.contains("did not complete within") || e.contains("still be processing") {
                 web_sys::console::log_1(
@@ -142,7 +158,7 @@ fn process_analysis_result<T>(
                 };
                 return (None, Some(pending_job));
             }
-            
+
             // Check for failed job
             if e.contains("Job failed") {
                 web_sys::console::log_1(&format!("❌ {} analysis failed: {}", job_type, e).into());
@@ -155,7 +171,7 @@ fn process_analysis_result<T>(
                 };
                 return (None, Some(pending_job));
             }
-            
+
             // Other errors
             web_sys::console::log_1(&format!("⚠️ {} data error: {}", job_type, e).into());
             (None, None)
@@ -168,6 +184,7 @@ fn process_analysis_result<T>(
 // ============================================================================
 
 /// Perform search with given query (shared logic for both search handler and URL restoration)
+#[allow(clippy::too_many_arguments)]
 pub async fn perform_search(
     search_query: String,
     is_fid: bool,
@@ -191,11 +208,11 @@ pub async fn perform_search(
     // Clone values needed for futures
     let api_url_clone = api_url.clone();
     let wallet_account_clone = wallet_account.clone();
-    
+
     let profile_endpoint = create_profile_endpoint(&search_query, is_fid);
     let social_endpoint = create_social_endpoint(&search_query, is_fid);
     let mbti_endpoint = create_mbti_endpoint(&search_query, is_fid);
-    
+
     // First, wait for profile to load (needed for FID and to render the page)
     let profile_future = make_request_with_payment::<ProfileData>(
         &api_url_clone,
@@ -205,7 +222,7 @@ pub async fn perform_search(
         None,
         None,
     );
-    
+
     let profile_result = profile_future.await;
 
     match profile_result {
@@ -225,11 +242,11 @@ pub async fn perform_search(
             let initial_result_clone = initial_result.clone();
             search_result.set(Some(initial_result_clone));
             current_view.set("profile".to_string());
-            
+
             // Force a small delay to allow Yew to process the state update
             // This is necessary because UseStateHandle.set() is asynchronous in nature
             gloo_timers::future::TimeoutFuture::new(50).await;
-            
+
             // Update URL path
             let query_for_url = if is_fid {
                 search_query.clone()
@@ -241,9 +258,11 @@ pub async fn perform_search(
             // Create status callbacks for background polling updates
             let search_result_for_social = search_result.clone();
             let search_result_for_mbti = search_result.clone();
-            let social_status_callback = create_polling_status_callback(search_result_for_social, "social");
-            let mbti_status_callback = create_polling_status_callback(search_result_for_mbti, "mbti");
-            
+            let social_status_callback =
+                create_polling_status_callback(search_result_for_social, "social");
+            let mbti_status_callback =
+                create_polling_status_callback(search_result_for_mbti, "mbti");
+
             // Start social and MBTI requests in parallel
             // Status callbacks will be used for background polling updates
             let social_future = make_request_with_payment::<SocialData>(
@@ -254,7 +273,7 @@ pub async fn perform_search(
                 None,
                 social_status_callback, // Pass callback for background polling updates
             );
-            
+
             let mbti_future = make_request_with_payment::<MbtiProfile>(
                 &api_url_clone,
                 &mbti_endpoint,
@@ -266,21 +285,25 @@ pub async fn perform_search(
 
             // Wait for both results in parallel
             let (social_result, mbti_result) = join(social_future, mbti_future).await;
-            
+
             // Immediately update pending_jobs if we got pending/processing status
             // This ensures UI shows status right away, even before polling completes
             if let Err(ref social_err) = social_result {
-                if let Some((status, job_key, message)) = parse_job_status_error(social_err, format!("social:{}", profile.fid)) {
+                if let Some((status, job_key, message)) =
+                    parse_job_status_error(social_err, format!("social:{}", profile.fid))
+                {
                     update_pending_job(&search_result, "social", status, job_key, message);
                 }
             }
-            
+
             if let Err(ref mbti_err) = mbti_result {
-                if let Some((status, job_key, message)) = parse_job_status_error(mbti_err, format!("mbti:{}", profile.fid)) {
+                if let Some((status, job_key, message)) =
+                    parse_job_status_error(mbti_err, format!("mbti:{}", profile.fid))
+                {
                     update_pending_job(&search_result, "mbti", status, job_key, message);
                 }
             }
-            
+
             // Process results and collect pending jobs
             let (social_data, social_pending) = process_analysis_result(
                 social_result,
@@ -288,25 +311,27 @@ pub async fn perform_search(
                 profile.fid,
                 "Social analysis is still processing. You can come back later to check the results.",
             );
-            
+
             let (mbti_data, mbti_pending) = process_analysis_result(
                 mbti_result,
                 "mbti",
                 profile.fid,
                 "MBTI analysis is still processing. You can come back later to check the results.",
             );
-            
+
             // Get existing pending jobs (set above if we got pending/processing status) and merge with new ones
-            let mut pending_jobs = search_result.as_ref()
+            let mut pending_jobs = search_result
+                .as_ref()
                 .and_then(|r| r.pending_jobs.clone())
                 .unwrap_or_default();
-            
+
             // If data was successfully loaded, remove the corresponding job
             if social_data.is_some() {
                 pending_jobs.retain(|j| j.job_type != "social");
             } else if let Some(new_job) = social_pending {
                 // Update or add social job
-                if let Some(existing_job) = pending_jobs.iter_mut().find(|j| j.job_type == "social") {
+                if let Some(existing_job) = pending_jobs.iter_mut().find(|j| j.job_type == "social")
+                {
                     // Update existing job with latest status from process_analysis_result
                     existing_job.status = new_job.status.clone();
                     existing_job.job_key = new_job.job_key.clone();
@@ -315,7 +340,7 @@ pub async fn perform_search(
                     pending_jobs.push(new_job);
                 }
             }
-            
+
             if mbti_data.is_some() {
                 pending_jobs.retain(|j| j.job_type != "mbti");
             } else if let Some(new_job) = mbti_pending {
@@ -329,13 +354,17 @@ pub async fn perform_search(
                     pending_jobs.push(new_job);
                 }
             }
-            
+
             // Update search result with all data, preserving pending jobs
             search_result.set(Some(SearchResult {
                 profile,
                 social: social_data,
                 mbti: mbti_data,
-                pending_jobs: if pending_jobs.is_empty() { None } else { Some(pending_jobs) },
+                pending_jobs: if pending_jobs.is_empty() {
+                    None
+                } else {
+                    Some(pending_jobs)
+                },
             }));
             error_message.set(None);
 
@@ -372,14 +401,47 @@ pub fn create_wallet_connect_handler(
         let wallet_error = wallet_error.clone();
         let wallet_account = wallet_account.clone();
         spawn_local(async move {
+            web_sys::console::log_1(&"🔌 Connect button clicked".into());
+            wallet_error.set(None); // Clear any previous errors
+
             match crate::wallet::connect().await {
                 Ok(_) => {
+                    web_sys::console::log_1(
+                        &"✅ Wallet connect() succeeded, WalletConnect menu should be showing"
+                            .into(),
+                    );
                     wallet_error.set(None);
+
+                    // Poll for account update (WalletConnect connection is async)
+                    // The QRCodeModal will show wallet selection menu first
+                    let mut attempts = 0;
+                    while attempts < 30 {
+                        if let Ok(account) = crate::wallet::get_account().await {
+                            if account.is_connected {
+                                web_sys::console::log_1(
+                                    &format!("✅ Account connected: {:?}", account.address).into(),
+                                );
+                                wallet_account.set(Some(account));
+                                return;
+                            }
+                        }
+                        gloo_timers::future::TimeoutFuture::new(500).await;
+                        attempts += 1;
+                    }
+
+                    // If still not connected, check one more time
                     if let Ok(account) = crate::wallet::get_account().await {
                         wallet_account.set(Some(account));
+                    } else {
+                        web_sys::console::log_1(
+                            &"ℹ️ WalletConnect menu shown, waiting for user to select wallet..."
+                                .into(),
+                        );
+                        // Don't set error - menu is showing, user needs to select wallet
                     }
                 }
                 Err(e) => {
+                    web_sys::console::log_1(&format!("❌ Wallet connect() failed: {}", e).into());
                     wallet_error.set(Some(e));
                 }
             }
@@ -401,6 +463,7 @@ pub fn create_wallet_disconnect_handler(
 }
 
 /// Create search handler
+#[allow(clippy::too_many_arguments)]
 pub fn create_search_handler(
     search_input: UseStateHandle<String>,
     search_result: UseStateHandle<Option<SearchResult>>,
@@ -442,7 +505,7 @@ pub fn create_search_handler(
             } else {
                 trimmed_input.trim_start_matches('@').to_string()
             };
-            
+
             perform_search(
                 search_query,
                 is_fid,
@@ -456,12 +519,14 @@ pub fn create_search_handler(
                 chat_error,
                 wallet_account,
                 current_view,
-            ).await;
+            )
+            .await;
         });
     })
 }
 
 /// Create chat session after successful search
+#[allow(clippy::too_many_arguments)]
 pub async fn create_chat_session_after_search(
     api_url: &str,
     search_query: &str,
@@ -656,39 +721,37 @@ pub fn create_smart_back_handler(
     chat_messages: UseStateHandle<Vec<ChatMessage>>,
     loading_tasks: UseStateHandle<std::collections::HashSet<String>>,
 ) -> Callback<()> {
-    Callback::from(move |_| {
-        match (*current_view).as_str() {
-            "profile" => {
-                search_result.set(None);
-                search_input.set(String::new());
-                error_message.set(None);
-                chat_session.set(None);
-                chat_messages.set(Vec::new());
-                loading_tasks.set(std::collections::HashSet::new());
-                current_view.set("profile".to_string());
-                crate::services::clear_url_path();
+    Callback::from(move |_| match (*current_view).as_str() {
+        "profile" => {
+            search_result.set(None);
+            search_input.set(String::new());
+            error_message.set(None);
+            chat_session.set(None);
+            chat_messages.set(Vec::new());
+            loading_tasks.set(std::collections::HashSet::new());
+            current_view.set("profile".to_string());
+            crate::services::clear_url_path();
+        }
+        "chat" => {
+            current_view.set("profile".to_string());
+            if let Some(result) = (*search_result).as_ref() {
+                let query = if let Some(username) = &result.profile.username {
+                    format!("@{}", username)
+                } else {
+                    format!("{}", result.profile.fid)
+                };
+                crate::services::update_url_path(&query, "profile");
             }
-            "chat" => {
-                current_view.set("profile".to_string());
-                if let Some(result) = (*search_result).as_ref() {
-                    let query = if let Some(username) = &result.profile.username {
-                        format!("@{}", username)
-                    } else {
-                        format!("{}", result.profile.fid)
-                    };
-                    crate::services::update_url_path(&query, "profile");
-                }
-            }
-            _ => {
-                search_result.set(None);
-                search_input.set(String::new());
-                error_message.set(None);
-                chat_session.set(None);
-                chat_messages.set(Vec::new());
-                loading_tasks.set(std::collections::HashSet::new());
-                current_view.set("profile".to_string());
-                crate::services::clear_url_path();
-            }
+        }
+        _ => {
+            search_result.set(None);
+            search_input.set(String::new());
+            error_message.set(None);
+            chat_session.set(None);
+            chat_messages.set(Vec::new());
+            loading_tasks.set(std::collections::HashSet::new());
+            current_view.set("profile".to_string());
+            crate::services::clear_url_path();
         }
     })
 }

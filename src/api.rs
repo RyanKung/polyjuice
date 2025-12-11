@@ -92,14 +92,12 @@ pub async fn make_request(
     let headers_iter = resp.headers().entries();
 
     if let Some(iterator) = js_sys::try_iter(&headers_iter).ok().flatten() {
-        for entry in iterator {
-            if let Ok(entry) = entry {
-                if let Ok(array) = entry.dyn_into::<js_sys::Array>() {
-                    if array.length() == 2 {
-                        let key = array.get(0).as_string().unwrap_or_default();
-                        let value = array.get(1).as_string().unwrap_or_default();
-                        response_headers.push((key, value));
-                    }
+        for entry in iterator.flatten() {
+            if let Ok(array) = entry.dyn_into::<js_sys::Array>() {
+                if array.length() == 2 {
+                    let key = array.get(0).as_string().unwrap_or_default();
+                    let value = array.get(1).as_string().unwrap_or_default();
+                    response_headers.push((key, value));
                 }
             }
         }

@@ -116,27 +116,28 @@ make help           # Show all commands
 
 ### Environment Configuration
 
-Configure the API server URL using **one of two methods**:
+Configure the API server URL and WalletConnect projectId using **one of two methods**:
 
 #### Method 1: Build-Time Environment Variable
 Set environment variable during build:
 ```bash
-# Development with custom API URL
-SNAPRAG_API_URL=http://192.168.1.100:3000 make serve
+# Development with custom API URL and WalletConnect projectId
+SNAPRAG_API_URL=http://192.168.1.100:3000 WALLETCONNECT_PROJECT_ID=your_project_id make serve
 
-# Production build with custom API URL
-SNAPRAG_API_URL=https://api.yourdomain.com make build-prod
+# Production build with custom API URL and WalletConnect projectId
+SNAPRAG_API_URL=https://api.yourdomain.com WALLETCONNECT_PROJECT_ID=your_project_id make build-prod
 ```
 
 #### Method 2: .env File (Build-time)
-1. **Copy the example file**:
+1. **Create `.env` file** (if it doesn't exist):
 ```bash
-cp .env.example .env
+touch .env
 ```
 
-2. **Edit `.env`** to set your API URL:
+2. **Edit `.env`** to set your configuration:
 ```bash
 SNAPRAG_API_URL=http://127.0.0.1:3000
+WALLETCONNECT_PROJECT_ID=your_project_id_here
 ```
 
 3. **Run**:
@@ -145,6 +146,42 @@ make serve
 ```
 
 **Note**: The `.env` file is automatically loaded when running `make serve` or `make build-prod`.
+
+#### Getting WalletConnect Project ID
+
+To get your WalletConnect `projectId`:
+
+1. **Visit [WalletConnect Cloud](https://cloud.walletconnect.com)**
+2. **Sign up or log in** to your account
+3. **Create a new project**:
+   - Click "Create Project" or "New Project"
+   - Enter your project name (e.g., "Polyjuice")
+   - Enter your website URL (e.g., `http://127.0.0.1:8080` for development)
+   - Submit the form
+4. **Copy your Project ID**:
+   - After creating the project, you'll see your unique `projectId` in the dashboard
+   - It looks like: `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`
+5. **Add it to your `.env` file**:
+   ```bash
+   WALLETCONNECT_PROJECT_ID=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+   ```
+
+**Important**: 
+- While WalletConnect can work without a valid projectId for basic functionality, you may see 403 errors when fetching wallet lists and analytics.
+- **403 errors and empty wallet list**: If you see 403 errors in the browser console and the wallet list is empty, this is likely because:
+  1. Your domain is not added to the allowed domains list in WalletConnect Cloud
+  2. The projectId is not properly configured in WalletConnect Cloud
+  3. The projectId in your `.env` file doesn't match the one in WalletConnect Cloud
+  
+  **To fix this**:
+  1. Go to [WalletConnect Cloud](https://cloud.walletconnect.com)
+  2. Select your project
+  3. Go to "Settings" or "Project Settings"
+  4. Add your domain (e.g., `127.0.0.1:8080` for development, or your production domain) to the "Allowed Domains" list
+  5. Save the changes
+  6. Rebuild and restart your application
+  
+- For production use, a valid projectId and proper domain configuration are required.
 
 ## 🚀 Deployment
 

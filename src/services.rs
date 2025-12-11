@@ -1,5 +1,7 @@
-use wasm_bindgen::JsCast;
 use std::rc::Rc;
+
+use wasm_bindgen::JsCast;
+
 use crate::api::ApiResponse as RawApiResponse;
 use crate::api::EndpointInfo;
 use crate::models::*;
@@ -41,7 +43,7 @@ pub async fn handle_payment(
     // Validate JSON parsing
     let _parsed_check: serde_json::Value = serde_json::from_str(&typed_data)
         .map_err(|e| format!("Failed to parse typed data as JSON: {}", e))?;
-    web_sys::console::log_1(&format!("Typed data validation successful").into());
+    web_sys::console::log_1(&"Typed data validation successful".to_string().into());
 
     // Sign with MetaMask
     let signature = crate::wallet::sign_eip712(&typed_data)
@@ -111,7 +113,13 @@ async fn poll_original_api<T>(
 where
     T: serde::de::DeserializeOwned,
 {
-    web_sys::console::log_1(&format!("⏳ Polling API endpoint: {} (max {} attempts)", endpoint.path, max_attempts).into());
+    web_sys::console::log_1(
+        &format!(
+            "⏳ Polling API endpoint: {} (max {} attempts)",
+            endpoint.path, max_attempts
+        )
+        .into(),
+    );
 
     // Exponential backoff: start with 2s, gradually increase to 15s
     // Formula: min(initial * 2^attempt, max_interval)
@@ -125,10 +133,15 @@ where
             current_interval = (current_interval * 2).min(max_interval_ms);
             let elapsed_seconds = (attempt as u64 * initial_interval_ms) / 1000;
             let total_seconds = (max_attempts as u64 * initial_interval_ms) / 1000;
-            
+
             web_sys::console::log_1(
-                &format!("⏸️  Waiting {}s before next poll ({}s / ~{}s elapsed)", 
-                    current_interval / 1000, elapsed_seconds, total_seconds).into(),
+                &format!(
+                    "⏸️  Waiting {}s before next poll ({}s / ~{}s elapsed)",
+                    current_interval / 1000,
+                    elapsed_seconds,
+                    total_seconds
+                )
+                .into(),
             );
 
             let promise = js_sys::Promise::new(&mut |resolve, _| {
@@ -145,15 +158,22 @@ where
 
         let elapsed_minutes = (attempt as u64 * initial_interval_ms) / 60000;
         web_sys::console::log_1(
-            &format!("📊 Polling attempt {}/{} (~{} min elapsed)", 
-                attempt + 1, max_attempts, elapsed_minutes).into(),
+            &format!(
+                "📊 Polling attempt {}/{} (~{} min elapsed)",
+                attempt + 1,
+                max_attempts,
+                elapsed_minutes
+            )
+            .into(),
         );
 
         match crate::api::make_request(api_url, endpoint, None, None).await {
             Ok(resp) => {
                 if resp.status == 200 {
                     // Parse response - could be pending status or actual data
-                    match serde_json::from_str::<crate::models::ApiResponse<serde_json::Value>>(&resp.body) {
+                    match serde_json::from_str::<crate::models::ApiResponse<serde_json::Value>>(
+                        &resp.body,
+                    ) {
                         Ok(api_resp) => {
                             if api_resp.success {
                                 if let Some(data) = &api_resp.data {
@@ -165,11 +185,15 @@ where
                                                 "pending" | "processing" => {
                                                     // Still pending or processing, continue polling
                                                     // Call status callback to update UI with current status
-                                                    if let Some(ref status_callback) = on_status_detected {
-                                                        let job_key = data.get("job_key")
+                                                    if let Some(ref status_callback) =
+                                                        on_status_detected
+                                                    {
+                                                        let job_key = data
+                                                            .get("job_key")
                                                             .and_then(|k| k.as_str())
                                                             .unwrap_or("");
-                                                        let message = data.get("message")
+                                                        let message = data
+                                                            .get("message")
                                                             .and_then(|m| m.as_str())
                                                             .unwrap_or("Processing in background");
                                                         status_callback(
@@ -178,38 +202,53 @@ where
                                                             message.to_string(),
                                                         );
                                                     }
-                                                    
-                                                let elapsed_seconds = (attempt as u64 * initial_interval_ms) / 1000;
-                                                let elapsed_minutes = elapsed_seconds / 60;
-                                                
-                                                // Show progress every 30 seconds or every 5 attempts
-                                                if attempt % 5 == 0 || elapsed_seconds % 30 == 0 {
-                                                        let status_msg = if status_str == "processing" {
-                                                            "⏳ Processing..."
-                                                        } else {
-                                                            "⏳ Queued..."
-                                                        };
-                                                    web_sys::console::log_1(
-                                                            &format!("{} (~{} min {} sec elapsed)", 
-                                                                status_msg, elapsed_minutes, elapsed_seconds % 60).into(),
-                                                    );
-                                                    
-                                                    // If taking longer than 3 minutes, suggest user can refresh later
-                                                    if elapsed_minutes >= 3 {
+
+                                                    let elapsed_seconds = (attempt as u64
+                                                        * initial_interval_ms)
+                                                        / 1000;
+                                                    let elapsed_minutes = elapsed_seconds / 60;
+
+                                                    // Show progress every 30 seconds or every 5 attempts
+                                                    if attempt % 5 == 0
+                                                        || elapsed_seconds.is_multiple_of(30)
+                                                    {
+                                                        let status_msg =
+                                                            if status_str == "processing" {
+                                                                "⏳ Processing..."
+                                                            } else {
+                                                                "⏳ Queued..."
+                                                            };
                                                         web_sys::console::log_1(
+                                                            &format!(
+                                                                "{} (~{} min {} sec elapsed)",
+                                                                status_msg,
+                                                                elapsed_minutes,
+                                                                elapsed_seconds % 60
+                                                            )
+                                                            .into(),
+                                                        );
+
+                                                        // If taking longer than 3 minutes, suggest user can refresh later
+                                                        if elapsed_minutes >= 3 {
+                                                            web_sys::console::log_1(
                                                             &"💡 Tip: This task is taking longer than usual. You can refresh the page later to check results.".into(),
                                                         );
+                                                        }
                                                     }
-                                                }
-                                                // Continue polling
+                                                    // Continue polling
                                                 }
                                                 "completed" => {
                                                     // Job completed - try to get result from response
-                                                    web_sys::console::log_1(&"✅ Job completed!".into());
+                                                    web_sys::console::log_1(
+                                                        &"✅ Job completed!".into(),
+                                                    );
                                                     // Try to deserialize as actual data (result might be in data field)
-                                                    match serde_json::from_value::<T>(data.clone()) {
+                                                    match serde_json::from_value::<T>(data.clone())
+                                                    {
                                                         Ok(result) => {
-                                                            web_sys::console::log_1(&"✅ Data received!".into());
+                                                            web_sys::console::log_1(
+                                                                &"✅ Data received!".into(),
+                                                            );
                                                             return Ok(result);
                                                         }
                                                         Err(_) => {
@@ -220,27 +259,38 @@ where
                                                 }
                                                 "failed" => {
                                                     // Job failed
-                                                    let error_msg = data.get("message")
+                                                    let error_msg = data
+                                                        .get("message")
                                                         .and_then(|m| m.as_str())
                                                         .unwrap_or("Analysis failed");
-                                                    return Err(format!("Job failed: {}", error_msg));
+                                                    return Err(format!(
+                                                        "Job failed: {}",
+                                                        error_msg
+                                                    ));
                                                 }
                                                 _ => {
                                                     // Unknown status, try to deserialize as actual data
                                                 }
                                             }
-                                            
+
                                             // If we didn't return above, try to deserialize as actual data
-                                            if status_str != "pending" && status_str != "processing" {
+                                            if status_str != "pending" && status_str != "processing"
+                                            {
                                                 // Not pending, try to deserialize as actual data
                                                 match serde_json::from_value::<T>(data.clone()) {
                                                     Ok(result) => {
-                                                        web_sys::console::log_1(&"✅ Data received!".into());
+                                                        web_sys::console::log_1(
+                                                            &"✅ Data received!".into(),
+                                                        );
                                                         return Ok(result);
                                                     }
                                                     Err(e) => {
                                                         web_sys::console::log_1(
-                                                            &format!("⚠️ Failed to deserialize data: {}", e).into(),
+                                                            &format!(
+                                                                "⚠️ Failed to deserialize data: {}",
+                                                                e
+                                                            )
+                                                            .into(),
                                                         );
                                                     }
                                                 }
@@ -249,12 +299,18 @@ where
                                             // No status field, try to deserialize as actual data
                                             match serde_json::from_value::<T>(data.clone()) {
                                                 Ok(result) => {
-                                                    web_sys::console::log_1(&"✅ Data received!".into());
+                                                    web_sys::console::log_1(
+                                                        &"✅ Data received!".into(),
+                                                    );
                                                     return Ok(result);
                                                 }
                                                 Err(e) => {
                                                     web_sys::console::log_1(
-                                                        &format!("⚠️ Failed to deserialize data: {}", e).into(),
+                                                        &format!(
+                                                            "⚠️ Failed to deserialize data: {}",
+                                                            e
+                                                        )
+                                                        .into(),
                                                     );
                                                 }
                                             }
@@ -263,12 +319,18 @@ where
                                         // No status field, try to deserialize as actual data
                                         match serde_json::from_value::<T>(data.clone()) {
                                             Ok(result) => {
-                                                web_sys::console::log_1(&"✅ Data received!".into());
+                                                web_sys::console::log_1(
+                                                    &"✅ Data received!".into(),
+                                                );
                                                 return Ok(result);
                                             }
                                             Err(e) => {
                                                 web_sys::console::log_1(
-                                                    &format!("⚠️ Failed to deserialize data: {}", e).into(),
+                                                    &format!(
+                                                        "⚠️ Failed to deserialize data: {}",
+                                                        e
+                                                    )
+                                                    .into(),
                                                 );
                                             }
                                         }
@@ -277,7 +339,9 @@ where
                                     return Err("No data in response".to_string());
                                 }
                             } else {
-                                return Err(api_resp.error.unwrap_or_else(|| "API request failed".to_string()));
+                                return Err(api_resp
+                                    .error
+                                    .unwrap_or_else(|| "API request failed".to_string()));
                             }
                         }
                         Err(e) => {
@@ -306,10 +370,12 @@ where
 }
 
 /// Make API request with automatic payment handling and pending/polling support
-/// 
+///
 /// # Arguments
 /// * `on_polling_start` - Optional callback that gets called when polling starts, with the endpoint name
-/// Note: In WASM, we don't need Send bound since it's single-threaded
+///
+/// Note: In WASM, we don't need Send bound since it's single-threaded.
+///
 /// Callback function type for notifying about job status
 pub type StatusCallback = Rc<Box<dyn Fn(String, String, String)>>; // (status, job_key, message) - Fn allows multiple calls, Rc allows cloning
 
@@ -398,15 +464,17 @@ where
                                                     "⏳ Request pending, starting background polling..."
                                                 };
                                                 web_sys::console::log_1(&status_msg.into());
-                                                
+
                                                 // Extract job_key and message from response for status display
-                                                let job_key = data.get("job_key")
+                                                let job_key = data
+                                                    .get("job_key")
                                                     .and_then(|k| k.as_str())
                                                     .unwrap_or("");
-                                                let message = data.get("message")
+                                                let message = data
+                                                    .get("message")
                                                     .and_then(|m| m.as_str())
                                                     .unwrap_or("Processing in background");
-                                                
+
                                                 // Create a special error message that includes status info
                                                 // Format: "JOB_STATUS:{status}:JOB_KEY:{job_key}:MESSAGE:{message}"
                                                 // Return this immediately so handlers can update UI right away
@@ -414,18 +482,19 @@ where
                                                     "JOB_STATUS:{}:JOB_KEY:{}:MESSAGE:{}",
                                                     status_str, job_key, message
                                                 );
-                                                
-                                            // Notify that polling is starting
-                                            if let Some(callback) = on_polling_start {
-                                                callback();
-                                            }
-                                                
+
+                                                // Notify that polling is starting
+                                                if let Some(callback) = on_polling_start {
+                                                    callback();
+                                                }
+
                                                 // Start background polling to continue checking status
                                                 // This will update the UI as status changes
                                                 let api_url_clone = api_url.to_string();
                                                 let endpoint_clone = endpoint.clone();
-                                                let status_callback_for_poll = on_status_detected.clone();
-                                                
+                                                let status_callback_for_poll =
+                                                    on_status_detected.clone();
+
                                                 wasm_bindgen_futures::spawn_local(async move {
                                                     // Continue polling in the background
                                                     // The polling will call status_callback to update UI
@@ -435,15 +504,18 @@ where
                                                         200,
                                                         2000,
                                                         status_callback_for_poll,
-                                                    ).await;
+                                                    )
+                                                    .await;
                                                 });
-                                                
+
                                                 // Return the status error immediately so handlers can update UI
                                                 return Err(status_error);
                                             }
                                             "completed" => {
                                                 // Job completed - try to get result from response
-                                                web_sys::console::log_1(&"✅ Job completed!".into());
+                                                web_sys::console::log_1(
+                                                    &"✅ Job completed!".into(),
+                                                );
                                                 // Try to deserialize as actual data (result might be in data field)
                                                 match serde_json::from_value::<T>(data.clone()) {
                                                     Ok(result) => {
@@ -451,18 +523,30 @@ where
                                                     }
                                                     Err(_) => {
                                                         // If data field doesn't contain result, continue polling to get actual data
-                                                        web_sys::console::log_1(&"⏳ Job completed, fetching result...".into());
+                                                        web_sys::console::log_1(
+                                                            &"⏳ Job completed, fetching result..."
+                                                                .into(),
+                                                        );
                                                         if let Some(callback) = on_polling_start {
                                                             callback();
                                                         }
-                                            let status_callback_clone = on_status_detected.clone();
-                                            return poll_original_api(api_url, endpoint, 200, 2000, status_callback_clone).await;
-                                        }
+                                                        let status_callback_clone =
+                                                            on_status_detected.clone();
+                                                        return poll_original_api(
+                                                            api_url,
+                                                            endpoint,
+                                                            200,
+                                                            2000,
+                                                            status_callback_clone,
+                                                        )
+                                                        .await;
+                                                    }
                                                 }
                                             }
                                             "failed" => {
                                                 // Job failed
-                                                let error_msg = data.get("message")
+                                                let error_msg = data
+                                                    .get("message")
                                                     .and_then(|m| m.as_str())
                                                     .unwrap_or("Analysis failed");
                                                 return Err(format!("Job failed: {}", error_msg));
@@ -474,39 +558,47 @@ where
                                                 // Unknown status, try to deserialize as normal response
                                             }
                                         }
-                                        
+
                                         // Handle updating status - cache expired, return old data and trigger background update
                                         if status_str == "updating" {
                                             web_sys::console::log_1(
                                                 &"🔄 Data is updating in background, returning cached data...".into(),
                                             );
-                                            
+
                                             // Extract data from updating response
                                             if let Some(cached_data_value) = data.get("data") {
-                                                match serde_json::from_value::<T>(cached_data_value.clone()) {
+                                                match serde_json::from_value::<T>(
+                                                    cached_data_value.clone(),
+                                                ) {
                                                     Ok(cached_data) => {
                                                         web_sys::console::log_1(
                                                             &"✅ Using cached data while update is in progress".into(),
                                                         );
-                                                        
+
                                                         // Trigger background polling to check for updated data
                                                         // This ensures we get the fresh data once it's ready
                                                         let api_url_clone = api_url.to_string();
                                                         let endpoint_clone = endpoint.clone();
-                                                        let status_callback_for_poll = on_status_detected.clone();
-                                                        
-                                                        wasm_bindgen_futures::spawn_local(async move {
-                                                            // Poll in background to get updated data
-                                                            // The polling will call status_callback to update UI when data is ready
-                                                            let _ = poll_original_api::<serde_json::Value>(
-                                                                &api_url_clone,
-                                                                &endpoint_clone,
-                                                                200,
-                                                                2000,
-                                                                status_callback_for_poll,
-                                                            ).await;
-                                                        });
-                                                        
+                                                        let status_callback_for_poll =
+                                                            on_status_detected.clone();
+
+                                                        wasm_bindgen_futures::spawn_local(
+                                                            async move {
+                                                                // Poll in background to get updated data
+                                                                // The polling will call status_callback to update UI when data is ready
+                                                                let _ = poll_original_api::<
+                                                                    serde_json::Value,
+                                                                >(
+                                                                    &api_url_clone,
+                                                                    &endpoint_clone,
+                                                                    200,
+                                                                    2000,
+                                                                    status_callback_for_poll,
+                                                                )
+                                                                .await;
+                                                            },
+                                                        );
+
                                                         return Ok(cached_data);
                                                     }
                                                     Err(e) => {
@@ -522,25 +614,27 @@ where
                                 }
                             }
                             // Not pending, try to deserialize as normal response
-                serde_json::from_str::<ApiResponse<T>>(&resp.body)
-                    .map_err(|e| format!("Failed to parse response: {}", e))
-                    .and_then(|api_response| {
-                        if api_response.success {
-                            api_response.data.ok_or_else(|| {
-                                api_response
-                                    .error
-                                    .unwrap_or_else(|| "No data returned".to_string())
-                            })
-                        } else {
-                            Err(api_response
-                                .error
-                                .unwrap_or_else(|| "Unknown error".to_string()))
-                        }
-                    })
+                            serde_json::from_str::<ApiResponse<T>>(&resp.body)
+                                .map_err(|e| format!("Failed to parse response: {}", e))
+                                .and_then(|api_response| {
+                                    if api_response.success {
+                                        api_response.data.ok_or_else(|| {
+                                            api_response
+                                                .error
+                                                .unwrap_or_else(|| "No data returned".to_string())
+                                        })
+                                    } else {
+                                        Err(api_response
+                                            .error
+                                            .unwrap_or_else(|| "Unknown error".to_string()))
+                                    }
+                                })
                         } else {
                             // Check if error message indicates pending
                             if let Some(error_msg) = &api_response.error {
-                                if error_msg.contains("pending") || error_msg.contains("in progress") {
+                                if error_msg.contains("pending")
+                                    || error_msg.contains("in progress")
+                                {
                                     web_sys::console::log_1(
                                         &"⏳ Request pending (from error), starting background polling...".into(),
                                     );
@@ -549,7 +643,8 @@ where
                                         callback();
                                     }
                                     // Start polling the original API with exponential backoff
-                                    return poll_original_api(api_url, endpoint, 200, 2000, None).await;
+                                    return poll_original_api(api_url, endpoint, 200, 2000, None)
+                                        .await;
                                 }
                             }
                             Err(api_response
@@ -655,16 +750,12 @@ pub fn update_url_path(query: &str, view: &str) {
     } else {
         format!("/profile/{}", query)
     };
-    
+
     // Use pushState to update URL without page reload
     // This adds a new entry to browser history (supports back/forward)
     let state = js_sys::Object::new();
-    let _ = history.push_state_with_url(
-        &state,
-        "",
-        Some(&path)
-    );
-    
+    let _ = history.push_state_with_url(&state, "", Some(&path));
+
     web_sys::console::log_1(&format!("📍 Updated URL path: {}", path).into());
 }
 
@@ -673,14 +764,10 @@ pub fn clear_url_path() {
     let window = web_sys::window().unwrap();
     let history = window.history().unwrap();
     let state = js_sys::Object::new();
-    
+
     // Use pushState to update URL to root
-    let _ = history.push_state_with_url(
-        &state,
-        "",
-        Some("/")
-    );
-    
+    let _ = history.push_state_with_url(&state, "", Some("/"));
+
     web_sys::console::log_1(&"📍 Cleared URL path (returned to home)".into());
 }
 
@@ -690,11 +777,11 @@ pub fn get_url_path() -> Option<(String, String)> {
     let window = web_sys::window().unwrap();
     let location = window.location();
     let pathname = location.pathname().ok()?;
-    
+
     if pathname.is_empty() || pathname == "/" {
         return None;
     }
-    
+
     // Parse format: /profile/{query} or /chat/{query}
     if let Some(path) = pathname.strip_prefix("/") {
         if let Some((view, query)) = path.split_once('/') {
@@ -703,28 +790,24 @@ pub fn get_url_path() -> Option<(String, String)> {
             }
         }
     }
-    
+
     None
 }
 
 /// Set up popstate event listener for browser back/forward navigation
 /// This callback will be called when user clicks browser back/forward buttons
-pub fn setup_popstate_listener(
-    callback: impl Fn(Option<(String, String)>) + 'static,
-) {
+pub fn setup_popstate_listener(callback: impl Fn(Option<(String, String)>) + 'static) {
     let window = web_sys::window().unwrap();
     let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move |_event: web_sys::Event| {
         let path = get_url_path();
-        web_sys::console::log_1(
-            &format!("🔙 Browser navigation detected: {:?}", path).into(),
-        );
+        web_sys::console::log_1(&format!("🔙 Browser navigation detected: {:?}", path).into());
         callback(path);
     }) as Box<dyn FnMut(_)>);
-    
+
     window
         .add_event_listener_with_callback("popstate", closure.as_ref().unchecked_ref())
         .unwrap();
-    
+
     // Keep the closure alive for the lifetime of the app
     closure.forget();
 }

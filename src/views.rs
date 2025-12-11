@@ -39,7 +39,9 @@ pub struct ProfileViewProps {
 pub fn ProfileView(props: &ProfileViewProps) -> Html {
     if let Some(result) = &props.search_result {
         // Determine loading messages for MBTI and Social with detailed status
-        let mbti_job = result.pending_jobs.as_ref()
+        let mbti_job = result
+            .pending_jobs
+            .as_ref()
             .and_then(|jobs| jobs.iter().find(|j| j.job_type == "mbti"));
         let mbti_message = if let Some(job) = mbti_job {
             // Show detailed status
@@ -47,14 +49,23 @@ pub fn ProfileView(props: &ProfileViewProps) -> Html {
                 Some("pending") => "⏳ Queued: Analysis is waiting to start...".to_string(),
                 Some("processing") => "⚙️ Processing: Analysis is in progress...".to_string(),
                 Some("completed") => "✅ Completed: Analysis finished!".to_string(),
-                Some("failed") => format!("❌ Failed: {}", job.message.as_deref().unwrap_or("Analysis failed")),
-                _ => job.message.as_deref().unwrap_or("Loading MBTI analysis...").to_string(),
+                Some("failed") => format!(
+                    "❌ Failed: {}",
+                    job.message.as_deref().unwrap_or("Analysis failed")
+                ),
+                _ => job
+                    .message
+                    .as_deref()
+                    .unwrap_or("Loading MBTI analysis...")
+                    .to_string(),
             }
         } else {
             "Loading MBTI analysis...".to_string()
         };
-        
-        let social_job = result.pending_jobs.as_ref()
+
+        let social_job = result
+            .pending_jobs
+            .as_ref()
             .and_then(|jobs| jobs.iter().find(|j| j.job_type == "social"));
         let social_message = if let Some(job) = social_job {
             // Show detailed status
@@ -62,13 +73,20 @@ pub fn ProfileView(props: &ProfileViewProps) -> Html {
                 Some("pending") => "⏳ Queued: Analysis is waiting to start...".to_string(),
                 Some("processing") => "⚙️ Processing: Analysis is in progress...".to_string(),
                 Some("completed") => "✅ Completed: Analysis finished!".to_string(),
-                Some("failed") => format!("❌ Failed: {}", job.message.as_deref().unwrap_or("Analysis failed")),
-                _ => job.message.as_deref().unwrap_or("Loading social analysis...").to_string(),
+                Some("failed") => format!(
+                    "❌ Failed: {}",
+                    job.message.as_deref().unwrap_or("Analysis failed")
+                ),
+                _ => job
+                    .message
+                    .as_deref()
+                    .unwrap_or("Loading social analysis...")
+                    .to_string(),
             }
         } else {
             "Loading social analysis...".to_string()
         };
-        
+
         html! {
             <div class="card profile-card">
                 <div class="card-content">
@@ -109,7 +127,7 @@ pub fn ProfileView(props: &ProfileViewProps) -> Html {
                     } else {
                         <SocialSkeleton message={social_message.clone()} />
                     }
-                    
+
                     // Show pending jobs notification
                     if let Some(ref pending_jobs) = result.pending_jobs {
                         <PendingJobsNotification jobs={pending_jobs.clone()} />
@@ -144,7 +162,7 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
     let size = 280.0;
     let center = size / 2.0;
     let radius = 100.0;
-    
+
     // Convert scores to individual dimension values
     // Score definition: 0.0 = first letter, 1.0 = second letter
     // ei_score: 0.0 = E, 1.0 = I
@@ -152,15 +170,15 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
     // tf_score: 0.0 = T, 1.0 = F
     // jp_score: 0.0 = J, 1.0 = P
     // So if ei_score = 0.4, then E = 0.6 (60%), I = 0.4 (40%)
-    let e_value = 1.0 - props.ei_score;  // E is opposite of I
-    let i_value = props.ei_score;         // I is the score itself
-    let s_value = 1.0 - props.sn_score;  // S is opposite of N
-    let n_value = props.sn_score;        // N is the score itself
-    let t_value = 1.0 - props.tf_score;  // T is opposite of F
-    let f_value = props.tf_score;        // F is the score itself
-    let j_value = 1.0 - props.jp_score;  // J is opposite of P
-    let p_value = props.jp_score;        // P is the score itself
-    
+    let e_value = 1.0 - props.ei_score; // E is opposite of I
+    let i_value = props.ei_score; // I is the score itself
+    let s_value = 1.0 - props.sn_score; // S is opposite of N
+    let n_value = props.sn_score; // N is the score itself
+    let t_value = 1.0 - props.tf_score; // T is opposite of F
+    let f_value = props.tf_score; // F is the score itself
+    let j_value = 1.0 - props.jp_score; // J is opposite of P
+    let p_value = props.jp_score; // P is the score itself
+
     // Convert to radius distances
     let e_radius = e_value * radius;
     let i_radius = i_value * radius;
@@ -170,45 +188,45 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
     let f_radius = f_value * radius;
     let j_radius = j_value * radius;
     let p_radius = p_value * radius;
-    
+
     // Calculate positions for 8 dimensions evenly spaced (45 degrees apart)
     // Layout: E (top), S (top-right), T (right), J (bottom-right), I (bottom), N (bottom-left), F (left), P (top-left)
     // Angles: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
     use std::f32::consts::PI;
-    
+
     let angle_to_coords = |angle_deg: f32, r: f32| -> (f32, f32) {
         let angle_rad = (angle_deg - 90.0) * PI / 180.0; // -90 to start from top
         let x = center + r * angle_rad.cos();
         let y = center + r * angle_rad.sin();
         (x, y)
     };
-    
+
     // Calculate coordinates for each dimension
-    let (e_x, e_y) = angle_to_coords(0.0, e_radius);      // Top: E
-    let (s_x, s_y) = angle_to_coords(45.0, s_radius);     // Top-right: S
-    let (t_x, t_y) = angle_to_coords(90.0, t_radius);     // Right: T
-    let (j_x, j_y) = angle_to_coords(135.0, j_radius);    // Bottom-right: J
-    let (i_x, i_y) = angle_to_coords(180.0, i_radius);    // Bottom: I (opposite of E)
-    let (n_x, n_y) = angle_to_coords(225.0, n_radius);    // Bottom-left: N (opposite of S)
-    let (f_x, f_y) = angle_to_coords(270.0, f_radius);   // Left: F (opposite of T)
-    let (p_x, p_y) = angle_to_coords(315.0, p_radius);   // Top-left: P (opposite of J)
-    
+    let (e_x, e_y) = angle_to_coords(0.0, e_radius); // Top: E
+    let (s_x, s_y) = angle_to_coords(45.0, s_radius); // Top-right: S
+    let (t_x, t_y) = angle_to_coords(90.0, t_radius); // Right: T
+    let (j_x, j_y) = angle_to_coords(135.0, j_radius); // Bottom-right: J
+    let (i_x, i_y) = angle_to_coords(180.0, i_radius); // Bottom: I (opposite of E)
+    let (n_x, n_y) = angle_to_coords(225.0, n_radius); // Bottom-left: N (opposite of S)
+    let (f_x, f_y) = angle_to_coords(270.0, f_radius); // Left: F (opposite of T)
+    let (p_x, p_y) = angle_to_coords(315.0, p_radius); // Top-left: P (opposite of J)
+
     // Create polygon path (8 points in order)
     let polygon_points = format!(
         "{:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1}",
         e_x, e_y, s_x, s_y, t_x, t_y, j_x, j_y, i_x, i_y, n_x, n_y, f_x, f_y, p_x, p_y
     );
-    
+
     // Create straight line grid (spider web style)
     // Grid levels: 4 concentric levels (25%, 50%, 75%, 100%)
     let grid_levels = 4;
-    let axis_angles = vec![0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0];
-    
+    let axis_angles = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0];
+
     // Create grid polygons (straight lines connecting points at same level)
     let grid_polygons = (1..=grid_levels).map(|i| {
         let r = radius * i as f32 / grid_levels as f32;
         let is_50_percent = i == 2; // Second level is 50%
-        
+
         // Create polygon points for this grid level
         let grid_points = axis_angles.iter()
             .map(|angle| {
@@ -217,32 +235,35 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
             })
             .collect::<Vec<_>>()
             .join(" ");
-        
+
         html! {
-            <polygon 
+            <polygon
                 points={grid_points}
                 class={if is_50_percent { "radar-grid-polygon radar-baseline" } else { "radar-grid-polygon" }}
             />
         }
     }).collect::<Vec<_>>();
-    
+
     // Create axis lines (8 axes, each 45 degrees apart)
-    let axis_lines_html = axis_angles.iter().map(|angle| {
-        let (x, y) = angle_to_coords(*angle, radius);
-        html! {
-            <line 
-                x1={center.to_string()} 
-                y1={center.to_string()} 
-                x2={x.to_string()} 
-                y2={y.to_string()}
-                class="radar-axis-line"
-            />
-        }
-    }).collect::<Vec<_>>();
-    
+    let axis_lines_html = axis_angles
+        .iter()
+        .map(|angle| {
+            let (x, y) = angle_to_coords(*angle, radius);
+            html! {
+                <line
+                    x1={center.to_string()}
+                    y1={center.to_string()}
+                    x2={x.to_string()}
+                    y2={y.to_string()}
+                    class="radar-axis-line"
+                />
+            }
+        })
+        .collect::<Vec<_>>();
+
     // Labels for all 8 dimensions
     let label_offset = radius + 22.0;
-    let labels = vec![
+    let labels = [
         ("E", angle_to_coords(0.0, label_offset), "radar-label"),
         ("S", angle_to_coords(45.0, label_offset), "radar-label"),
         ("T", angle_to_coords(90.0, label_offset), "radar-label"),
@@ -252,12 +273,12 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
         ("F", angle_to_coords(270.0, label_offset), "radar-label"),
         ("P", angle_to_coords(315.0, label_offset), "radar-label"),
     ];
-    
+
     html! {
         <div class="mbti-radar-container">
-            <svg 
-                class="mbti-radar-chart" 
-                width={size.to_string()} 
+            <svg
+                class="mbti-radar-chart"
+                width={size.to_string()}
                 height={size.to_string()}
                 viewBox={format!("0 0 {} {}", size, size)}
             >
@@ -266,9 +287,9 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
                     {for grid_polygons}
                     {for axis_lines_html}
                 </g>
-                
+
                 // Baseline polygon (50% reference)
-                <polygon 
+                <polygon
                     points={format!(
                         "{:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1}",
                         angle_to_coords(0.0, radius * 0.5).0, angle_to_coords(0.0, radius * 0.5).1,
@@ -282,13 +303,13 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
                     )}
                     class="radar-baseline-polygon"
                 />
-                
+
                 // Data polygon (spider web style - lines only, no fill)
-                <polygon 
+                <polygon
                     points={polygon_points.clone()}
                     class="radar-polygon"
                 />
-                
+
                 // Data points
                 <circle cx={e_x.to_string()} cy={e_y.to_string()} r="4" class="radar-point" />
                 <circle cx={s_x.to_string()} cy={s_y.to_string()} r="4" class="radar-point" />
@@ -298,7 +319,7 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
                 <circle cx={n_x.to_string()} cy={n_y.to_string()} r="4" class="radar-point" />
                 <circle cx={f_x.to_string()} cy={f_y.to_string()} r="4" class="radar-point" />
                 <circle cx={p_x.to_string()} cy={p_y.to_string()} r="4" class="radar-point" />
-                
+
                 // Axis labels (highlight if > 50%)
                 <g class="radar-labels">
                     {for labels.iter().enumerate().map(|(idx, (text, (x, y), _class))| {
@@ -313,11 +334,11 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
                             7 => p_value > 0.5,  // P
                             _ => false,
                         };
-                        
+
                         html! {
-                            <text 
-                                x={x.to_string()} 
-                                y={y.to_string()} 
+                            <text
+                                x={x.to_string()}
+                                y={y.to_string()}
                                 class={if is_highlight { "radar-label radar-label-highlight" } else { "radar-label radar-label-dim" }}
                                 text-anchor="middle"
                                 dominant-baseline="middle"
@@ -328,7 +349,7 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
                     })}
                 </g>
             </svg>
-            
+
             // Legend (keep original 4 dimension pairs format)
             <div class="radar-legend">
                 <div class="radar-legend-item">
@@ -395,7 +416,7 @@ fn MbtiAnalysis(props: &MbtiAnalysisProps) -> Html {
 
             <div class="mbti-dimensions">
                 <h4>{"Personality Dimensions"}</h4>
-                <MbtiRadarChart 
+                <MbtiRadarChart
                     ei_score={props.mbti.dimensions.ei_score}
                     sn_score={props.mbti.dimensions.sn_score}
                     tf_score={props.mbti.dimensions.tf_score}
@@ -561,22 +582,36 @@ pub struct PendingJobsNotificationProps {
 
 #[function_component]
 fn PendingJobsNotification(props: &PendingJobsNotificationProps) -> Html {
-    let has_failed = props.jobs.iter().any(|j| j.status.as_deref() == Some("failed"));
-    let has_processing = props.jobs.iter().any(|j| {
-        matches!(j.status.as_deref(), Some("pending") | Some("processing"))
-    });
-    
+    let has_failed = props
+        .jobs
+        .iter()
+        .any(|j| j.status.as_deref() == Some("failed"));
+    let has_processing = props
+        .jobs
+        .iter()
+        .any(|j| matches!(j.status.as_deref(), Some("pending") | Some("processing")));
+
     let (bg_color, border_color, text_color, title, description) = if has_failed {
-        ("#f8d7da", "#f5c6cb", "#721c24", "⚠️ Some Tasks Failed", 
-         "Some analyses failed. Please try again or check the error messages below.")
+        (
+            "#f8d7da",
+            "#f5c6cb",
+            "#721c24",
+            "⚠️ Some Tasks Failed",
+            "Some analyses failed. Please try again or check the error messages below.",
+        )
     } else if has_processing {
         ("#fff3cd", "#ffc107", "#856404", "⏳ Background Tasks in Progress",
          "Some analyses are still processing in the background. You can come back later to check the results.")
     } else {
-        ("#d4edda", "#c3e6cb", "#155724", "✅ Tasks Completed",
-         "All background tasks have completed.")
+        (
+            "#d4edda",
+            "#c3e6cb",
+            "#155724",
+            "✅ Tasks Completed",
+            "All background tasks have completed.",
+        )
     };
-    
+
     html! {
         <div class="pending-jobs-notification" style={format!("margin-top: 20px; padding: 15px; background: {}; border: 1px solid {}; border-radius: 8px;", bg_color, border_color)}>
             <h4 style={format!("margin: 0 0 10px 0; color: {}; display: flex; align-items: center; gap: 8px;", text_color)}>
@@ -614,7 +649,7 @@ fn PendingJobsNotification(props: &PendingJobsNotificationProps) -> Html {
             {if has_processing {
                 html! {
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button 
+                <button
                     onclick={Callback::from(|_| {
                         // Reload page while preserving current URL hash
                         // Note: hash is preserved automatically by browser on reload
@@ -1071,7 +1106,7 @@ fn SocialSkeleton(props: &SocialSkeletonProps) -> Html {
     html! {
         <div class="social-analysis skeleton-container">
             <div class="skeleton-overlay"></div>
-            
+
             <div class="social-stats">
                 {for (0..3).map(|_| {
                     html! {

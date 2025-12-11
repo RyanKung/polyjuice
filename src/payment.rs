@@ -1,4 +1,3 @@
-use hex;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -93,7 +92,7 @@ pub fn create_eip712_typed_data(
 
     // Calculate valid_after and valid_before
     let valid_after = timestamp;
-    let valid_before = timestamp + requirements.max_timeout_seconds.unwrap_or(60) as u64;
+    let valid_before = timestamp + requirements.max_timeout_seconds.unwrap_or(60);
 
     // Determine the verifying contract based on the asset (USDC)
     let verifying_contract = normalize_address(&requirements.asset);
@@ -218,8 +217,7 @@ pub fn create_payment_payload(
 ) -> PaymentPayload {
     // Calculate valid_after and valid_before timestamps
     let valid_after = timestamp.to_string();
-    let valid_before =
-        (timestamp + requirements.max_timeout_seconds.unwrap_or(60) as u64).to_string();
+    let valid_before = (timestamp + requirements.max_timeout_seconds.unwrap_or(60)).to_string();
 
     PaymentPayload {
         x402_version: 1,

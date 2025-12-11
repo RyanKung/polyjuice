@@ -15,12 +15,24 @@ pub struct WalletStatusProps {
 /// Wallet status component
 #[function_component]
 pub fn WalletStatus(props: &WalletStatusProps) -> Html {
-    if !props.wallet_initialized || props.wallet_error.is_some() {
+    if !props.wallet_initialized {
         return html! {};
     }
 
+    // Show error message if there's an error
+    let error_html = if let Some(error) = &props.wallet_error {
+        html! {
+            <div class="wallet-status disconnected" style="margin-bottom: 8px;">
+                <span style="font-size: 12px;">{error}</span>
+            </div>
+        }
+    } else {
+        html! {}
+    };
+
     html! {
         <div class="wallet-section">
+            {error_html}
             {
                 if let Some(account) = &props.wallet_account {
                     if account.is_connected {
@@ -147,7 +159,6 @@ pub fn ErrorMessage(props: &ErrorMessageProps) -> Html {
         html! {}
     }
 }
-
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct BackButtonProps {

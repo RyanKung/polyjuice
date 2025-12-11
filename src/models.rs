@@ -103,8 +103,8 @@ pub struct SearchResult {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PendingJob {
     pub job_key: String,
-    pub job_type: String, // "social", "mbti", etc.
-    pub status: Option<String>, // "pending", "processing", "completed", "failed"
+    pub job_type: String,        // "social", "mbti", etc.
+    pub status: Option<String>,  // "pending", "processing", "completed", "failed"
     pub started_at: Option<u64>, // Timestamp
     pub message: Option<String>,
 }

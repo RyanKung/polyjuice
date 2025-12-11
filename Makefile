@@ -4,9 +4,15 @@
 .PHONY: all
 all: serve
 
+# Build WalletConnect bundle
+.PHONY: build-walletconnect
+build-walletconnect:
+	@echo "Building WalletConnect bundle..."
+	npm run build:walletconnect
+
 # Build the project
 .PHONY: build
-build:
+build: build-walletconnect
 	@echo "Building WebAssembly application..."
 	cargo build --target wasm32-unknown-unknown
 
@@ -19,7 +25,7 @@ clean:
 
 # Serve the application with Trunk (with watch mode)
 .PHONY: serve
-serve:
+serve: build-walletconnect
 	@echo "Starting Trunk development server with watch mode..."
 	@echo "Server will be available at: http://127.0.0.1:8080"
 	@echo "Changes to files will automatically trigger rebuild"
@@ -39,7 +45,7 @@ serve:
 
 # Build for production
 .PHONY: build-prod
-build-prod:
+build-prod: build-walletconnect
 	@echo "Building for production..."
 	@if [ -f .env ]; then \
 		export $$(grep -v '^#' .env | grep -v '^$$' | xargs) && echo "API URL: $$SNAPRAG_API_URL"; \
@@ -54,7 +60,7 @@ build-prod:
 
 # Build for production deployment (uses snaprag.0xbase.ai)
 .PHONY: build-deploy
-build-deploy:
+build-deploy: build-walletconnect
 	@echo "Building for production deployment..."
 	@echo "Using API URL: https://snaprag.0xbase.ai/"
 	SNAPRAG_API_URL=https://snaprag.0xbase.ai/ unset NO_COLOR && trunk build --release
