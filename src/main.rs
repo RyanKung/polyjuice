@@ -60,20 +60,28 @@ fn App() -> Html {
     let is_adding_endpoint = use_state(|| false); // Whether we're currently adding an endpoint
 
     // Initialize Farcaster Mini App SDK on mount
+    // According to Farcaster docs: call sdk.actions.ready() when app is fully loaded
     {
         use_effect_with((), move |_| {
             spawn_local(async move {
-                // Check if we're in a Mini App environment
+                // Wait a bit for app to fully render
+                gloo_timers::future::TimeoutFuture::new(100).await;
+
+                // Check if we're in a Mini App environment using official method
                 match farcaster::is_in_mini_app().await {
                     Ok(true) => {
                         web_sys::console::log_1(&"📱 Running in Farcaster Mini App".into());
-                        // Initialize SDK and call ready()
+                        // Call sdk.actions.ready() to hide loading screen and show content
+                        // This must be called when app is fully loaded
                         if let Err(e) = farcaster::initialize().await {
                             web_sys::console::warn_1(
-                                &format!("⚠️ Failed to initialize Farcaster SDK: {}", e).into(),
+                                &format!("⚠️ Failed to call sdk.actions.ready(): {}", e).into(),
                             );
                         } else {
-                            // Try to get context
+                            web_sys::console::log_1(
+                                &"✅ sdk.actions.ready() called successfully".into(),
+                            );
+                            // Try to get context after ready()
                             match farcaster::get_context().await {
                                 Ok(context) => {
                                     if let Some(user) = &context.user {
@@ -96,12 +104,16 @@ fn App() -> Html {
                         }
                     }
                     Ok(false) => {
-                        web_sys::console::log_1(&"🌐 Running in regular browser".into());
+                        web_sys::console::log_1(
+                            &"🌐 Running in regular browser (not a Mini App)".into(),
+                        );
+                        // In regular browser, we don't need to call sdk.ready()
                     }
                     Err(e) => {
                         web_sys::console::warn_1(
                             &format!("⚠️ Failed to check Mini App status: {}", e).into(),
                         );
+                        // If SDK is not available, assume regular browser
                     }
                 }
             });
