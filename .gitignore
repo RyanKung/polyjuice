@@ -53,5 +53,6 @@ js/*.LICENSE.txt
 js/walletconnect-bundle.js
 js/walletconnect-umd.js
 
-# Keep only the source entry file
+# Keep only the source entry files
 !js/walletconnect-entry.js
+!js/farcaster-entry.js

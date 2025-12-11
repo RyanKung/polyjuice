@@ -3,6 +3,7 @@ use yew::prelude::*;
 
 mod api;
 mod components;
+mod farcaster;
 mod handlers;
 mod models;
 mod payment;
@@ -57,6 +58,56 @@ fn App() -> Html {
     let custom_url_input = use_state(String::new); // Input for custom URL
     let custom_endpoint_error = use_state(|| None::<String>); // Error message for custom endpoint
     let is_adding_endpoint = use_state(|| false); // Whether we're currently adding an endpoint
+
+    // Initialize Farcaster Mini App SDK on mount
+    {
+        use_effect_with((), move |_| {
+            spawn_local(async move {
+                // Check if we're in a Mini App environment
+                match farcaster::is_in_mini_app().await {
+                    Ok(true) => {
+                        web_sys::console::log_1(&"📱 Running in Farcaster Mini App".into());
+                        // Initialize SDK and call ready()
+                        if let Err(e) = farcaster::initialize().await {
+                            web_sys::console::warn_1(
+                                &format!("⚠️ Failed to initialize Farcaster SDK: {}", e).into(),
+                            );
+                        } else {
+                            // Try to get context
+                            match farcaster::get_context().await {
+                                Ok(context) => {
+                                    if let Some(user) = &context.user {
+                                        web_sys::console::log_1(
+                                            &format!(
+                                                "👤 Farcaster user: {} (FID: {:?})",
+                                                user.username.as_deref().unwrap_or("unknown"),
+                                                user.fid
+                                            )
+                                            .into(),
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    web_sys::console::warn_1(
+                                        &format!("⚠️ Failed to get context: {}", e).into(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Ok(false) => {
+                        web_sys::console::log_1(&"🌐 Running in regular browser".into());
+                    }
+                    Err(e) => {
+                        web_sys::console::warn_1(
+                            &format!("⚠️ Failed to check Mini App status: {}", e).into(),
+                        );
+                    }
+                }
+            });
+            || ()
+        });
+    }
 
     // Initialize wallet on mount
     {

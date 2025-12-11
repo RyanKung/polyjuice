@@ -1,0 +1,13 @@
+{
+  "miniapp": {
+    "version": "1",
+    "name": "Polyjuice",
+    "iconUrl": "https://polyjuice.0xbase.ai/logo.png",
+    "homeUrl": "https://polyjuice.0xbase.ai",
+    "splashImageUrl": "https://polyjuice.0xbase.ai/logo.png",
+    "splashBackgroundColor": "#667eea",
+    "heroImageUrl": "https://polyjuice.0xbase.ai/logo.png",
+    "tagline": "Discover & Chat with Farcaster Users"
+  }
+}
+
