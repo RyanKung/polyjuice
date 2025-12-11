@@ -37,6 +37,15 @@ if (typeof window !== 'undefined') {
       return false;
     }
 
+    // Check for other Farcaster Mini App indicators
+    // Some implementations might use different global objects
+    if (typeof window.farcasterSDK !== 'undefined' && window.farcasterSDK !== null) {
+      window.sdk = window.farcasterSDK;
+      window.farcaster = window.farcasterSDK;
+      console.log('✅ Farcaster SDK found on window.farcasterSDK');
+      return true;
+    }
+
     // Not in Mini App environment - this is normal for regular browser usage
     console.log('🌐 Running in regular browser (not a Mini App)');
     return false;
@@ -44,11 +53,31 @@ if (typeof window !== 'undefined') {
 
   // Try to setup immediately
   if (!setupFarcasterSDK()) {
-    // If not found immediately, wait a bit and try again
-    // (SDK might be injected asynchronously)
-    setTimeout(() => {
-      setupFarcasterSDK();
-    }, 100);
+    // If not found immediately, wait and retry multiple times
+    // (SDK might be injected asynchronously by the host)
+    let attempts = 0;
+    const maxAttempts = 10;
+    const retryInterval = 200; // 200ms between attempts
+    
+    const retrySetup = () => {
+      attempts++;
+      if (setupFarcasterSDK()) {
+        return; // Found, stop retrying
+      }
+      
+      if (attempts < maxAttempts) {
+        setTimeout(retrySetup, retryInterval);
+      } else {
+        // After max attempts, check one more time for ReactNativeWebView
+        // If it exists, we're in Mini App but SDK might not be available yet
+        if (typeof window.ReactNativeWebView !== 'undefined') {
+          console.log('📱 Mini App environment detected but SDK not found after ' + maxAttempts + ' attempts');
+          console.log('ℹ️ SDK may be injected later by the host');
+        }
+      }
+    };
+    
+    setTimeout(retrySetup, retryInterval);
   }
 }
 
