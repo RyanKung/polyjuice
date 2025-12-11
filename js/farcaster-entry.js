@@ -56,48 +56,6 @@ if (typeof window !== 'undefined') {
       return true;
     }
 
-    // Check for setupFarcasterSDK function - might need to call it
-    if (typeof window.setupFarcasterSDK === 'function') {
-      console.log('[Farcaster SDK Detection] Found setupFarcasterSDK function');
-      console.log('[Farcaster SDK Detection] Attempting to call setupFarcasterSDK...');
-      try {
-        window.setupFarcasterSDK();
-        console.log('[Farcaster SDK Detection] setupFarcasterSDK called, checking again...');
-        // Check again after calling setup function
-        if (typeof window.sdk !== 'undefined' && window.sdk !== null) {
-          window.farcaster = window.sdk;
-          console.log('✅ Farcaster SDK found after setupFarcasterSDK call');
-          return true;
-        }
-        if (typeof window.farcaster !== 'undefined' && window.farcaster !== null) {
-          window.sdk = window.farcaster;
-          console.log('✅ Farcaster SDK found on window.farcaster after setupFarcasterSDK call');
-          return true;
-        }
-      } catch (e) {
-        console.warn('[Farcaster SDK Detection] Error calling setupFarcasterSDK:', e);
-      }
-    }
-
-    // Check for setupFarcasterSDK function - might need to call it
-    if (typeof window.setupFarcasterSDK === 'function') {
-      console.log('[Farcaster SDK Detection] Found setupFarcasterSDK function');
-      if (attempt === 0) {
-        console.log('[Farcaster SDK Detection] Attempting to call setupFarcasterSDK...');
-        try {
-          window.setupFarcasterSDK();
-          console.log('[Farcaster SDK Detection] setupFarcasterSDK called, waiting for SDK...');
-          // Wait a bit and check again
-          return false; // Will retry
-        } catch (e) {
-          console.warn('[Farcaster SDK Detection] Error calling setupFarcasterSDK:', e);
-        }
-      }
-      // If we've already called it, just wait
-      console.log('📱 Mini App environment detected (setupFarcasterSDK function found)');
-      console.log('ℹ️ Waiting for Farcaster SDK to be injected...');
-      return false;
-    }
 
     // Check for ReactNativeWebView (indicates Mini App environment)
     // Even if SDK isn't loaded yet, we're in a Mini App environment

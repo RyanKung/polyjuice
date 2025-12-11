@@ -144,45 +144,21 @@ pub async fn is_in_mini_app() -> Result<bool, String> {
     // Official method: Check if window.farcaster property exists
     // According to Farcaster docs, if window.farcaster exists, we're in Mini App environment
     // Even if it's null initially, the property existence indicates Mini App environment
-    // Also check for setupFarcasterSDK function which might need to be called
     let window_js: &JsValue = window.as_ref();
     let farcaster_exists = Reflect::has(window_js, &"farcaster".into()).unwrap_or(false);
     let sdk_exists = Reflect::has(window_js, &"sdk".into()).unwrap_or(false);
-    let setup_fn_exists = Reflect::has(window_js, &"setupFarcasterSDK".into()).unwrap_or(false);
 
     web_sys::console::log_1(
         &format!(
-            "[Farcaster SDK] Property check: window.farcaster={}, window.sdk={}, setupFarcasterSDK={}",
-            farcaster_exists, sdk_exists, setup_fn_exists
+            "[Farcaster SDK] Property check: window.farcaster={}, window.sdk={}",
+            farcaster_exists, sdk_exists
         )
         .into(),
     );
 
-    // If setupFarcasterSDK function exists, try calling it
-    if setup_fn_exists {
-        web_sys::console::log_1(
-            &"[Farcaster SDK] Found setupFarcasterSDK function, attempting to call it...".into(),
-        );
-        if let Ok(setup_fn) = Reflect::get(window_js, &"setupFarcasterSDK".into()) {
-            if let Some(func) = setup_fn.dyn_ref::<js_sys::Function>() {
-                if let Err(e) = func.call0(window_js) {
-                    web_sys::console::warn_1(
-                        &format!("[Farcaster SDK] Error calling setupFarcasterSDK: {:?}", e).into(),
-                    );
-                } else {
-                    web_sys::console::log_1(
-                        &"[Farcaster SDK] setupFarcasterSDK called successfully".into(),
-                    );
-                    // Wait a bit for SDK to be set up
-                    gloo_timers::future::TimeoutFuture::new(100).await;
-                }
-            }
-        }
-    }
-
-    // If window.farcaster exists (even if null), or setupFarcasterSDK exists, we're likely in Mini App
+    // If window.farcaster exists (even if null), we're likely in Mini App
     // Wait for SDK to be injected with retries
-    if farcaster_exists || sdk_exists || setup_fn_exists {
+    if farcaster_exists || sdk_exists {
         web_sys::console::log_1(
             &"[Farcaster SDK] ⚠️ SDK properties exist - likely in Mini App, waiting for injection...".into(),
         );
