@@ -56,6 +56,18 @@ jobs:
       - name: Install Trunk
         run: cargo install trunk --locked
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build WalletConnect bundle
+        run: npm run build:walletconnect
+
       - name: Build
         env:
           SNAPRAG_API_URL: https://snaprag.0xbase.ai/
