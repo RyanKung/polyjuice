@@ -9,6 +9,14 @@ if (typeof window !== 'undefined') {
   function setupFarcasterSDK(attempt = 0) {
     console.log(`[Farcaster SDK Detection] Attempt ${attempt + 1}: Checking for SDK...`);
     
+    // Official method: Check if window.farcaster property exists
+    // According to Farcaster docs, property existence indicates Mini App environment
+    // Even if null initially, the property will be populated by the host
+    const farcasterPropExists = 'farcaster' in window;
+    const sdkPropExists = 'sdk' in window;
+    
+    console.log(`[Farcaster SDK Detection] Property check: window.farcaster=${farcasterPropExists}, window.sdk=${sdkPropExists}`);
+    
     // Check if SDK is already available (injected by Farcaster client)
     // The SDK is typically available as window.sdk in Mini App environments
     console.log(`[Farcaster SDK Detection] Checking window.sdk: ${typeof window.sdk !== 'undefined' ? 'exists' : 'undefined'}`);
@@ -59,17 +67,54 @@ if (typeof window !== 'undefined') {
     }
 
     // Debug: Log all window properties that might be relevant
-    if (attempt === 0) {
+    if (attempt === 0 || attempt === 9) {
       const relevantKeys = Object.keys(window).filter(k => 
         k.toLowerCase().includes('farcaster') || 
         k.toLowerCase().includes('sdk') ||
         k.toLowerCase().includes('miniapp') ||
         k.toLowerCase().includes('mini') ||
-        k === 'sdk'
+        k === 'sdk' ||
+        k.startsWith('__') ||
+        k.includes('Farcaster')
       );
       if (relevantKeys.length > 0) {
         console.log('[Farcaster SDK Detection] Relevant window properties found:', relevantKeys);
+        // Log the values of these properties
+        relevantKeys.forEach(key => {
+          const value = window[key];
+          console.log(`[Farcaster SDK Detection] window.${key}:`, typeof value, value === null ? 'null' : value === undefined ? 'undefined' : 'object');
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            try {
+              const keys = Object.keys(value).slice(0, 10);
+              console.log(`[Farcaster SDK Detection] window.${key} keys:`, keys);
+            } catch (e) {
+              // Ignore errors accessing keys
+            }
+          }
+        });
       }
+      
+      // Also check for nested objects
+      const nestedChecks = ['__farcaster__', '__farcasterSDK__', 'FarcasterSDK', 'Farcaster'];
+      nestedChecks.forEach(path => {
+        if (window[path] && typeof window[path] === 'object') {
+          console.log(`[Farcaster SDK Detection] Found window.${path}:`, typeof window[path]);
+          try {
+            if (window[path].sdk) {
+              console.log(`[Farcaster SDK Detection] ✅ Found nested SDK in window.${path}.sdk`);
+            }
+          } catch (e) {
+            // Ignore
+          }
+        }
+      });
+    }
+
+    // If properties exist but SDK is null, we're likely in Mini App waiting for injection
+    if (farcasterPropExists || sdkPropExists) {
+      console.log('📱 Mini App environment detected (properties exist but SDK not injected yet)');
+      console.log('ℹ️ Waiting for Farcaster SDK to be injected by host...');
+      return false; // Will retry
     }
 
     // Not in Mini App environment - this is normal for regular browser usage

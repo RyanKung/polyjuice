@@ -88,83 +88,163 @@ fn get_farcaster_sdk(window: &web_sys::Window) -> Result<JsValue, String> {
         web_sys::console::log_1(&"[Farcaster SDK] window.farcasterSDK does not exist".into());
     }
 
+    // Check for other possible locations - sometimes SDK might be nested
+    // Check window.__farcaster__ or similar
+    let possible_paths = vec![
+        "__farcaster__",
+        "__farcasterSDK__",
+        "FarcasterSDK",
+        "Farcaster",
+    ];
+    for path in possible_paths {
+        web_sys::console::log_1(&format!("[Farcaster SDK] Checking window.{}...", path).into());
+        if let Ok(sdk) = Reflect::get(window, &path.into()) {
+            if !sdk.is_undefined() && !sdk.is_null() {
+                // Check if it's an object with an sdk property
+                if let Some(sdk_obj) = sdk.dyn_ref::<Object>() {
+                    if let Ok(nested_sdk) = Reflect::get(sdk_obj, &"sdk".into()) {
+                        if !nested_sdk.is_undefined() && !nested_sdk.is_null() {
+                            web_sys::console::log_1(
+                                &format!(
+                                    "[Farcaster SDK] ✅ Found nested SDK in window.{}.sdk",
+                                    path
+                                )
+                                .into(),
+                            );
+                            return Ok(nested_sdk);
+                        }
+                    }
+                }
+                // Or it might be the SDK itself
+                if let Some(sdk_obj) = sdk.dyn_ref::<Object>() {
+                    // Check if it has typical SDK methods
+                    if Reflect::get(sdk_obj, &"isInMiniApp".into()).is_ok()
+                        || Reflect::get(sdk_obj, &"actions".into()).is_ok()
+                    {
+                        web_sys::console::log_1(
+                            &format!("[Farcaster SDK] ✅ Found SDK in window.{}", path).into(),
+                        );
+                        return Ok(sdk);
+                    }
+                }
+            }
+        }
+    }
+
     web_sys::console::log_1(&"[Farcaster SDK] ❌ SDK not found in any expected location".into());
     Err("Farcaster SDK not found. Make sure @farcaster/miniapp-sdk is loaded.".to_string())
 }
 
 /// Check if the app is running inside a Farcaster Mini App
+/// Official method: Check if window.farcaster exists (even if null initially)
 pub async fn is_in_mini_app() -> Result<bool, String> {
     let window = get_window()?;
     web_sys::console::log_1(&"[Farcaster SDK] Starting is_in_mini_app() check...".into());
 
-    // First, check if SDK exists - if it does, we're likely in a Mini App environment
-    // Try to get SDK with retries (SDK might be loading asynchronously)
-    // Increase retry count and wait time for slower SDK injection
-    for attempt in 0..10 {
+    // Official method: Check if window.farcaster property exists
+    // According to Farcaster docs, if window.farcaster exists, we're in Mini App environment
+    // Even if it's null initially, the property existence indicates Mini App environment
+    let window_js: &JsValue = window.as_ref();
+    let farcaster_exists = Reflect::has(window_js, &"farcaster".into()).unwrap_or(false);
+    let sdk_exists = Reflect::has(window_js, &"sdk".into()).unwrap_or(false);
+
+    web_sys::console::log_1(
+        &format!(
+            "[Farcaster SDK] Property check: window.farcaster={}, window.sdk={}",
+            farcaster_exists, sdk_exists
+        )
+        .into(),
+    );
+
+    // If window.farcaster exists (even if null), we're likely in Mini App
+    // Wait for SDK to be injected with retries
+    if farcaster_exists || sdk_exists {
         web_sys::console::log_1(
-            &format!(
-                "[Farcaster SDK] Attempt {}/10: Checking for SDK...",
-                attempt + 1
-            )
-            .into(),
+            &"[Farcaster SDK] ⚠️ SDK properties exist - likely in Mini App, waiting for injection...".into(),
         );
-        match get_farcaster_sdk(&window) {
-            Ok(sdk) => {
-                web_sys::console::log_1(&"[Farcaster SDK] ✅ SDK found! Verifying...".into());
-                // SDK exists - verify with isInMiniApp method if available
-                let is_in_mini_app_fn = Reflect::get(&sdk, &"isInMiniApp".into())
-                    .ok()
-                    .and_then(|f| f.dyn_ref::<js_sys::Function>().cloned());
 
-                if let Some(func) = is_in_mini_app_fn {
+        // Try to get actual SDK value with retries
+        for attempt in 0..15 {
+            web_sys::console::log_1(
+                &format!(
+                    "[Farcaster SDK] Attempt {}/15: Waiting for SDK injection...",
+                    attempt + 1
+                )
+                .into(),
+            );
+
+            match get_farcaster_sdk(&window) {
+                Ok(sdk) => {
                     web_sys::console::log_1(
-                        &"[Farcaster SDK] Calling sdk.isInMiniApp() method...".into(),
+                        &"[Farcaster SDK] ✅ SDK injected! Verifying...".into(),
                     );
-                    let promise = func
-                        .call0(&sdk)
-                        .map_err(|e| format!("Failed to call isInMiniApp: {:?}", e))?;
+                    // SDK exists - verify with isInMiniApp method if available
+                    let is_in_mini_app_fn = Reflect::get(&sdk, &"isInMiniApp".into())
+                        .ok()
+                        .and_then(|f| f.dyn_ref::<js_sys::Function>().cloned());
 
-                    if let Ok(promise_value) = promise.dyn_into::<Promise>() {
-                        let result = JsFuture::from(promise_value)
-                            .await
-                            .map_err(|e| format!("Failed to await isInMiniApp: {:?}", e))?;
-                        let is_mini_app = result
-                            .as_bool()
-                            .ok_or_else(|| "isInMiniApp returned non-boolean value".to_string())?;
+                    if let Some(func) = is_in_mini_app_fn {
                         web_sys::console::log_1(
-                            &format!(
-                                "[Farcaster SDK] sdk.isInMiniApp() returned: {}",
-                                is_mini_app
-                            )
-                            .into(),
+                            &"[Farcaster SDK] Calling sdk.isInMiniApp() method...".into(),
                         );
-                        return Ok(is_mini_app);
+                        let promise = func
+                            .call0(&sdk)
+                            .map_err(|e| format!("Failed to call isInMiniApp: {:?}", e))?;
+
+                        if let Ok(promise_value) = promise.dyn_into::<Promise>() {
+                            let result = JsFuture::from(promise_value)
+                                .await
+                                .map_err(|e| format!("Failed to await isInMiniApp: {:?}", e))?;
+                            let is_mini_app = result.as_bool().ok_or_else(|| {
+                                "isInMiniApp returned non-boolean value".to_string()
+                            })?;
+                            web_sys::console::log_1(
+                                &format!(
+                                    "[Farcaster SDK] sdk.isInMiniApp() returned: {}",
+                                    is_mini_app
+                                )
+                                .into(),
+                            );
+                            return Ok(is_mini_app);
+                        }
+                    } else {
+                        web_sys::console::log_1(
+                            &"[Farcaster SDK] SDK found but isInMiniApp() method not available"
+                                .into(),
+                        );
                     }
-                } else {
+                    // SDK exists - we're in a Mini App environment
                     web_sys::console::log_1(
-                        &"[Farcaster SDK] SDK found but isInMiniApp() method not available".into(),
+                        &"[Farcaster SDK] ✅ SDK exists, confirming Mini App environment".into(),
                     );
+                    return Ok(true);
                 }
-                // SDK exists - we're in a Mini App environment
-                web_sys::console::log_1(
-                    &"[Farcaster SDK] ✅ SDK exists, assuming Mini App environment".into(),
-                );
-                return Ok(true);
-            }
-            Err(e) => {
-                web_sys::console::log_1(
-                    &format!("[Farcaster SDK] Attempt {} failed: {}", attempt + 1, e).into(),
-                );
-                // SDK not found yet, wait and retry
-                if attempt < 9 {
+                Err(e) => {
                     web_sys::console::log_1(
-                        &"[Farcaster SDK] Waiting 300ms before retry...".into(),
+                        &format!(
+                            "[Farcaster SDK] Attempt {}: SDK not injected yet: {}",
+                            attempt + 1,
+                            e
+                        )
+                        .into(),
                     );
-                    gloo_timers::future::TimeoutFuture::new(300).await;
-                    continue;
+                    // SDK not injected yet, wait and retry
+                    if attempt < 14 {
+                        gloo_timers::future::TimeoutFuture::new(300).await;
+                        continue;
+                    }
                 }
             }
         }
+
+        // Properties exist but SDK never got injected - still likely in Mini App
+        web_sys::console::log_1(
+            &"[Farcaster SDK] ⚠️ Properties exist but SDK not injected after 15 attempts".into(),
+        );
+        web_sys::console::log_1(
+            &"[Farcaster SDK] Assuming Mini App environment based on property existence".into(),
+        );
+        return Ok(true);
     }
 
     // SDK not found - check for ReactNativeWebView as fallback indicator
@@ -173,6 +253,28 @@ pub async fn is_in_mini_app() -> Result<bool, String> {
     );
     let rn_webview = Reflect::get(&window, &"ReactNativeWebView".into()).ok();
     let is_mini_app_env = rn_webview.is_some() && !rn_webview.unwrap().is_undefined();
+
+    // Check if window.sdk, window.farcaster, or window.farcasterSDK exist (even if null)
+    // This might indicate we're in a Mini App but SDK hasn't loaded yet
+    let window_js: &JsValue = window.as_ref();
+    let sdk_prop_exists = Reflect::has(window_js, &"sdk".into()).unwrap_or(false);
+    let farcaster_prop_exists = Reflect::has(window_js, &"farcaster".into()).unwrap_or(false);
+    let farcaster_sdk_prop_exists =
+        Reflect::has(window_js, &"farcasterSDK".into()).unwrap_or(false);
+
+    if sdk_prop_exists || farcaster_prop_exists || farcaster_sdk_prop_exists {
+        web_sys::console::log_1(
+            &"[Farcaster SDK] ⚠️ SDK properties exist but are null/undefined - might be loading..."
+                .into(),
+        );
+        web_sys::console::log_1(
+            &format!(
+                "[Farcaster SDK] Properties: sdk={}, farcaster={}, farcasterSDK={}",
+                sdk_prop_exists, farcaster_prop_exists, farcaster_sdk_prop_exists
+            )
+            .into(),
+        );
+    }
 
     if is_mini_app_env {
         web_sys::console::log_1(
@@ -183,6 +285,16 @@ pub async fn is_in_mini_app() -> Result<bool, String> {
             "Farcaster SDK not found in Mini App environment. SDK must be injected by the host."
                 .to_string(),
         );
+    }
+
+    // If SDK properties exist but are null, we might be in a Mini App
+    if sdk_prop_exists || farcaster_prop_exists || farcaster_sdk_prop_exists {
+        web_sys::console::log_1(
+            &"[Farcaster SDK] ⚠️ SDK properties exist but SDK not loaded - might be in Mini App"
+                .into(),
+        );
+        // Return true optimistically - SDK might load later
+        return Ok(true);
     }
 
     // Not in Mini App environment
