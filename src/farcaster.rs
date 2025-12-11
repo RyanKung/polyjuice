@@ -70,31 +70,58 @@ fn get_farcaster_sdk(window: &web_sys::Window) -> Result<JsValue, String> {
 /// Check if the app is running inside a Farcaster Mini App
 pub async fn is_in_mini_app() -> Result<bool, String> {
     let window = get_window()?;
-    let sdk = get_farcaster_sdk(&window)?;
 
-    // Check if isInMiniApp method exists
-    let is_in_mini_app_fn = Reflect::get(&sdk, &"isInMiniApp".into())
-        .ok()
-        .and_then(|f| f.dyn_ref::<js_sys::Function>().cloned());
+    // First check for ReactNativeWebView (most reliable indicator of Mini App environment)
+    let rn_webview = Reflect::get(&window, &"ReactNativeWebView".into()).ok();
+    let is_mini_app_env = rn_webview.is_some() && !rn_webview.unwrap().is_undefined();
 
-    if let Some(func) = is_in_mini_app_fn {
-        let promise = func
-            .call0(&sdk)
-            .map_err(|e| format!("Failed to call isInMiniApp: {:?}", e))?;
+    // If we're in a Mini App environment, SDK must exist
+    if is_mini_app_env {
+        // Try to get SDK - if it doesn't exist, wait a bit and retry (SDK might be loading)
+        for attempt in 0..5 {
+            match get_farcaster_sdk(&window) {
+                Ok(sdk) => {
+                    // SDK exists, verify with isInMiniApp method if available
+                    let is_in_mini_app_fn = Reflect::get(&sdk, &"isInMiniApp".into())
+                        .ok()
+                        .and_then(|f| f.dyn_ref::<js_sys::Function>().cloned());
 
-        if let Ok(promise_value) = promise.dyn_into::<Promise>() {
-            let result = JsFuture::from(promise_value)
-                .await
-                .map_err(|e| format!("Failed to await isInMiniApp: {:?}", e))?;
-            return result
-                .as_bool()
-                .ok_or_else(|| "isInMiniApp returned non-boolean value".to_string());
+                    if let Some(func) = is_in_mini_app_fn {
+                        let promise = func
+                            .call0(&sdk)
+                            .map_err(|e| format!("Failed to call isInMiniApp: {:?}", e))?;
+
+                        if let Ok(promise_value) = promise.dyn_into::<Promise>() {
+                            let result = JsFuture::from(promise_value)
+                                .await
+                                .map_err(|e| format!("Failed to await isInMiniApp: {:?}", e))?;
+                            return result.as_bool().ok_or_else(|| {
+                                "isInMiniApp returned non-boolean value".to_string()
+                            });
+                        }
+                    }
+                    // SDK exists and we're in Mini App environment
+                    return Ok(true);
+                }
+                Err(_) => {
+                    // SDK not found yet, wait and retry
+                    if attempt < 4 {
+                        gloo_timers::future::TimeoutFuture::new(200).await;
+                        continue;
+                    } else {
+                        // After 5 attempts, SDK should exist in Mini App environment
+                        return Err(
+                            "Farcaster SDK not found in Mini App environment. SDK must be injected by the host."
+                                .to_string(),
+                        );
+                    }
+                }
+            }
         }
     }
 
-    // Fallback: check for ReactNativeWebView (indicates Mini App environment)
-    let rn_webview = Reflect::get(&window, &"ReactNativeWebView".into()).ok();
-    Ok(rn_webview.is_some() && !rn_webview.unwrap().is_undefined())
+    // Not in Mini App environment
+    Ok(false)
 }
 
 /// Initialize Farcaster Mini App SDK and call ready()
