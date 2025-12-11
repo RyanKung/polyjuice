@@ -23,6 +23,9 @@ fn App() -> Html {
     let wallet_initialized = use_state(|| false);
     let wallet_error = use_state(|| None::<String>);
 
+    // Track if we're in Farcaster Mini App environment
+    let is_farcaster_env = use_state(|| false);
+
     // State management
     let search_input = use_state(String::new);
     let search_result = use_state(|| None::<SearchResult>);
@@ -62,6 +65,7 @@ fn App() -> Html {
     // Initialize Farcaster Mini App SDK on mount
     // According to Farcaster docs: call sdk.actions.ready() when app is fully loaded
     {
+        let is_farcaster_env = is_farcaster_env.clone();
         use_effect_with((), move |_| {
             spawn_local(async move {
                 // Wait a bit for app to fully render
@@ -71,6 +75,7 @@ fn App() -> Html {
                 match farcaster::is_in_mini_app().await {
                     Ok(true) => {
                         web_sys::console::log_1(&"📱 Running in Farcaster Mini App".into());
+                        is_farcaster_env.set(true);
                         // Call sdk.actions.ready() to hide loading screen and show content
                         // This must be called when app is fully loaded
                         if let Err(e) = farcaster::initialize().await {
@@ -107,12 +112,14 @@ fn App() -> Html {
                         web_sys::console::log_1(
                             &"🌐 Running in regular browser (not a Mini App)".into(),
                         );
+                        is_farcaster_env.set(false);
                         // In regular browser, we don't need to call sdk.ready()
                     }
                     Err(e) => {
                         web_sys::console::warn_1(
                             &format!("⚠️ Failed to check Mini App status: {}", e).into(),
                         );
+                        is_farcaster_env.set(false);
                         // If SDK is not available, assume regular browser
                     }
                 }
@@ -121,14 +128,24 @@ fn App() -> Html {
         });
     }
 
-    // Initialize wallet on mount
+    // Initialize wallet on mount (only if not in Farcaster environment)
     {
         let wallet_initialized = wallet_initialized.clone();
         let wallet_account = wallet_account.clone();
         let wallet_error = wallet_error.clone();
+        let is_farcaster_env = is_farcaster_env.clone();
 
         use_effect_with((), move |_| {
             spawn_local(async move {
+                // Don't initialize WalletConnect in Farcaster environment
+                if *is_farcaster_env {
+                    web_sys::console::log_1(
+                        &"📱 Skipping WalletConnect initialization in Farcaster environment".into(),
+                    );
+                    wallet_initialized.set(true); // Mark as initialized to avoid UI issues
+                    return;
+                }
+
                 match wallet::initialize().await {
                     Ok(_) => {
                         wallet_initialized.set(true);
@@ -146,21 +163,31 @@ fn App() -> Html {
         });
     }
 
-    // Poll wallet account state
+    // Poll wallet account state (only if not in Farcaster environment)
     {
         let wallet_account = wallet_account.clone();
+        let is_farcaster_env = is_farcaster_env.clone();
 
         use_effect_with((), move |_| {
-            let interval = gloo_timers::callback::Interval::new(1000, move || {
-                let wallet_account = wallet_account.clone();
-                spawn_local(async move {
-                    if let Ok(account) = wallet::get_account().await {
-                        wallet_account.set(Some(account));
-                    }
-                });
-            });
+            // Don't poll wallet state in Farcaster environment
+            let interval_opt = if !*is_farcaster_env {
+                Some(gloo_timers::callback::Interval::new(1000, move || {
+                    let wallet_account = wallet_account.clone();
+                    spawn_local(async move {
+                        if let Ok(account) = wallet::get_account().await {
+                            wallet_account.set(Some(account));
+                        }
+                    });
+                }))
+            } else {
+                None
+            };
 
-            move || drop(interval)
+            move || {
+                if let Some(interval) = interval_opt {
+                    drop(interval);
+                }
+            }
         });
     }
 
@@ -484,6 +511,10 @@ fn App() -> Html {
                             <p class="tagline">{"Discover & Chat with Farcaster Users"}</p>
                         </div>
 
+                        {
+                            // Only show WalletStatus if not in Farcaster environment
+                            if !*is_farcaster_env {
+                                html! {
                         <WalletStatus
                             wallet_account={(*wallet_account).clone()}
                             wallet_initialized={*wallet_initialized}
@@ -491,6 +522,11 @@ fn App() -> Html {
                             on_connect={on_connect_wallet}
                             on_disconnect={on_disconnect_wallet}
                         />
+                                }
+                            } else {
+                                html! {}
+                            }
+                        }
                     </div>
 
                     <div class="search-content">
