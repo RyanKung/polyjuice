@@ -1,7 +1,9 @@
 use web_sys::InputEvent;
 use yew::prelude::*;
 
+use crate::analysis_loaders::*;
 use crate::models::*;
+use crate::wallet::WalletAccount;
 
 // MBTI type descriptions
 const MBTI_DESCRIPTIONS: &[(&str, &str)] = &[
@@ -32,61 +34,14 @@ const MBTI_DESCRIPTIONS: &[(&str, &str)] = &[
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProfileViewProps {
     pub search_result: Option<SearchResult>,
+    pub api_url: String,
+    pub wallet_account: Option<WalletAccount>,
 }
 
 /// Profile view component
 #[function_component]
 pub fn ProfileView(props: &ProfileViewProps) -> Html {
     if let Some(result) = &props.search_result {
-        // Determine loading messages for MBTI and Social with detailed status
-        let mbti_job = result
-            .pending_jobs
-            .as_ref()
-            .and_then(|jobs| jobs.iter().find(|j| j.job_type == "mbti"));
-        let mbti_message = if let Some(job) = mbti_job {
-            // Show detailed status
-            match job.status.as_deref() {
-                Some("pending") => "⏳ Queued: Analysis is waiting to start...".to_string(),
-                Some("processing") => "⚙️ Processing: Analysis is in progress...".to_string(),
-                Some("completed") => "✅ Completed: Analysis finished!".to_string(),
-                Some("failed") => format!(
-                    "❌ Failed: {}",
-                    job.message.as_deref().unwrap_or("Analysis failed")
-                ),
-                _ => job
-                    .message
-                    .as_deref()
-                    .unwrap_or("Loading MBTI analysis...")
-                    .to_string(),
-            }
-        } else {
-            "Loading MBTI analysis...".to_string()
-        };
-
-        let social_job = result
-            .pending_jobs
-            .as_ref()
-            .and_then(|jobs| jobs.iter().find(|j| j.job_type == "social"));
-        let social_message = if let Some(job) = social_job {
-            // Show detailed status
-            match job.status.as_deref() {
-                Some("pending") => "⏳ Queued: Analysis is waiting to start...".to_string(),
-                Some("processing") => "⚙️ Processing: Analysis is in progress...".to_string(),
-                Some("completed") => "✅ Completed: Analysis finished!".to_string(),
-                Some("failed") => format!(
-                    "❌ Failed: {}",
-                    job.message.as_deref().unwrap_or("Analysis failed")
-                ),
-                _ => job
-                    .message
-                    .as_deref()
-                    .unwrap_or("Loading social analysis...")
-                    .to_string(),
-            }
-        } else {
-            "Loading social analysis...".to_string()
-        };
-
         html! {
             <div class="card profile-card">
                 <div class="card-content">
@@ -114,24 +69,21 @@ pub fn ProfileView(props: &ProfileViewProps) -> Html {
                         </div>
                     </div>
 
-                    // Show MBTI analysis if available, or skeleton loading if not loaded yet
-                    if let Some(mbti) = &result.mbti {
-                        <MbtiAnalysis mbti={mbti.clone()} />
-                    } else {
-                        <MbtiSkeleton message={mbti_message.clone()} />
-                    }
+                    // MBTI Analysis Loader - manages its own state
+                    <MbtiAnalysisLoader
+                        fid={result.profile.fid}
+                        username={result.profile.username.clone()}
+                        api_url={props.api_url.clone()}
+                        wallet_account={props.wallet_account.clone()}
+                    />
 
-                    // Show Social analysis if available, or skeleton loading if not loaded yet
-                    if let Some(social) = &result.social {
-                        <SocialAnalysis social={social.clone()} />
-                    } else {
-                        <SocialSkeleton message={social_message.clone()} />
-                    }
-
-                    // Show pending jobs notification
-                    if let Some(ref pending_jobs) = result.pending_jobs {
-                        <PendingJobsNotification jobs={pending_jobs.clone()} />
-                    }
+                    // Social Analysis Loader - manages its own state
+                    <SocialAnalysisLoader
+                        fid={result.profile.fid}
+                        username={result.profile.username.clone()}
+                        api_url={props.api_url.clone()}
+                        wallet_account={props.wallet_account.clone()}
+                    />
                 </div>
             </div>
         }
@@ -375,7 +327,7 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
 
 /// MBTI analysis component
 #[function_component]
-fn MbtiAnalysis(props: &MbtiAnalysisProps) -> Html {
+pub fn MbtiAnalysis(props: &MbtiAnalysisProps) -> Html {
     // Get MBTI description
     let description = MBTI_DESCRIPTIONS
         .iter()
@@ -452,7 +404,7 @@ pub struct SocialAnalysisProps {
 
 /// Social analysis component
 #[function_component]
-fn SocialAnalysis(props: &SocialAnalysisProps) -> Html {
+pub fn SocialAnalysis(props: &SocialAnalysisProps) -> Html {
     html! {
         <div class="social-analysis">
             <div class="social-stats">
@@ -674,163 +626,6 @@ fn PendingJobsNotification(props: &PendingJobsNotificationProps) -> Html {
 }
 
 #[derive(Properties, PartialEq, Clone)]
-pub struct ChatViewProps {
-    pub chat_session: Option<ChatSession>,
-    pub chat_messages: Vec<ChatMessage>,
-    pub chat_message: String,
-    pub is_chat_loading: bool,
-    pub chat_error: Option<String>,
-    pub search_result: Option<SearchResult>,
-    pub on_input_change: Callback<InputEvent>,
-    pub on_keypress: Callback<web_sys::KeyboardEvent>,
-    pub on_send_message: Callback<()>,
-}
-
-/// Chat view component
-#[function_component]
-pub fn ChatView(props: &ChatViewProps) -> Html {
-    html! {
-        <div class="card chat-card">
-            <div class="card-content">
-                if let Some(session) = &props.chat_session {
-                    <ChatHeader session={session.clone()} search_result={props.search_result.clone()} />
-                    <ChatMessages messages={props.chat_messages.clone()} is_loading={props.is_chat_loading} />
-                    <ChatInput
-                        message={props.chat_message.clone()}
-                        is_loading={props.is_chat_loading}
-                        on_input_change={props.on_input_change.clone()}
-                        on_keypress={props.on_keypress.clone()}
-                        on_send_message={props.on_send_message.clone()}
-                    />
-                    if let Some(error) = &props.chat_error {
-                        <div class="error-message">
-                            <p>{error}</p>
-                        </div>
-                    }
-                } else {
-                    <div class="no-chat-session">
-                        <p>{"No chat session available. Please try searching again."}</p>
-                    </div>
-                }
-            </div>
-        </div>
-    }
-}
-
-#[derive(Properties, PartialEq, Clone)]
-pub struct ChatHeaderProps {
-    pub session: ChatSession,
-    pub search_result: Option<SearchResult>,
-}
-
-/// Chat header component
-#[function_component]
-fn ChatHeader(props: &ChatHeaderProps) -> Html {
-    html! {
-        <div class="chat-user-info">
-            <div class="chat-user-avatar">
-                if let Some(result) = &props.search_result {
-                    if let Some(pfp_url) = &result.profile.pfp_url {
-                        <img src={pfp_url.clone()} alt="Profile" />
-                    } else {
-                        <div class="chat-avatar-placeholder">
-                            {props.session.display_name.clone().unwrap_or_else(|| "Unknown".to_string()).chars().next().unwrap_or('?').to_uppercase().collect::<String>()}
-                        </div>
-                    }
-                } else {
-                    <div class="chat-avatar-placeholder">
-                        {props.session.display_name.clone().unwrap_or_else(|| "Unknown".to_string()).chars().next().unwrap_or('?').to_uppercase().collect::<String>()}
-                    </div>
-                }
-            </div>
-            <div class="chat-user-details">
-                <h3>{props.session.display_name.clone().unwrap_or_else(|| "Unknown".to_string())}</h3>
-                <p>{"FID: "}{props.session.fid}</p>
-            </div>
-            <div class="chat-status">
-                <div class="chat-status-dot"></div>
-                {"Online"}
-            </div>
-        </div>
-    }
-}
-
-#[derive(Properties, PartialEq, Clone)]
-pub struct ChatMessagesProps {
-    pub messages: Vec<ChatMessage>,
-    pub is_loading: bool,
-}
-
-/// Chat messages component
-#[function_component]
-fn ChatMessages(props: &ChatMessagesProps) -> Html {
-    html! {
-        <div class="chat-messages">
-            {for props.messages.iter().map(|message| {
-                html! {
-                    <div class={if message.role == "user" { "user-message" } else { "assistant-message" }}>
-                        <div class="message-content">
-                            {&message.content}
-                        </div>
-                        <div class="message-time">
-                            {"Now"}
-                        </div>
-                    </div>
-                }
-            })}
-
-            if props.is_loading {
-                <div class="assistant-message">
-                    <div class="message-content loading">
-                        <div class="typing-indicator">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                        </div>
-                        {"AI is thinking..."}
-                    </div>
-                </div>
-            }
-        </div>
-    }
-}
-
-#[derive(Properties, PartialEq, Clone)]
-pub struct ChatInputProps {
-    pub message: String,
-    pub is_loading: bool,
-    pub on_input_change: Callback<InputEvent>,
-    pub on_keypress: Callback<web_sys::KeyboardEvent>,
-    pub on_send_message: Callback<()>,
-}
-
-/// Chat input component
-#[function_component]
-fn ChatInput(props: &ChatInputProps) -> Html {
-    html! {
-        <div class="chat-input">
-            <div class="chat-input-box">
-                <input
-                    type="text"
-                    class="chat-input-field"
-                    placeholder="Ask me anything"
-                    value={props.message.clone()}
-                    oninput={props.on_input_change.clone()}
-                    onkeypress={props.on_keypress.clone()}
-                />
-                <button
-                    class="chat-send-button"
-                    onclick={props.on_send_message.clone().reform(|_| ())}
-                    disabled={props.is_loading}
-                >
-                    {"➤"}
-                </button>
-            </div>
-        </div>
-    }
-}
-
-#[derive(Properties, PartialEq, Clone)]
 pub struct EndpointViewProps {
     pub endpoint_data: Option<EndpointData>,
     pub is_loading: bool,
@@ -1039,7 +834,7 @@ pub struct MbtiSkeletonProps {
 }
 
 #[function_component]
-fn MbtiSkeleton(props: &MbtiSkeletonProps) -> Html {
+pub fn MbtiSkeleton(props: &MbtiSkeletonProps) -> Html {
     html! {
         <div class="mbti-analysis skeleton-container">
             <div class="skeleton-overlay"></div>
@@ -1102,7 +897,7 @@ pub struct SocialSkeletonProps {
 }
 
 #[function_component]
-fn SocialSkeleton(props: &SocialSkeletonProps) -> Html {
+pub fn SocialSkeleton(props: &SocialSkeletonProps) -> Html {
     html! {
         <div class="social-analysis skeleton-container">
             <div class="skeleton-overlay"></div>

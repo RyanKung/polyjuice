@@ -193,3 +193,49 @@ pub struct EndpointData {
     pub contract_address: String,
     pub network: String,
 }
+
+// Casts Stats Structures - API Response format
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CastsStatsResponse {
+    pub date_distribution: Vec<DateDistribution>,
+    pub date_range: DateRange,
+    pub language_distribution: std::collections::HashMap<String, usize>,
+    pub top_nouns: Vec<TopWord>,
+    pub top_verbs: Vec<TopWord>,
+    pub total_casts: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DateDistribution {
+    pub count: usize,
+    pub date: String, // Format: YYYY-MM-DD
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DateRange {
+    pub start: String,
+    pub end: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TopWord {
+    pub count: usize,
+    pub language: String,
+    pub word: String,
+}
+
+// Internal representation for UI
+#[derive(Debug, Clone, PartialEq)]
+pub struct CastsStats {
+    pub fid: i64,
+    pub daily_stats: Vec<DailyCastStat>,
+    pub total_casts: usize,
+    pub word_cloud: Vec<WordFrequency>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DailyCastStat {
+    pub date: String, // Format: YYYY-MM-DD
+    pub count: usize,
+    pub timestamp: i64, // Unix timestamp for that day
+}

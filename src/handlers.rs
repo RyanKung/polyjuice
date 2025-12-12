@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use futures::future::join;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::InputEvent;
 use web_sys::KeyboardEvent;
@@ -184,19 +183,16 @@ fn process_analysis_result<T>(
 // ============================================================================
 
 /// Perform search with given query (shared logic for both search handler and URL restoration)
+/// Now it just sets the search_query state - ProfileLoader component will handle loading
 #[allow(clippy::too_many_arguments)]
 pub async fn perform_search(
     search_query: String,
     is_fid: bool,
-    search_result: UseStateHandle<Option<SearchResult>>,
+    search_query_state: UseStateHandle<Option<String>>,
+    is_fid_state: UseStateHandle<bool>,
     loading_tasks: UseStateHandle<std::collections::HashSet<String>>,
     error_message: UseStateHandle<Option<String>>,
-    api_url: String,
-    chat_session: UseStateHandle<Option<ChatSession>>,
-    chat_messages: UseStateHandle<Vec<ChatMessage>>,
-    is_chat_loading: UseStateHandle<bool>,
-    chat_error: UseStateHandle<Option<String>>,
-    wallet_account: UseStateHandle<Option<WalletAccount>>,
+    _api_url: String,  // Not used anymore, kept for URL path update
     current_view: UseStateHandle<String>,
 ) {
     // Set loading state
@@ -205,47 +201,26 @@ pub async fn perform_search(
     ]));
     error_message.set(None);
 
-    // Clone values needed for futures
-    let api_url_clone = api_url.clone();
-    let wallet_account_clone = wallet_account.clone();
+    // Set search query - ProfileLoader will handle the loading
+    search_query_state.set(Some(search_query.clone()));
+    is_fid_state.set(is_fid);
+    current_view.set("profile".to_string());
 
-    let profile_endpoint = create_profile_endpoint(&search_query, is_fid);
-    let social_endpoint = create_social_endpoint(&search_query, is_fid);
-    let mbti_endpoint = create_mbti_endpoint(&search_query, is_fid);
+    // Scroll to top immediately when search starts
+    if let Some(window) = web_sys::window() {
+        let _ = window.scroll_to_with_x_and_y(0.0, 0.0);
+        if let Some(document) = window.document() {
+            if let Ok(Some(main_content)) = document.query_selector(".main-content") {
+                use wasm_bindgen::JsCast;
+                if let Ok(main_element) = main_content.dyn_into::<web_sys::HtmlElement>() {
+                    let _ = main_element.scroll_to_with_x_and_y(0.0, 0.0);
+                }
+            }
+        }
+    }
 
-    // First, wait for profile to load (needed for FID and to render the page)
-    let profile_future = make_request_with_payment::<ProfileData>(
-        &api_url_clone,
-        &profile_endpoint,
-        None,
-        wallet_account_clone.as_ref(),
-        None,
-        None,
-    );
-
-    let profile_result = profile_future.await;
-
-    match profile_result {
-        Ok(profile) => {
-            // Clear loading state and show profile
+    // Clear loading state - ProfileLoader will show its own loading state
             loading_tasks.set(std::collections::HashSet::new());
-
-            let initial_result = SearchResult {
-                profile: profile.clone(),
-                social: None,
-                mbti: None,
-                pending_jobs: None,
-            };
-            // CRITICAL: Set search_result BEFORE creating status callbacks
-            // This ensures status callbacks can see the updated state
-            // IMPORTANT: Use clone() to avoid moving initial_result
-            let initial_result_clone = initial_result.clone();
-            search_result.set(Some(initial_result_clone));
-            current_view.set("profile".to_string());
-
-            // Force a small delay to allow Yew to process the state update
-            // This is necessary because UseStateHandle.set() is asynchronous in nature
-            gloo_timers::future::TimeoutFuture::new(50).await;
 
             // Update URL path
             let query_for_url = if is_fid {
@@ -255,193 +230,125 @@ pub async fn perform_search(
             };
             crate::services::update_url_path(&query_for_url, "profile");
 
-            // Create status callbacks for background polling updates
-            let search_result_for_social = search_result.clone();
-            let search_result_for_mbti = search_result.clone();
-            let social_status_callback =
-                create_polling_status_callback(search_result_for_social, "social");
-            let mbti_status_callback =
-                create_polling_status_callback(search_result_for_mbti, "mbti");
-
-            // Start social and MBTI requests in parallel
-            // Status callbacks will be used for background polling updates
-            let social_future = make_request_with_payment::<SocialData>(
-                &api_url_clone,
-                &social_endpoint,
-                None,
-                wallet_account_clone.as_ref(),
-                None,
-                social_status_callback, // Pass callback for background polling updates
-            );
-
-            let mbti_future = make_request_with_payment::<MbtiProfile>(
-                &api_url_clone,
-                &mbti_endpoint,
-                None,
-                wallet_account_clone.as_ref(),
-                None,
-                mbti_status_callback, // Pass callback for background polling updates
-            );
-
-            // Wait for both results in parallel
-            let (social_result, mbti_result) = join(social_future, mbti_future).await;
-
-            // Immediately update pending_jobs if we got pending/processing status
-            // This ensures UI shows status right away, even before polling completes
-            if let Err(ref social_err) = social_result {
-                if let Some((status, job_key, message)) =
-                    parse_job_status_error(social_err, format!("social:{}", profile.fid))
-                {
-                    update_pending_job(&search_result, "social", status, job_key, message);
-                }
-            }
-
-            if let Err(ref mbti_err) = mbti_result {
-                if let Some((status, job_key, message)) =
-                    parse_job_status_error(mbti_err, format!("mbti:{}", profile.fid))
-                {
-                    update_pending_job(&search_result, "mbti", status, job_key, message);
-                }
-            }
-
-            // Process results and collect pending jobs
-            let (social_data, social_pending) = process_analysis_result(
-                social_result,
-                "social",
-                profile.fid,
-                "Social analysis is still processing. You can come back later to check the results.",
-            );
-
-            let (mbti_data, mbti_pending) = process_analysis_result(
-                mbti_result,
-                "mbti",
-                profile.fid,
-                "MBTI analysis is still processing. You can come back later to check the results.",
-            );
-
-            // Get existing pending jobs (set above if we got pending/processing status) and merge with new ones
-            let mut pending_jobs = search_result
-                .as_ref()
-                .and_then(|r| r.pending_jobs.clone())
-                .unwrap_or_default();
-
-            // If data was successfully loaded, remove the corresponding job
-            if social_data.is_some() {
-                pending_jobs.retain(|j| j.job_type != "social");
-            } else if let Some(new_job) = social_pending {
-                // Update or add social job
-                if let Some(existing_job) = pending_jobs.iter_mut().find(|j| j.job_type == "social")
-                {
-                    // Update existing job with latest status from process_analysis_result
-                    existing_job.status = new_job.status.clone();
-                    existing_job.job_key = new_job.job_key.clone();
-                    existing_job.message = new_job.message.clone();
-                } else {
-                    pending_jobs.push(new_job);
-                }
-            }
-
-            if mbti_data.is_some() {
-                pending_jobs.retain(|j| j.job_type != "mbti");
-            } else if let Some(new_job) = mbti_pending {
-                // Update or add mbti job
-                if let Some(existing_job) = pending_jobs.iter_mut().find(|j| j.job_type == "mbti") {
-                    // Update existing job with latest status from process_analysis_result
-                    existing_job.status = new_job.status.clone();
-                    existing_job.job_key = new_job.job_key.clone();
-                    existing_job.message = new_job.message.clone();
-                } else {
-                    pending_jobs.push(new_job);
-                }
-            }
-
-            // Update search result with all data, preserving pending jobs
-            search_result.set(Some(SearchResult {
-                profile,
-                social: social_data,
-                mbti: mbti_data,
-                pending_jobs: if pending_jobs.is_empty() {
-                    None
-                } else {
-                    Some(pending_jobs)
-                },
-            }));
-            error_message.set(None);
-
-            // Auto-create chat session after successful search
-            create_chat_session_after_search(
-                &api_url,
-                &search_query,
-                is_fid,
-                chat_session.clone(),
-                chat_messages.clone(),
-                is_chat_loading.clone(),
-                chat_error.clone(),
-                wallet_account.clone(),
-            )
-            .await;
-        }
-        Err(e) => {
-            error_message.set(Some(e));
-            loading_tasks.set(std::collections::HashSet::new());
-        }
-    }
+    // Chat session will be created when user clicks the chat button
 }
 
 // ============================================================================
 // Handler Creators
 // ============================================================================
 
-/// Create wallet connect handler
+/// Create wallet connect handler - shows wallet list
 pub fn create_wallet_connect_handler(
+    show_wallet_list: UseStateHandle<bool>,
+    discovered_wallets: UseStateHandle<Vec<wallet::DiscoveredWallet>>,
     wallet_error: UseStateHandle<Option<String>>,
-    wallet_account: UseStateHandle<Option<WalletAccount>>,
 ) -> Callback<()> {
     Callback::from(move |_| {
+        let show_wallet_list = show_wallet_list.clone();
+        let discovered_wallets = discovered_wallets.clone();
         let wallet_error = wallet_error.clone();
-        let wallet_account = wallet_account.clone();
         spawn_local(async move {
-            web_sys::console::log_1(&"🔌 Connect button clicked".into());
+            web_sys::console::log_1(&"🔌 Connect button clicked - discovering wallets...".into());
             wallet_error.set(None); // Clear any previous errors
 
-            match crate::wallet::connect().await {
-                Ok(_) => {
-                    web_sys::console::log_1(
-                        &"✅ Wallet connect() succeeded, WalletConnect menu should be showing"
-                            .into(),
-                    );
-                    wallet_error.set(None);
+            // Discover wallets when user clicks Connect
+            // Wait a bit for EIP-6963 events to be received
+            gloo_timers::future::TimeoutFuture::new(500).await;
+            
+            match wallet::discover_wallets().await {
+                Ok(wallets) => {
+                    web_sys::console::log_1(&format!("✅ Discovered {} wallets", wallets.len()).into());
+                    discovered_wallets.set(wallets);
+                    show_wallet_list.set(true); // Show wallet list after discovery
+                }
+                Err(e) => {
+                    web_sys::console::log_1(&format!("❌ Failed to discover wallets: {}", e).into());
+                    wallet_error.set(Some(e));
+                }
+            }
+        });
+    })
+}
 
-                    // Poll for account update (WalletConnect connection is async)
-                    // The QRCodeModal will show wallet selection menu first
+/// Create wallet select handler
+pub fn create_wallet_select_handler(
+    wallet_error: UseStateHandle<Option<String>>,
+    wallet_account: UseStateHandle<Option<WalletAccount>>,
+    show_wallet_list: UseStateHandle<bool>,
+    api_url: UseStateHandle<String>,
+) -> Callback<String> {
+    Callback::from(move |uuid: String| {
+        let wallet_error = wallet_error.clone();
+        let wallet_account = wallet_account.clone();
+        let show_wallet_list = show_wallet_list.clone();
+        let api_url = (*api_url).clone();
+        spawn_local(async move {
+            web_sys::console::log_1(&format!("🔌 Connecting to wallet: {}", uuid).into());
+            wallet_error.set(None);
+            show_wallet_list.set(false);
+
+            match crate::wallet::connect_to_wallet(&uuid).await {
+                Ok(_) => {
+                    // Poll for account update
                     let mut attempts = 0;
+                    let mut connected_account: Option<WalletAccount> = None;
                     while attempts < 30 {
                         if let Ok(account) = crate::wallet::get_account().await {
                             if account.is_connected {
                                 web_sys::console::log_1(
                                     &format!("✅ Account connected: {:?}", account.address).into(),
                                 );
-                                wallet_account.set(Some(account));
-                                return;
+                                connected_account = Some(account);
+                                break;
                             }
                         }
                         gloo_timers::future::TimeoutFuture::new(500).await;
                         attempts += 1;
                     }
 
-                    // If still not connected, check one more time
-                    if let Ok(account) = crate::wallet::get_account().await {
-                        wallet_account.set(Some(account));
-                    } else {
-                        web_sys::console::log_1(
-                            &"ℹ️ WalletConnect menu shown, waiting for user to select wallet..."
-                                .into(),
-                        );
-                        // Don't set error - menu is showing, user needs to select wallet
+                    // Final check if not found yet
+                    if connected_account.is_none() {
+                        if let Ok(account) = crate::wallet::get_account().await {
+                            connected_account = Some(account);
+                        } else {
+                            wallet_error.set(Some("Connection timeout. Please try again.".to_string()));
+                            return;
+                        }
+                    }
+
+                    // Get FID for the connected address
+                    if let Some(ref account) = connected_account {
+                        if let Some(ref address) = account.address {
+                            // Save wallet connection to localStorage
+                            if let Err(e) = crate::wallet::save_wallet_to_storage(&uuid, address) {
+                                web_sys::console::warn_1(&format!("⚠️ Failed to save wallet to storage: {}", e).into());
+                            }
+                            
+                            web_sys::console::log_1(&"🔍 Fetching FID for connected address...".into());
+                            match crate::wallet::get_fid_for_address(&api_url, address).await {
+                                Ok(fid) => {
+                                    let mut updated_account = account.clone();
+                                    updated_account.fid = fid;
+                                    wallet_account.set(Some(updated_account));
+                                    if let Some(fid_value) = fid {
+                                        web_sys::console::log_1(&format!("✅ FID found: {}", fid_value).into());
+                                    } else {
+                                        web_sys::console::log_1(&"ℹ️ No FID found for this address".into());
+                                    }
+                                }
+                                Err(e) => {
+                                    web_sys::console::log_1(&format!("⚠️ Failed to fetch FID: {}", e).into());
+                                    // Still set the account even if FID fetch failed
+                                    wallet_account.set(Some(account.clone()));
+                                }
+                            }
+                        } else {
+                            wallet_account.set(Some(account.clone()));
+                        }
                     }
                 }
                 Err(e) => {
-                    web_sys::console::log_1(&format!("❌ Wallet connect() failed: {}", e).into());
+                    web_sys::console::log_1(&format!("❌ Wallet connection failed: {}", e).into());
                     wallet_error.set(Some(e));
                 }
             }
@@ -457,6 +364,8 @@ pub fn create_wallet_disconnect_handler(
         let wallet_account = wallet_account.clone();
         spawn_local(async move {
             let _ = crate::wallet::disconnect().await;
+            // Clear wallet from localStorage
+            let _ = crate::wallet::clear_wallet_from_storage();
             wallet_account.set(None);
         });
     })
@@ -466,15 +375,11 @@ pub fn create_wallet_disconnect_handler(
 #[allow(clippy::too_many_arguments)]
 pub fn create_search_handler(
     search_input: UseStateHandle<String>,
-    search_result: UseStateHandle<Option<SearchResult>>,
+    search_query_state: UseStateHandle<Option<String>>,
+    is_fid_state: UseStateHandle<bool>,
     loading_tasks: UseStateHandle<std::collections::HashSet<String>>,
     error_message: UseStateHandle<Option<String>>,
     api_url: UseStateHandle<String>,
-    chat_session: UseStateHandle<Option<ChatSession>>,
-    chat_messages: UseStateHandle<Vec<ChatMessage>>,
-    is_chat_loading: UseStateHandle<bool>,
-    chat_error: UseStateHandle<Option<String>>,
-    wallet_account: UseStateHandle<Option<WalletAccount>>,
     current_view: UseStateHandle<String>,
 ) -> Callback<()> {
     Callback::from(move |_| {
@@ -483,15 +388,11 @@ pub fn create_search_handler(
             return;
         }
 
-        let search_result = search_result.clone();
+        let search_query_state = search_query_state.clone();
+        let is_fid_state = is_fid_state.clone();
         let loading_tasks = loading_tasks.clone();
         let error_message = error_message.clone();
-        let api_url = (*api_url).clone();
-        let chat_session = chat_session.clone();
-        let chat_messages = chat_messages.clone();
-        let is_chat_loading = is_chat_loading.clone();
-        let chat_error = chat_error.clone();
-        let wallet_account = wallet_account.clone();
+        let api_url_clone = (*api_url).clone();
         let current_view = current_view.clone();
 
         spawn_local(async move {
@@ -509,15 +410,11 @@ pub fn create_search_handler(
             perform_search(
                 search_query,
                 is_fid,
-                search_result,
+                search_query_state,
+                is_fid_state,
                 loading_tasks,
                 error_message,
-                api_url,
-                chat_session,
-                chat_messages,
-                is_chat_loading,
-                chat_error,
-                wallet_account,
+                api_url_clone,
                 current_view,
             )
             .await;
@@ -537,6 +434,9 @@ pub async fn create_chat_session_after_search(
     chat_error: UseStateHandle<Option<String>>,
     wallet_account: UseStateHandle<Option<WalletAccount>>,
 ) {
+    web_sys::console::log_1(
+        &format!("💬 Creating chat session for query: {}, is_fid: {}", search_query, is_fid).into(),
+    );
     is_chat_loading.set(true);
     chat_error.set(None);
 
@@ -564,6 +464,12 @@ pub async fn create_chat_session_after_search(
     .await
     {
         Ok(chat_data) => {
+            web_sys::console::log_1(
+                &format!("✅ Chat session created successfully: session_id={}, fid={}", 
+                    chat_data.session_id, 
+                    chat_data.fid
+                ).into(),
+            );
             let session = ChatSession {
                 session_id: chat_data.session_id,
                 fid: chat_data.fid,
@@ -576,8 +482,12 @@ pub async fn create_chat_session_after_search(
             chat_session.set(Some(session));
             chat_messages.set(Vec::new());
             chat_error.set(None);
+            web_sys::console::log_1(&"✅ Chat session state updated".into());
         }
         Err(e) => {
+            web_sys::console::log_1(
+                &format!("❌ Chat session creation failed: {}", e).into(),
+            );
             chat_error.set(Some(e));
         }
     }
@@ -693,20 +603,72 @@ pub fn create_popular_fid_handler(
     })
 }
 
-/// Create view switching handler
+/// Create view switching handler - creates chat session when switching to chat
+#[allow(clippy::too_many_arguments)]
 pub fn create_view_switch_handler(
     current_view: UseStateHandle<String>,
-    search_result: UseStateHandle<Option<SearchResult>>,
+    search_query: UseStateHandle<Option<String>>,
+    is_fid: UseStateHandle<bool>,
+    api_url: UseStateHandle<String>,
+    chat_session: UseStateHandle<Option<ChatSession>>,
+    chat_messages: UseStateHandle<Vec<ChatMessage>>,
+    is_chat_loading: UseStateHandle<bool>,
+    chat_error: UseStateHandle<Option<String>>,
+    wallet_account: UseStateHandle<Option<WalletAccount>>,
 ) -> Callback<()> {
     Callback::from(move |_| {
-        current_view.set("chat".to_string());
-        if let Some(result) = (*search_result).as_ref() {
-            let query = if let Some(username) = &result.profile.username {
-                format!("@{}", username)
+        // Check if we already have a chat session
+        if (*chat_session).is_some() {
+            // Session already exists, just switch view
+            current_view.set("chat".to_string());
+            if let Some(query) = (*search_query).as_ref() {
+                let query_for_url = if *is_fid {
+                    query.clone()
+                } else {
+                    format!("@{}", query)
+                };
+                crate::services::update_url_path(&query_for_url, "chat");
+            }
+            return;
+        }
+
+        // No session yet, need to create one
+        if let Some(query) = (*search_query).as_ref() {
+            web_sys::console::log_1(
+                &format!("💬 Switching to chat view and creating session for query: {}", query).into(),
+            );
+            let query_clone = query.clone();
+            let is_fid_clone = *is_fid;
+            let api_url_clone = (*api_url).clone();
+            let chat_session_clone = chat_session.clone();
+            let chat_messages_clone = chat_messages.clone();
+            let is_chat_loading_clone = is_chat_loading.clone();
+            let chat_error_clone = chat_error.clone();
+            let wallet_account_clone = wallet_account.clone();
+
+            // Switch view first
+            current_view.set("chat".to_string());
+            let query_for_url = if is_fid_clone {
+                query_clone.clone()
             } else {
-                format!("{}", result.profile.fid)
+                format!("@{}", query_clone)
             };
-            crate::services::update_url_path(&query, "chat");
+            crate::services::update_url_path(&query_for_url, "chat");
+
+            // Create chat session
+            spawn_local(async move {
+                create_chat_session_after_search(
+                    &api_url_clone,
+                    &query_clone,
+                    is_fid_clone,
+                    chat_session_clone,
+                    chat_messages_clone,
+                    is_chat_loading_clone,
+                    chat_error_clone,
+                    wallet_account_clone,
+                )
+                .await;
+            });
         }
     })
 }
@@ -714,7 +676,8 @@ pub fn create_view_switch_handler(
 /// Create smart back button handler
 pub fn create_smart_back_handler(
     current_view: UseStateHandle<String>,
-    search_result: UseStateHandle<Option<SearchResult>>,
+    search_query: UseStateHandle<Option<String>>,
+    is_fid: UseStateHandle<bool>,
     search_input: UseStateHandle<String>,
     error_message: UseStateHandle<Option<String>>,
     chat_session: UseStateHandle<Option<ChatSession>>,
@@ -723,7 +686,7 @@ pub fn create_smart_back_handler(
 ) -> Callback<()> {
     Callback::from(move |_| match (*current_view).as_str() {
         "profile" => {
-            search_result.set(None);
+            search_query.set(None);
             search_input.set(String::new());
             error_message.set(None);
             chat_session.set(None);
@@ -734,17 +697,17 @@ pub fn create_smart_back_handler(
         }
         "chat" => {
             current_view.set("profile".to_string());
-            if let Some(result) = (*search_result).as_ref() {
-                let query = if let Some(username) = &result.profile.username {
-                    format!("@{}", username)
+            if let Some(query) = (*search_query).as_ref() {
+                let query_for_url = if *is_fid {
+                    query.clone()
                 } else {
-                    format!("{}", result.profile.fid)
+                    format!("@{}", query)
                 };
-                crate::services::update_url_path(&query, "profile");
+                crate::services::update_url_path(&query_for_url, "profile");
             }
         }
         _ => {
-            search_result.set(None);
+            search_query.set(None);
             search_input.set(String::new());
             error_message.set(None);
             chat_session.set(None);

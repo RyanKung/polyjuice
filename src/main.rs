@@ -1,19 +1,28 @@
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
+mod analysis_loaders;
 mod api;
+mod chat;
 mod components;
+mod dashboard;
 mod farcaster;
 mod handlers;
+mod headers;
 mod models;
+mod pages;
 mod payment;
 mod services;
 mod views;
 mod wallet;
 
+use analysis_loaders::*;
+use chat::*;
 use components::*;
 use handlers::*;
+use headers::*;
 use models::*;
+use pages::*;
 use views::*;
 
 #[function_component]
@@ -22,13 +31,21 @@ fn App() -> Html {
     let wallet_account = use_state(|| None::<wallet::WalletAccount>);
     let wallet_initialized = use_state(|| false);
     let wallet_error = use_state(|| None::<String>);
+    let show_wallet_list = use_state(|| false);
+    let discovered_wallets = use_state(Vec::<wallet::DiscoveredWallet>::new);
 
     // Track if we're in Farcaster Mini App environment
     let is_farcaster_env = use_state(|| false);
+    let farcaster_context = use_state(|| None::<farcaster::MiniAppContext>);
+
+    // Tab navigation state
+    let active_tab = use_state(|| "search".to_string()); // "profile", "search", or "about"
 
     // State management
     let search_input = use_state(String::new);
-    let search_result = use_state(|| None::<SearchResult>);
+    let search_query = use_state(|| None::<String>); // Current search query
+    let is_fid_search = use_state(|| false); // Whether current search is by FID
+    let search_result = use_state(|| None::<SearchResult>); // Keep for backward compatibility with chat
     let loading_tasks = use_state(std::collections::HashSet::<String>::new); // Multiple loading tasks
     let error_message = use_state(|| None::<String>);
     let api_url = use_state(|| {
@@ -66,6 +83,7 @@ fn App() -> Html {
     // According to Farcaster docs: call sdk.actions.ready() when app is fully loaded
     {
         let is_farcaster_env = is_farcaster_env.clone();
+        let farcaster_context = farcaster_context.clone();
         use_effect_with((), move |_| {
             spawn_local(async move {
                 // Wait a bit for app to fully render
@@ -86,9 +104,10 @@ fn App() -> Html {
                             web_sys::console::log_1(
                                 &"✅ sdk.actions.ready() called successfully".into(),
                             );
-                            // Try to get context after ready()
+                            // Get context after ready() and store it
                             match farcaster::get_context().await {
                                 Ok(context) => {
+                                    farcaster_context.set(Some(context.clone()));
                                     if let Some(user) = &context.user {
                                         web_sys::console::log_1(
                                             &format!(
@@ -134,13 +153,14 @@ fn App() -> Html {
         let wallet_account = wallet_account.clone();
         let wallet_error = wallet_error.clone();
         let is_farcaster_env = is_farcaster_env.clone();
+        let api_url = api_url.clone();
 
         use_effect_with((), move |_| {
             spawn_local(async move {
-                // Don't initialize WalletConnect in Farcaster environment
+                // Don't initialize wallet discovery in Farcaster environment
                 if *is_farcaster_env {
                     web_sys::console::log_1(
-                        &"📱 Skipping WalletConnect initialization in Farcaster environment".into(),
+                        &"📱 Skipping wallet initialization in Farcaster environment".into(),
                     );
                     wallet_initialized.set(true); // Mark as initialized to avoid UI issues
                     return;
@@ -149,9 +169,86 @@ fn App() -> Html {
                 match wallet::initialize().await {
                     Ok(_) => {
                         wallet_initialized.set(true);
-                        if let Ok(account) = wallet::get_account().await {
-                            wallet_account.set(Some(account));
+                        
+                        // Wait a bit for wallets to be discovered via EIP-6963
+                        gloo_timers::future::TimeoutFuture::new(1000).await;
+                        
+                        // Try to restore wallet connection from localStorage
+                        let api_url_clone = (*api_url).clone();
+                        let wallet_account_clone = wallet_account.clone();
+                        if let Ok(Some((saved_uuid, saved_address))) = wallet::load_wallet_from_storage() {
+                            web_sys::console::log_1(&format!("🔄 Attempting to restore wallet connection: {}", saved_uuid).into());
+                            
+                            // Try to reconnect to the saved wallet
+                            match wallet::connect_to_wallet(&saved_uuid).await {
+                                Ok(_) => {
+                                    // Wait a bit for connection to establish
+                                    gloo_timers::future::TimeoutFuture::new(500).await;
+                                    
+                                    if let Ok(account) = wallet::get_account().await {
+                                        if account.is_connected {
+                                            // Verify the address matches
+                                            if account.address.as_ref() == Some(&saved_address) {
+                                                web_sys::console::log_1(&"✅ Wallet connection restored from localStorage".into());
+                                                
+                                                // Get FID for the connected address
+                                                let api_url_for_fid = api_url_clone.clone();
+                                                let wallet_account_for_fid = wallet_account_clone.clone();
+                                                let account_for_fid = account.clone();
+                                                spawn_local(async move {
+                                                    match wallet::get_fid_for_address(&api_url_for_fid, &saved_address).await {
+                                                        Ok(fid) => {
+                                                            let mut updated_account = account_for_fid;
+                                                            updated_account.fid = fid;
+                                                            wallet_account_for_fid.set(Some(updated_account));
+                                                        }
+                                                        Err(_) => {
+                                                            wallet_account_for_fid.set(Some(account_for_fid));
+                                                        }
+                                                    }
+                                                });
+                                            } else {
+                                                web_sys::console::log_1(&"⚠️ Wallet address mismatch, clearing saved connection".into());
+                                                let _ = wallet::clear_wallet_from_storage();
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    web_sys::console::log_1(&format!("⚠️ Failed to restore wallet connection: {}", e).into());
+                                    // Clear invalid saved connection
+                                    let _ = wallet::clear_wallet_from_storage();
+                                }
+                            }
+                        } else {
+                            // No saved wallet, check if there's already a connected account
+                            if let Ok(account) = wallet::get_account().await {
+                                if account.is_connected {
+                                    // Get FID for the connected address
+                                    let api_url_clone = (*api_url).clone();
+                                    let wallet_account_clone = wallet_account.clone();
+                                    if let Some(address) = &account.address {
+                                        let address_clone = address.clone();
+                                        let account_clone = account.clone();
+                                        spawn_local(async move {
+                                            match wallet::get_fid_for_address(&api_url_clone, &address_clone).await {
+                                                Ok(fid) => {
+                                                    let mut updated_account = account_clone;
+                                                    updated_account.fid = fid;
+                                                    wallet_account_clone.set(Some(updated_account));
+                                                }
+                                                Err(_) => {
+                                                    wallet_account_clone.set(Some(account_clone));
+                                                }
+                                            }
+                                        });
+                                    } else {
+                                        wallet_account.set(Some(account));
+                                    }
+                                }
+                            }
                         }
+                        // Don't discover wallets here - wait for user to click Connect button
                     }
                     Err(e) => {
                         wallet_initialized.set(true); // Set initialized even on error
@@ -163,38 +260,12 @@ fn App() -> Html {
         });
     }
 
-    // Poll wallet account state (only if not in Farcaster environment)
-    {
-        let wallet_account = wallet_account.clone();
-        let is_farcaster_env = is_farcaster_env.clone();
-
-        use_effect_with((), move |_| {
-            // Don't poll wallet state in Farcaster environment
-            let interval_opt = if !*is_farcaster_env {
-                Some(gloo_timers::callback::Interval::new(1000, move || {
-                    let wallet_account = wallet_account.clone();
-                    spawn_local(async move {
-                        if let Ok(account) = wallet::get_account().await {
-                            wallet_account.set(Some(account));
-                        }
-                    });
-                }))
-            } else {
-                None
-            };
-
-            move || {
-                if let Some(interval) = interval_opt {
-                    drop(interval);
-                }
-            }
-        });
-    }
 
     // Restore state from URL path on mount and handle browser navigation
     {
         let search_input = search_input.clone();
-        let search_result = search_result.clone();
+        let search_query_state = search_query.clone();
+        let is_fid_state = is_fid_search.clone();
         let loading_tasks = loading_tasks.clone();
         let error_message = error_message.clone();
         let api_url = api_url.clone();
@@ -208,7 +279,8 @@ fn App() -> Html {
         // Function to restore state from URL path
         let restore_from_path = {
             let search_input = search_input.clone();
-            let search_result = search_result.clone();
+            let search_query_state = search_query_state.clone();
+            let is_fid_state = is_fid_state.clone();
             let loading_tasks = loading_tasks.clone();
             let error_message = error_message.clone();
             let api_url = api_url.clone();
@@ -235,7 +307,8 @@ fn App() -> Html {
                 current_view.set(view.clone());
 
                 // Use the shared perform_search function to restore state
-                let search_result_clone = search_result.clone();
+                let search_query_state_clone = search_query_state.clone();
+                let is_fid_state_clone = is_fid_state.clone();
                 let loading_tasks_clone = loading_tasks.clone();
                 let error_message_clone = error_message.clone();
                 let api_url_clone = (*api_url).clone();
@@ -250,15 +323,11 @@ fn App() -> Html {
                     crate::handlers::perform_search(
                         query_for_input,
                         is_fid,
-                        search_result_clone,
+                        search_query_state_clone,
+                        is_fid_state_clone,
                         loading_tasks_clone,
                         error_message_clone,
                         api_url_clone,
-                        chat_session_clone,
-                        chat_messages_clone,
-                        is_chat_loading_clone,
-                        chat_error_clone,
-                        wallet_account_clone,
                         current_view_clone,
                     )
                     .await;
@@ -274,12 +343,13 @@ fn App() -> Html {
 
             // Set up popstate listener for browser back/forward navigation
             let loading_tasks_for_popstate = loading_tasks.clone();
+            let search_query_state = search_query_state.clone();
             crate::services::setup_popstate_listener(move |path| {
                 if let Some((query, view)) = path {
                     restore_from_path(query, view);
                 } else {
                     // Returned to home page - clear all state
-                    search_result.set(None);
+                    search_query_state.set(None);
                     search_input.set(String::new());
                     error_message.set(None);
                     chat_session.set(None);
@@ -294,30 +364,52 @@ fn App() -> Html {
     }
 
     // Create handlers
-    let on_connect_wallet =
-        create_wallet_connect_handler(wallet_error.clone(), wallet_account.clone());
+    let on_connect_wallet = create_wallet_connect_handler(
+        show_wallet_list.clone(),
+        discovered_wallets.clone(),
+        wallet_error.clone(),
+    );
+    let on_select_wallet = create_wallet_select_handler(
+        wallet_error.clone(),
+        wallet_account.clone(),
+        show_wallet_list.clone(),
+        api_url.clone(),
+    );
+    let on_close_wallet_list = Callback::from({
+        let show_wallet_list = show_wallet_list.clone();
+        move |_| {
+            show_wallet_list.set(false);
+        }
+    });
     let on_disconnect_wallet = create_wallet_disconnect_handler(wallet_account.clone());
 
     let on_search = create_search_handler(
         search_input.clone(),
-        search_result.clone(),
+        search_query.clone(),
+        is_fid_search.clone(),
         loading_tasks.clone(),
         error_message.clone(),
+        api_url.clone(),
+        current_view.clone(),
+    );
+
+    let on_keypress = create_search_keypress_handler(on_search.clone());
+    let on_popular_fid = create_popular_fid_handler(search_input.clone(), on_search.clone());
+    let on_switch_to_chat = create_view_switch_handler(
+        current_view.clone(),
+        search_query.clone(),
+        is_fid_search.clone(),
         api_url.clone(),
         chat_session.clone(),
         chat_messages.clone(),
         is_chat_loading.clone(),
         chat_error.clone(),
         wallet_account.clone(),
-        current_view.clone(),
     );
-
-    let on_keypress = create_search_keypress_handler(on_search.clone());
-    let on_popular_fid = create_popular_fid_handler(search_input.clone(), on_search.clone());
-    let on_switch_to_chat = create_view_switch_handler(current_view.clone(), search_result.clone());
     let on_smart_back = create_smart_back_handler(
         current_view.clone(),
-        search_result.clone(),
+        search_query.clone(),
+        is_fid_search.clone(),
         search_input.clone(),
         error_message.clone(),
         chat_session.clone(),
@@ -466,122 +558,207 @@ fn App() -> Html {
     // Handler for custom URL input change
     let on_custom_url_input_change = create_input_change_handler(custom_url_input.clone());
 
+    // Handler for tab change
+    let on_tab_change = {
+        let active_tab = active_tab.clone();
+        Callback::from(move |tab: String| {
+            active_tab.set(tab);
+        })
+    };
+
+    // Determine left action button based on current page state
+    let left_action = if (*search_query).is_some() {
+        // Results page - show back button
+        Some(html! {
+            <button class="back-button" onclick={on_smart_back.clone().reform(|_| ())} style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: white;">
+                {"←"}
+            </button>
+        })
+    } else if (*active_tab).as_str() == "search" {
+        // Search page - show link button
+        Some(html! {
+            <button class="link-button" onclick={on_show_endpoint.clone().reform(|_| ())} style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px 8px; color: white;">
+                {"🔗"}
+            </button>
+        })
+    } else {
+        // Other pages - no button
+        None
+    };
+
     html! {
         <div class="app-container">
-            // Link Button - Only visible in search page (top left)
-            if !*show_endpoint && (*search_result).is_none() {
-                <LinkButton on_click={on_show_endpoint} />
-            }
-
-            // Endpoint View (show when show_endpoint is true)
-            if *show_endpoint {
-                <div class="endpoint-page">
-                    <div class="back-to-search">
-                        <button class="back-button" onclick={on_back_from_endpoint}>
-                            {"←"}
-                        </button>
-                    </div>
-                    <EndpointView
-                        endpoint_data={(*endpoint_data).clone()}
-                        is_loading={*is_endpoint_loading}
-                        error={(*endpoint_error).clone()}
-                        ping_results={(*ping_results).clone()}
-                        selected_endpoint={(*selected_endpoint).clone()}
-                        on_select_endpoint={on_select_endpoint.clone()}
-                        custom_endpoints={(*custom_endpoints).clone()}
-                        custom_url_input={(*custom_url_input).clone()}
-                        on_custom_url_input_change={on_custom_url_input_change.clone()}
-                        on_add_custom_endpoint={on_add_custom_endpoint.clone()}
-                        custom_endpoint_error={(*custom_endpoint_error).clone()}
-                        is_adding_endpoint={*is_adding_endpoint}
-                    />
-                </div>
-            } else {
-            // Search Page (only show if no search results)
-            if (*search_result).is_none() {
-                <div class="search-page">
-
-                    <div class="search-header">
-                        <div class="logo">
-                            // Logo Image
-                            <div class="logo-image">
-                                <img src="/logo.png" alt="Polyjuice Logo" />
+            <div class="content">
+                // Global Header (inside content, inherits background)
+                <Header
+                    wallet_account={(*wallet_account).clone()}
+                    wallet_initialized={*wallet_initialized}
+                    wallet_error={(*wallet_error).clone()}
+                    on_connect={on_connect_wallet.clone()}
+                    on_disconnect={on_disconnect_wallet.clone()}
+                    api_url={(*api_url).clone()}
+                    left_action={left_action}
+                    is_farcaster_env={*is_farcaster_env}
+                    farcaster_context={(*farcaster_context).clone()}
+                />
+                // Main content
+                <div>
+                    // Endpoint View (show when show_endpoint is true, hides tabs)
+                    if *show_endpoint {
+                        <div class="endpoint-page">
+                            <div class="back-to-search">
+                                <button class="back-button" onclick={on_back_from_endpoint}>
+                                    {"←"}
+                                </button>
                             </div>
-                            <h1>{"polyjuice"}</h1>
-                            <p class="tagline">{"Discover & Chat with Farcaster Users"}</p>
+                            <EndpointView
+                                endpoint_data={(*endpoint_data).clone()}
+                                is_loading={*is_endpoint_loading}
+                                error={(*endpoint_error).clone()}
+                                ping_results={(*ping_results).clone()}
+                                selected_endpoint={(*selected_endpoint).clone()}
+                                on_select_endpoint={on_select_endpoint.clone()}
+                                custom_endpoints={(*custom_endpoints).clone()}
+                                custom_url_input={(*custom_url_input).clone()}
+                                on_custom_url_input_change={on_custom_url_input_change.clone()}
+                                on_add_custom_endpoint={on_add_custom_endpoint.clone()}
+                                custom_endpoint_error={(*custom_endpoint_error).clone()}
+                                is_adding_endpoint={*is_adding_endpoint}
+                            />
+                        </div>
+                    } else {
+                        // Main content area with tabs
+                        <div class="main-content">
+                            // Results Page (Profile + Chat cards) - shown when search_query exists
+                            if let Some(query) = (*search_query).as_ref() {
+                                <div class="results-page">
+
+                                    // Profile Card (only show if current_view is "profile")
+                                    if (*current_view).as_str() == "profile" {
+                                        <ProfileLoader 
+                                            search_query={query.clone()}
+                                            is_fid={*is_fid_search}
+                                            api_url={(*api_url).clone()}
+                                            wallet_account={(*wallet_account).clone()}
+                                            on_profile_loaded={Callback::from({
+                                                let search_result = search_result.clone();
+                                                move |profile: ProfileData| {
+                                                    // Update search_result when profile loads (for ChatView compatibility)
+                                                    search_result.set(Some(SearchResult {
+                                                        profile,
+                                                        social: None,
+                                                        mbti: None,
+                                                        pending_jobs: None,
+                                                    }));
+                                                }
+                                            })}
+                                        />
+                                    }
+
+                                    // Chat Card (only show if current_view is "chat")
+                                    if (*current_view).as_str() == "chat" {
+                                        <ChatView
+                                            chat_session={(*chat_session).clone()}
+                                            chat_messages={(*chat_messages).clone()}
+                                            chat_message={(*chat_message).clone()}
+                                            is_chat_loading={*is_chat_loading}
+                                            chat_error={(*chat_error).clone()}
+                                            search_result={(*search_result).clone()}
+                                            on_input_change={on_chat_input_change}
+                                            on_keypress={on_chat_keypress}
+                                            on_send_message={on_send_chat_message}
+                                        />
+                                    }
+
+                                    // Floating Chat Button (only show on results page when profile is visible)
+                                    if (*current_view).as_str() == "profile" {
+                                        <FloatingChatButton on_switch_to_chat={on_switch_to_chat} />
+                                    }
+                                </div>
+                            } else {
+                                // Tab-based pages (only show when no search results)
+                                {
+                                    if (*active_tab).as_str() == "profile" {
+                                        html! {
+                                            <ProfilePage
+                                                wallet_account={(*wallet_account).clone()}
+                                                api_url={(*api_url).clone()}
+                                            />
+                                        }
+                                    } else if (*active_tab).as_str() == "search" {
+                                        html! {
+                                            <div class="search-page">
+
+                                                <div class="search-header">
+                                                    <div class="logo">
+                                                        // Logo Image
+                                                        <div class="logo-image">
+                                                            <img src="/logo.png" alt="Polyjuice Logo" />
+                                                        </div>
+                                                        <h1>{"polyjuice"}</h1>
+                                                        <p class="tagline">{"Discover & Chat with Farcaster Users"}</p>
+                                                    </div>
+
+                                                    {
+                                                        // WalletStatus is now in Header, but we still need WalletList
+                                                        if !*is_farcaster_env {
+                                                            html! {
+                                                                if *show_wallet_list {
+                                                                    <WalletList
+                                                                        wallets={(*discovered_wallets).clone()}
+                                                                        on_select_wallet={on_select_wallet.clone()}
+                                                                        on_close={on_close_wallet_list.clone()}
+                                                                    />
+                                                                }
+                                                            }
+                                                        } else {
+                                                            html! {}
+                                                        }
+                                                    }
+                                                </div>
+
+                                                <div class="search-content">
+                                                    <SearchBox
+                                                        search_input={(*search_input).clone()}
+                                                        is_loading={!(*loading_tasks).is_empty()}
+                                                        on_input_change={on_search_input_change}
+                                                        on_keypress={on_keypress}
+                                                        on_search={on_search.clone()}
+                                                    />
+
+                                                    <MobileSearchButton
+                                                        is_loading={!(*loading_tasks).is_empty()}
+                                                        on_search={on_search.clone()}
+                                                    />
+
+                                                    <SearchSuggestions on_popular_fid={on_popular_fid} />
+
+                                                    <ErrorMessage error={(*error_message).clone()} />
+                                                </div>
+                                            </div>
+                                        }
+                                    } else if (*active_tab).as_str() == "about" {
+                                        html! {
+                                            <AboutPage />
+                                        }
+                                    } else {
+                                        html! {
+                                            <div class="search-page">
+                                                <p>{"Unknown tab"}</p>
+                                            </div>
+                                        }
+                                    }
+                                }
+                            }
                         </div>
 
-                        {
-                            // Only show WalletStatus if not in Farcaster environment
-                            if !*is_farcaster_env {
-                                html! {
-                        <WalletStatus
-                            wallet_account={(*wallet_account).clone()}
-                            wallet_initialized={*wallet_initialized}
-                            wallet_error={(*wallet_error).clone()}
-                            on_connect={on_connect_wallet}
-                            on_disconnect={on_disconnect_wallet}
-                        />
-                                }
-                            } else {
-                                html! {}
-                            }
+                        // Bottom Tab Navigation (only show when not in endpoint view and no search query)
+                        if (*search_query).is_none() {
+                            <BottomTab active_tab={(*active_tab).clone()} on_tab_change={on_tab_change} />
                         }
-                    </div>
-
-                    <div class="search-content">
-                        <SearchBox
-                            search_input={(*search_input).clone()}
-                            is_loading={!(*loading_tasks).is_empty()}
-                            on_input_change={on_search_input_change}
-                            on_keypress={on_keypress}
-                            on_search={on_search.clone()}
-                        />
-
-                        <MobileSearchButton
-                            is_loading={!(*loading_tasks).is_empty()}
-                            on_search={on_search.clone()}
-                        />
-
-                        <SearchSuggestions on_popular_fid={on_popular_fid} />
-
-                        <ErrorMessage error={(*error_message).clone()} />
-                    </div>
-                </div>
-            }
-
-            // Results Page (Profile + Chat cards)
-            if (*search_result).is_some() {
-                <div class="results-page">
-                    <BackButton on_back={on_smart_back} />
-
-                    // Profile Card (only show if current_view is "profile")
-                    if (*current_view).as_str() == "profile" {
-                        <ProfileView search_result={(*search_result).clone()} />
-                    }
-
-                    // Chat Card (only show if current_view is "chat")
-                    if (*current_view).as_str() == "chat" {
-                        <ChatView
-                            chat_session={(*chat_session).clone()}
-                            chat_messages={(*chat_messages).clone()}
-                            chat_message={(*chat_message).clone()}
-                            is_chat_loading={*is_chat_loading}
-                            chat_error={(*chat_error).clone()}
-                            search_result={(*search_result).clone()}
-                            on_input_change={on_chat_input_change}
-                            on_keypress={on_chat_keypress}
-                            on_send_message={on_send_chat_message}
-                        />
                     }
                 </div>
-
-                // Floating Chat Button (only show on results page when profile is visible)
-                if (*search_result).is_some() && (*current_view).as_str() == "profile" {
-                    <FloatingChatButton on_switch_to_chat={on_switch_to_chat} />
-                }
-            }
-            }
+            </div>
         </div>
     }
 }

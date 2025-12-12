@@ -1,14 +1,15 @@
 // WalletConnect v2 Bundle Entry Point
-// This file loads the UMD build and exports EthereumProvider to window
+// This file loads the UMD build and exports EthereumProvider and WalletConnectModal to window
 
 // The UMD file is loaded by a script tag in index.html before this file
-// UMD bundles typically create a module namespace, we need to extract EthereumProvider
+// UMD bundles typically create a module namespace, we need to extract EthereumProvider and WalletConnectModal
 
 if (typeof window !== 'undefined') {
   function setupWalletConnect() {
     // UMD bundles typically export to module.exports or a global namespace
     // Check the actual UMD export - it should be available after the script loads
     let EthereumProvider;
+    let WalletConnectModal;
     
     // The UMD file exports to a module object, check if it's available
     // UMD pattern: (function(e){...})(typeof exports !== 'undefined' ? exports : {})
@@ -37,13 +38,43 @@ if (typeof window !== 'undefined') {
       }
     }
     
+    // Try to find WalletConnectModal
+    if (typeof window.WalletConnectModal !== 'undefined') {
+      WalletConnectModal = window.WalletConnectModal;
+    } else {
+      // Check for modal in common export locations
+      for (const key in window) {
+        try {
+          const obj = window[key];
+          if (obj && typeof obj === 'object' && obj.WalletConnectModal) {
+            WalletConnectModal = obj.WalletConnectModal;
+            console.log('Found WalletConnectModal in window.' + key);
+            break;
+          }
+        } catch (e) {
+          // Skip if we can't access the property
+        }
+      }
+    }
+    
     if (EthereumProvider) {
       // Ensure it's available on window for Rust to access
       window.EthereumProvider = EthereumProvider;
+      
+      // Check for WalletConnectModal from modal bundle (loaded separately)
+      if (typeof window.WalletConnectModal !== 'undefined') {
+        WalletConnectModal = window.WalletConnectModal;
+      }
+      
       window.WalletConnect = {
         EthereumProvider,
+        WalletConnectModal: WalletConnectModal || null,
       };
-      console.log('✅ WalletConnect v2 bundle loaded');
+      if (WalletConnectModal) {
+        console.log('✅ WalletConnect v2 bundle and Modal loaded');
+      } else {
+        console.log('✅ WalletConnect v2 bundle loaded (Modal will be loaded from modal bundle)');
+      }
       return true;
     }
     return false;

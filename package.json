@@ -9,6 +9,7 @@
   "dependencies": {
     "@farcaster/miniapp-sdk": "^0.2.1",
     "@walletconnect/ethereum-provider": "^2.14.0",
+    "@walletconnect/modal": "^2.7.0",
     "abstract-leveldown": "^2.6.3",
     "ajv": "^6.12.6",
     "ansi-regex": "^5.0.1",

@@ -50,6 +50,40 @@ module.exports = [
       }),
     ],
   },
+  // WalletConnect Modal bundle
+  {
+    mode: 'production',
+    entry: './js/walletconnect-modal-entry.js',
+    output: {
+      path: path.resolve(__dirname, 'js'),
+      filename: 'walletconnect-modal-bundle.js',
+      library: {
+        name: 'WalletConnectModalLib',
+        type: 'umd',
+      },
+      globalObject: 'window',
+      chunkFormat: false,
+    },
+    optimization: {
+      splitChunks: false,
+    },
+    resolve: {
+      conditionNames: ['require', 'node', 'default'],
+      fallback: {
+        "buffer": require.resolve("buffer"),
+        "stream": require.resolve("stream-browserify"),
+        "crypto": require.resolve("crypto-browserify"),
+        "util": require.resolve("util"),
+        "process": require.resolve("process/browser"),
+      }
+    },
+    plugins: [
+      new (require('webpack').ProvidePlugin)({
+        Buffer: ['buffer', 'Buffer'],
+        process: 'process/browser',
+      }),
+    ],
+  },
   // Farcaster SDK bundle
   {
     mode: 'production',
