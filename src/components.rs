@@ -1,7 +1,8 @@
 use web_sys::InputEvent;
 use yew::prelude::*;
 
-use crate::wallet::{DiscoveredWallet, WalletAccount};
+use crate::wallet::DiscoveredWallet;
+use crate::wallet::WalletAccount;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct WalletStatusProps {
@@ -66,7 +67,7 @@ pub fn WalletStatus(props: &WalletStatusProps) -> Html {
                         } else {
                             "Connected".to_string()
                         };
-                        
+
                         html! {
                             <div class="wallet-status connected" onclick={props.on_disconnect.clone().reform(|_| ())} style="cursor: pointer;">
                                 <span style="font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace; font-size: 14px;">
@@ -119,7 +120,7 @@ pub fn WalletList(props: &WalletListProps) -> Html {
                                             let uuid = wallet.info.uuid.clone();
                                             let name = wallet.info.name.clone();
                                             let icon = wallet.info.icon.clone();
-                                            
+
                                             html! {
                                                 <button
                                                     class="wallet-list-item"
@@ -305,7 +306,7 @@ pub struct BottomTabProps {
 #[function_component]
 pub fn BottomTab(props: &BottomTabProps) -> Html {
     let active_tab = props.active_tab.clone();
-    
+
     html! {
         <div class="bottom-tab-bar">
             <button

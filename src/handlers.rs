@@ -192,7 +192,7 @@ pub async fn perform_search(
     is_fid_state: UseStateHandle<bool>,
     loading_tasks: UseStateHandle<std::collections::HashSet<String>>,
     error_message: UseStateHandle<Option<String>>,
-    _api_url: String,  // Not used anymore, kept for URL path update
+    _api_url: String, // Not used anymore, kept for URL path update
     current_view: UseStateHandle<String>,
 ) {
     // Set loading state
@@ -220,15 +220,15 @@ pub async fn perform_search(
     }
 
     // Clear loading state - ProfileLoader will show its own loading state
-            loading_tasks.set(std::collections::HashSet::new());
+    loading_tasks.set(std::collections::HashSet::new());
 
-            // Update URL path
-            let query_for_url = if is_fid {
-                search_query.clone()
-            } else {
-                format!("@{}", search_query)
-            };
-            crate::services::update_url_path(&query_for_url, "profile");
+    // Update URL path
+    let query_for_url = if is_fid {
+        search_query.clone()
+    } else {
+        format!("@{}", search_query)
+    };
+    crate::services::update_url_path(&query_for_url, "profile");
 
     // Chat session will be created when user clicks the chat button
 }
@@ -254,15 +254,19 @@ pub fn create_wallet_connect_handler(
             // Discover wallets when user clicks Connect
             // Wait a bit for EIP-6963 events to be received
             gloo_timers::future::TimeoutFuture::new(500).await;
-            
+
             match wallet::discover_wallets().await {
                 Ok(wallets) => {
-                    web_sys::console::log_1(&format!("✅ Discovered {} wallets", wallets.len()).into());
+                    web_sys::console::log_1(
+                        &format!("✅ Discovered {} wallets", wallets.len()).into(),
+                    );
                     discovered_wallets.set(wallets);
                     show_wallet_list.set(true); // Show wallet list after discovery
                 }
                 Err(e) => {
-                    web_sys::console::log_1(&format!("❌ Failed to discover wallets: {}", e).into());
+                    web_sys::console::log_1(
+                        &format!("❌ Failed to discover wallets: {}", e).into(),
+                    );
                     wallet_error.set(Some(e));
                 }
             }
@@ -311,7 +315,8 @@ pub fn create_wallet_select_handler(
                         if let Ok(account) = crate::wallet::get_account().await {
                             connected_account = Some(account);
                         } else {
-                            wallet_error.set(Some("Connection timeout. Please try again.".to_string()));
+                            wallet_error
+                                .set(Some("Connection timeout. Please try again.".to_string()));
                             return;
                         }
                     }
@@ -321,23 +326,33 @@ pub fn create_wallet_select_handler(
                         if let Some(ref address) = account.address {
                             // Save wallet connection to localStorage
                             if let Err(e) = crate::wallet::save_wallet_to_storage(&uuid, address) {
-                                web_sys::console::warn_1(&format!("⚠️ Failed to save wallet to storage: {}", e).into());
+                                web_sys::console::warn_1(
+                                    &format!("⚠️ Failed to save wallet to storage: {}", e).into(),
+                                );
                             }
-                            
-                            web_sys::console::log_1(&"🔍 Fetching FID for connected address...".into());
+
+                            web_sys::console::log_1(
+                                &"🔍 Fetching FID for connected address...".into(),
+                            );
                             match crate::wallet::get_fid_for_address(&api_url, address).await {
                                 Ok(fid) => {
                                     let mut updated_account = account.clone();
                                     updated_account.fid = fid;
                                     wallet_account.set(Some(updated_account));
                                     if let Some(fid_value) = fid {
-                                        web_sys::console::log_1(&format!("✅ FID found: {}", fid_value).into());
+                                        web_sys::console::log_1(
+                                            &format!("✅ FID found: {}", fid_value).into(),
+                                        );
                                     } else {
-                                        web_sys::console::log_1(&"ℹ️ No FID found for this address".into());
+                                        web_sys::console::log_1(
+                                            &"ℹ️ No FID found for this address".into(),
+                                        );
                                     }
                                 }
                                 Err(e) => {
-                                    web_sys::console::log_1(&format!("⚠️ Failed to fetch FID: {}", e).into());
+                                    web_sys::console::log_1(
+                                        &format!("⚠️ Failed to fetch FID: {}", e).into(),
+                                    );
                                     // Still set the account even if FID fetch failed
                                     wallet_account.set(Some(account.clone()));
                                 }
@@ -435,7 +450,11 @@ pub async fn create_chat_session_after_search(
     wallet_account: UseStateHandle<Option<WalletAccount>>,
 ) {
     web_sys::console::log_1(
-        &format!("💬 Creating chat session for query: {}, is_fid: {}", search_query, is_fid).into(),
+        &format!(
+            "💬 Creating chat session for query: {}, is_fid: {}",
+            search_query, is_fid
+        )
+        .into(),
     );
     is_chat_loading.set(true);
     chat_error.set(None);
@@ -465,10 +484,11 @@ pub async fn create_chat_session_after_search(
     {
         Ok(chat_data) => {
             web_sys::console::log_1(
-                &format!("✅ Chat session created successfully: session_id={}, fid={}", 
-                    chat_data.session_id, 
-                    chat_data.fid
-                ).into(),
+                &format!(
+                    "✅ Chat session created successfully: session_id={}, fid={}",
+                    chat_data.session_id, chat_data.fid
+                )
+                .into(),
             );
             let session = ChatSession {
                 session_id: chat_data.session_id,
@@ -485,9 +505,7 @@ pub async fn create_chat_session_after_search(
             web_sys::console::log_1(&"✅ Chat session state updated".into());
         }
         Err(e) => {
-            web_sys::console::log_1(
-                &format!("❌ Chat session creation failed: {}", e).into(),
-            );
+            web_sys::console::log_1(&format!("❌ Chat session creation failed: {}", e).into());
             chat_error.set(Some(e));
         }
     }
@@ -635,7 +653,11 @@ pub fn create_view_switch_handler(
         // No session yet, need to create one
         if let Some(query) = (*search_query).as_ref() {
             web_sys::console::log_1(
-                &format!("💬 Switching to chat view and creating session for query: {}", query).into(),
+                &format!(
+                    "💬 Switching to chat view and creating session for query: {}",
+                    query
+                )
+                .into(),
             );
             let query_clone = query.clone();
             let is_fid_clone = *is_fid;

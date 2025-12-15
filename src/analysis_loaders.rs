@@ -44,17 +44,21 @@ pub fn ProfileLoader(props: &ProfileLoaderProps) -> Html {
         let wallet_account_for_effect = props.wallet_account.clone();
 
         use_effect_with(
-            (props.search_query.clone(), props.is_fid, props.api_url.clone()),
+            (
+                props.search_query.clone(),
+                props.is_fid,
+                props.api_url.clone(),
+            ),
             move |_| {
                 // Check if we need to load - only load if query changed or we don't have data
                 let current_query = search_query_for_effect.clone();
                 let query_changed = (*loaded_query_clone).as_ref() != Some(&current_query);
                 let needs_load = (*profile_data).is_none() || query_changed;
-                
+
                 if needs_load {
                     loading.set(true);
                     error.set(None);
-                    
+
                     let profile_data_clone = profile_data.clone();
                     let loading_clone = loading.clone();
                     let error_clone = error.clone();
@@ -65,7 +69,8 @@ pub fn ProfileLoader(props: &ProfileLoaderProps) -> Html {
                     let on_profile_loaded = on_profile_loaded_callback.clone();
 
                     spawn_local(async move {
-                        let endpoint = create_profile_endpoint(&search_query_clone, is_fid_for_effect);
+                        let endpoint =
+                            create_profile_endpoint(&search_query_clone, is_fid_for_effect);
 
                         let result = make_request_with_payment::<ProfileData>(
                             &api_url_clone,
@@ -80,7 +85,11 @@ pub fn ProfileLoader(props: &ProfileLoaderProps) -> Html {
                         match result {
                             Ok(data) => {
                                 web_sys::console::log_1(
-                                    &format!("✅ Profile data loaded for query: {}", search_query_clone).into(),
+                                    &format!(
+                                        "✅ Profile data loaded for query: {}",
+                                        search_query_clone
+                                    )
+                                    .into(),
                                 );
                                 profile_data_clone.set(Some(data.clone()));
                                 loading_clone.set(false);
@@ -220,77 +229,72 @@ pub fn SocialAnalysisLoader(props: &SocialAnalysisLoaderProps) -> Html {
         let pending_job = pending_job.clone();
         let loading = loading.clone();
 
-        use_effect_with(
-            (fid, username.clone(), api_url.clone()),
-            move |_| {
-                loading.set(true);
-                
-                let social_data_clone = social_data.clone();
-                let pending_job_clone = pending_job.clone();
-                let loading_clone = loading.clone();
-                let fid_clone = fid;
-                let username_clone = username.clone();
-                let api_url_clone = api_url.clone();
-                let wallet_account_clone = wallet_account.clone();
+        use_effect_with((fid, username.clone(), api_url.clone()), move |_| {
+            loading.set(true);
 
-                spawn_local(async move {
-                    let is_fid = false; // Always use username for social endpoint
-                    let endpoint = create_social_endpoint(
-                        &username_clone.unwrap_or_else(|| fid_clone.to_string()),
-                        is_fid,
-                    );
+            let social_data_clone = social_data.clone();
+            let pending_job_clone = pending_job.clone();
+            let loading_clone = loading.clone();
+            let fid_clone = fid;
+            let username_clone = username.clone();
+            let api_url_clone = api_url.clone();
+            let wallet_account_clone = wallet_account.clone();
 
-                    let result = make_request_with_payment::<SocialData>(
-                        &api_url_clone,
-                        &endpoint,
-                        None,
-                        wallet_account_clone.as_ref(),
-                        None,
-                        None,
-                    )
-                    .await;
+            spawn_local(async move {
+                let is_fid = false; // Always use username for social endpoint
+                let endpoint = create_social_endpoint(
+                    &username_clone.unwrap_or_else(|| fid_clone.to_string()),
+                    is_fid,
+                );
 
-                    match result {
-                        Ok(data) => {
+                let result = make_request_with_payment::<SocialData>(
+                    &api_url_clone,
+                    &endpoint,
+                    None,
+                    wallet_account_clone.as_ref(),
+                    None,
+                    None,
+                )
+                .await;
+
+                match result {
+                    Ok(data) => {
+                        web_sys::console::log_1(
+                            &format!("✅ Social data loaded for FID={}", fid_clone).into(),
+                        );
+                        social_data_clone.set(Some(data));
+                        pending_job_clone.set(None);
+                        loading_clone.set(false);
+                    }
+                    Err(e) => {
+                        // Check for JOB_STATUS error format
+                        if let Some((status, job_key, message)) =
+                            parse_job_status_error(&e, format!("social:{}", fid_clone))
+                        {
                             web_sys::console::log_1(
-                                &format!("✅ Social data loaded for FID={}", fid_clone).into(),
+                                &format!(
+                                    "⏳ Social analysis status: {} (job_key: {})",
+                                    status, job_key
+                                )
+                                .into(),
                             );
-                            social_data_clone.set(Some(data));
-                            pending_job_clone.set(None);
+                            let new_job = PendingJob {
+                                job_key,
+                                job_type: "social".to_string(),
+                                status: Some(status),
+                                started_at: Some(js_sys::Date::now() as u64),
+                                message: Some(message),
+                            };
+                            pending_job_clone.set(Some(new_job));
+                            loading_clone.set(false);
+                        } else {
+                            web_sys::console::log_1(&format!("❌ Social data error: {}", e).into());
                             loading_clone.set(false);
                         }
-                        Err(e) => {
-                            // Check for JOB_STATUS error format
-                            if let Some((status, job_key, message)) =
-                                parse_job_status_error(&e, format!("social:{}", fid_clone))
-                            {
-                                web_sys::console::log_1(
-                                    &format!(
-                                        "⏳ Social analysis status: {} (job_key: {})",
-                                        status, job_key
-                                    )
-                                    .into(),
-                                );
-                                let new_job = PendingJob {
-                                    job_key,
-                                    job_type: "social".to_string(),
-                                    status: Some(status),
-                                    started_at: Some(js_sys::Date::now() as u64),
-                                    message: Some(message),
-                                };
-                                pending_job_clone.set(Some(new_job));
-                                loading_clone.set(false);
-                            } else {
-                                web_sys::console::log_1(
-                                    &format!("❌ Social data error: {}", e).into(),
-                                );
-                                loading_clone.set(false);
-                            }
-                        }
                     }
-                });
-            },
-        );
+                }
+            });
+        });
     }
 
     // Render based on state
@@ -348,77 +352,72 @@ pub fn MbtiAnalysisLoader(props: &MbtiAnalysisLoaderProps) -> Html {
         let pending_job = pending_job.clone();
         let loading = loading.clone();
 
-        use_effect_with(
-            (fid, username.clone(), api_url.clone()),
-            move |_| {
-                loading.set(true);
-                
-                let mbti_data_clone = mbti_data.clone();
-                let pending_job_clone = pending_job.clone();
-                let loading_clone = loading.clone();
-                let fid_clone = fid;
-                let username_clone = username.clone();
-                let api_url_clone = api_url.clone();
-                let wallet_account_clone = wallet_account.clone();
+        use_effect_with((fid, username.clone(), api_url.clone()), move |_| {
+            loading.set(true);
 
-                spawn_local(async move {
-                    let is_fid = false; // Always use username for MBTI endpoint
-                    let endpoint = create_mbti_endpoint(
-                        &username_clone.unwrap_or_else(|| fid_clone.to_string()),
-                        is_fid,
-                    );
+            let mbti_data_clone = mbti_data.clone();
+            let pending_job_clone = pending_job.clone();
+            let loading_clone = loading.clone();
+            let fid_clone = fid;
+            let username_clone = username.clone();
+            let api_url_clone = api_url.clone();
+            let wallet_account_clone = wallet_account.clone();
 
-                    let result = make_request_with_payment::<MbtiProfile>(
-                        &api_url_clone,
-                        &endpoint,
-                        None,
-                        wallet_account_clone.as_ref(),
-                        None,
-                        None,
-                    )
-                    .await;
+            spawn_local(async move {
+                let is_fid = false; // Always use username for MBTI endpoint
+                let endpoint = create_mbti_endpoint(
+                    &username_clone.unwrap_or_else(|| fid_clone.to_string()),
+                    is_fid,
+                );
 
-                    match result {
-                        Ok(data) => {
+                let result = make_request_with_payment::<MbtiProfile>(
+                    &api_url_clone,
+                    &endpoint,
+                    None,
+                    wallet_account_clone.as_ref(),
+                    None,
+                    None,
+                )
+                .await;
+
+                match result {
+                    Ok(data) => {
+                        web_sys::console::log_1(
+                            &format!("✅ MBTI data loaded for FID={}", fid_clone).into(),
+                        );
+                        mbti_data_clone.set(Some(data));
+                        pending_job_clone.set(None);
+                        loading_clone.set(false);
+                    }
+                    Err(e) => {
+                        // Check for JOB_STATUS error format
+                        if let Some((status, job_key, message)) =
+                            parse_job_status_error(&e, format!("mbti:{}", fid_clone))
+                        {
                             web_sys::console::log_1(
-                                &format!("✅ MBTI data loaded for FID={}", fid_clone).into(),
+                                &format!(
+                                    "⏳ MBTI analysis status: {} (job_key: {})",
+                                    status, job_key
+                                )
+                                .into(),
                             );
-                            mbti_data_clone.set(Some(data));
-                            pending_job_clone.set(None);
+                            let new_job = PendingJob {
+                                job_key,
+                                job_type: "mbti".to_string(),
+                                status: Some(status),
+                                started_at: Some(js_sys::Date::now() as u64),
+                                message: Some(message),
+                            };
+                            pending_job_clone.set(Some(new_job));
+                            loading_clone.set(false);
+                        } else {
+                            web_sys::console::log_1(&format!("❌ MBTI data error: {}", e).into());
                             loading_clone.set(false);
                         }
-                        Err(e) => {
-                            // Check for JOB_STATUS error format
-                            if let Some((status, job_key, message)) =
-                                parse_job_status_error(&e, format!("mbti:{}", fid_clone))
-                            {
-                                web_sys::console::log_1(
-                                    &format!(
-                                        "⏳ MBTI analysis status: {} (job_key: {})",
-                                        status, job_key
-                                    )
-                                    .into(),
-                                );
-                                let new_job = PendingJob {
-                                    job_key,
-                                    job_type: "mbti".to_string(),
-                                    status: Some(status),
-                                    started_at: Some(js_sys::Date::now() as u64),
-                                    message: Some(message),
-                                };
-                                pending_job_clone.set(Some(new_job));
-                                loading_clone.set(false);
-                            } else {
-                                web_sys::console::log_1(
-                                    &format!("❌ MBTI data error: {}", e).into(),
-                                );
-                                loading_clone.set(false);
-                            }
-                        }
                     }
-                });
-            },
-        );
+                }
+            });
+        });
     }
 
     // Render based on state
@@ -427,10 +426,7 @@ pub fn MbtiAnalysisLoader(props: &MbtiAnalysisLoaderProps) -> Html {
             <MbtiAnalysisView mbti={data.clone()} />
         }
     } else if let Some(job) = (*pending_job).as_ref() {
-        let message = job
-            .message
-            .as_deref()
-            .unwrap_or("Loading MBTI analysis...");
+        let message = job.message.as_deref().unwrap_or("Loading MBTI analysis...");
         html! {
             <MbtiSkeletonView message={message.to_string()} />
         }
@@ -495,7 +491,10 @@ fn parse_job_status_error(
 }
 
 // Import view components from views module
-use crate::views::{MbtiAnalysis, MbtiSkeleton, SocialAnalysis, SocialSkeleton};
+use crate::views::MbtiAnalysis;
+use crate::views::MbtiSkeleton;
+use crate::views::SocialAnalysis;
+use crate::views::SocialSkeleton;
 
 // Wrapper components for the views
 #[derive(Properties, PartialEq, Clone)]
@@ -545,4 +544,3 @@ fn MbtiSkeletonView(props: &MbtiSkeletonViewProps) -> Html {
         <MbtiSkeleton message={props.message.clone()} />
     }
 }
-

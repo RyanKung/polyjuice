@@ -35,6 +35,8 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 js-sys = "0.3"
 base64 = "0.21"
 hex = "0.4"
+hmac = "0.12"
+sha2 = "0.10"
 polyendpoint-sdk = { git = "https://github.com/RyanKung/polyportal", default-features = false }
 
 [dev-dependencies]

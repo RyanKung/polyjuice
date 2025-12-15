@@ -169,41 +169,58 @@ fn App() -> Html {
                 match wallet::initialize().await {
                     Ok(_) => {
                         wallet_initialized.set(true);
-                        
+
                         // Wait a bit for wallets to be discovered via EIP-6963
                         gloo_timers::future::TimeoutFuture::new(1000).await;
-                        
+
                         // Try to restore wallet connection from localStorage
                         let api_url_clone = (*api_url).clone();
                         let wallet_account_clone = wallet_account.clone();
-                        if let Ok(Some((saved_uuid, saved_address))) = wallet::load_wallet_from_storage() {
-                            web_sys::console::log_1(&format!("🔄 Attempting to restore wallet connection: {}", saved_uuid).into());
-                            
+                        if let Ok(Some((saved_uuid, saved_address))) =
+                            wallet::load_wallet_from_storage()
+                        {
+                            web_sys::console::log_1(
+                                &format!(
+                                    "🔄 Attempting to restore wallet connection: {}",
+                                    saved_uuid
+                                )
+                                .into(),
+                            );
+
                             // Try to reconnect to the saved wallet
                             match wallet::connect_to_wallet(&saved_uuid).await {
                                 Ok(_) => {
                                     // Wait a bit for connection to establish
                                     gloo_timers::future::TimeoutFuture::new(500).await;
-                                    
+
                                     if let Ok(account) = wallet::get_account().await {
                                         if account.is_connected {
                                             // Verify the address matches
                                             if account.address.as_ref() == Some(&saved_address) {
                                                 web_sys::console::log_1(&"✅ Wallet connection restored from localStorage".into());
-                                                
+
                                                 // Get FID for the connected address
                                                 let api_url_for_fid = api_url_clone.clone();
-                                                let wallet_account_for_fid = wallet_account_clone.clone();
+                                                let wallet_account_for_fid =
+                                                    wallet_account_clone.clone();
                                                 let account_for_fid = account.clone();
                                                 spawn_local(async move {
-                                                    match wallet::get_fid_for_address(&api_url_for_fid, &saved_address).await {
+                                                    match wallet::get_fid_for_address(
+                                                        &api_url_for_fid,
+                                                        &saved_address,
+                                                    )
+                                                    .await
+                                                    {
                                                         Ok(fid) => {
-                                                            let mut updated_account = account_for_fid;
+                                                            let mut updated_account =
+                                                                account_for_fid;
                                                             updated_account.fid = fid;
-                                                            wallet_account_for_fid.set(Some(updated_account));
+                                                            wallet_account_for_fid
+                                                                .set(Some(updated_account));
                                                         }
                                                         Err(_) => {
-                                                            wallet_account_for_fid.set(Some(account_for_fid));
+                                                            wallet_account_for_fid
+                                                                .set(Some(account_for_fid));
                                                         }
                                                     }
                                                 });
@@ -215,7 +232,10 @@ fn App() -> Html {
                                     }
                                 }
                                 Err(e) => {
-                                    web_sys::console::log_1(&format!("⚠️ Failed to restore wallet connection: {}", e).into());
+                                    web_sys::console::log_1(
+                                        &format!("⚠️ Failed to restore wallet connection: {}", e)
+                                            .into(),
+                                    );
                                     // Clear invalid saved connection
                                     let _ = wallet::clear_wallet_from_storage();
                                 }
@@ -231,7 +251,12 @@ fn App() -> Html {
                                         let address_clone = address.clone();
                                         let account_clone = account.clone();
                                         spawn_local(async move {
-                                            match wallet::get_fid_for_address(&api_url_clone, &address_clone).await {
+                                            match wallet::get_fid_for_address(
+                                                &api_url_clone,
+                                                &address_clone,
+                                            )
+                                            .await
+                                            {
                                                 Ok(fid) => {
                                                     let mut updated_account = account_clone;
                                                     updated_account.fid = fid;
@@ -259,7 +284,6 @@ fn App() -> Html {
             || ()
         });
     }
-
 
     // Restore state from URL path on mount and handle browser navigation
     {
@@ -635,7 +659,7 @@ fn App() -> Html {
 
                                     // Profile Card (only show if current_view is "profile")
                                     if (*current_view).as_str() == "profile" {
-                                        <ProfileLoader 
+                                        <ProfileLoader
                                             search_query={query.clone()}
                                             is_fid={*is_fid_search}
                                             api_url={(*api_url).clone()}

@@ -1,9 +1,9 @@
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
+use crate::farcaster;
 use crate::models::ProfileData;
 use crate::wallet::WalletAccount;
-use crate::farcaster;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct HeaderProps {
@@ -38,9 +38,8 @@ pub fn Header(props: &HeaderProps) -> Html {
                 if account.is_connected {
                     if let Some(fid) = account.fid {
                         // Only fetch if we don't already have the profile or if FID changed
-                        let should_fetch = user_profile.as_ref()
-                            .map(|p| p.fid != fid)
-                            .unwrap_or(true);
+                        let should_fetch =
+                            user_profile.as_ref().map(|p| p.fid != fid).unwrap_or(true);
 
                         if should_fetch && !*is_loading_profile {
                             is_loading_profile.set(true);
@@ -51,13 +50,21 @@ pub fn Header(props: &HeaderProps) -> Html {
                             if let Some(address) = &account.address {
                                 let address_clone = address.clone();
                                 spawn_local(async move {
-                                    match crate::wallet::get_profile_for_address(&api_url_clone, &address_clone).await {
+                                    match crate::wallet::get_profile_for_address(
+                                        &api_url_clone,
+                                        &address_clone,
+                                    )
+                                    .await
+                                    {
                                         Ok(profile) => {
                                             user_profile_clone.set(profile);
                                             is_loading_profile_clone.set(false);
                                         }
                                         Err(e) => {
-                                            web_sys::console::log_1(&format!("⚠️ Failed to fetch profile: {}", e).into());
+                                            web_sys::console::log_1(
+                                                &format!("⚠️ Failed to fetch profile: {}", e)
+                                                    .into(),
+                                            );
                                             is_loading_profile_clone.set(false);
                                         }
                                     }
@@ -118,9 +125,9 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             {
                                                 if let Some(pfp_url) = &user.pfp_url {
                                                     html! {
-                                                        <img 
-                                                            src={pfp_url.clone()} 
-                                                            alt="Avatar" 
+                                                        <img
+                                                            src={pfp_url.clone()}
+                                                            alt="Avatar"
                                                             style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"
                                                         />
                                                     }
@@ -179,9 +186,9 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             {
                                                 if let Some(pfp_url) = &profile.pfp_url {
                                                     html! {
-                                                        <img 
-                                                            src={pfp_url.clone()} 
-                                                            alt="Avatar" 
+                                                        <img
+                                                            src={pfp_url.clone()}
+                                                            alt="Avatar"
                                                             style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"
                                                         />
                                                     }
@@ -212,7 +219,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             </span>
                                         </div>
                                         // Disconnect button
-                                        <button 
+                                        <button
                                             class="disconnect-btn"
                                             style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: #666;"
                                             onclick={props.on_disconnect.clone().reform(|_| ())}
@@ -262,7 +269,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                                 }
                                             }
                                         </div>
-                                        <button 
+                                        <button
                                             class="disconnect-btn"
                                             style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: #666;"
                                             onclick={props.on_disconnect.clone().reform(|_| ())}
@@ -275,7 +282,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                         } else {
                             // Not connected - show Connect button
                             html! {
-                                <button 
+                                <button
                                     class="connect-button"
                                     onclick={props.on_connect.clone().reform(|_| ())}
                                     style="background: #007AFF; color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;"
@@ -287,7 +294,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                     } else {
                         // No account - show Connect button
                         html! {
-                            <button 
+                            <button
                                 class="connect-button"
                                 onclick={props.on_connect.clone().reform(|_| ())}
                                 style="background: #007AFF; color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;"
@@ -301,4 +308,3 @@ pub fn Header(props: &HeaderProps) -> Html {
         </header>
     }
 }
-

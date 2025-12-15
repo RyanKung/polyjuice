@@ -30,6 +30,14 @@ fn main() {
                         value
                     );
                 }
+                if key == "AUTH_TOKEN" {
+                    println!("cargo:rustc-env=AUTH_TOKEN={}", value);
+                    println!("cargo:warning=Loaded AUTH_TOKEN from .env");
+                }
+                if key == "AUTH_SECRET" {
+                    println!("cargo:rustc-env=AUTH_SECRET={}", value);
+                    println!("cargo:warning=Loaded AUTH_SECRET from .env");
+                }
             }
         }
     }

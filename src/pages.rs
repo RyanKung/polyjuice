@@ -4,7 +4,8 @@ use yew::prelude::*;
 use crate::dashboard::Dashboard;
 use crate::farcaster;
 use crate::models::ProfileData;
-use crate::services::{create_profile_endpoint, make_request_with_payment};
+use crate::services::create_profile_endpoint;
+use crate::services::make_request_with_payment;
 use crate::wallet::WalletAccount;
 
 #[derive(Properties, PartialEq, Clone)]
@@ -56,7 +57,8 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                 if account.is_connected {
                     if let Some(fid) = account.fid {
                         // Check if we already have this profile loaded
-                        let should_fetch = wallet_profile.as_ref()
+                        let should_fetch = wallet_profile
+                            .as_ref()
                             .map(|p| p.fid != fid)
                             .unwrap_or(true);
 
@@ -87,7 +89,8 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                     }
                                     Err(e) => {
                                         web_sys::console::warn_1(
-                                            &format!("⚠️ Failed to fetch wallet profile: {}", e).into(),
+                                            &format!("⚠️ Failed to fetch wallet profile: {}", e)
+                                                .into(),
                                         );
                                         is_loading_wallet_profile_clone.set(false);
                                     }
@@ -131,7 +134,7 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                     </div>
                                 </div>
                             </div>
-                            
+
                             // Dashboard component
                             if let Some(fid) = user.fid {
                                 <Dashboard
@@ -165,7 +168,7 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                 </div>
                             </div>
                         </div>
-                        
+
                         // Dashboard component
                         <Dashboard
                             fid={profile.fid}
@@ -227,4 +230,3 @@ pub fn AboutPage() -> Html {
         </div>
     }
 }
-

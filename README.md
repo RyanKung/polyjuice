@@ -138,6 +138,11 @@ touch .env
 ```bash
 SNAPRAG_API_URL=http://127.0.0.1:3000
 WALLETCONNECT_PROJECT_ID=your_project_id_here
+
+# Optional: API Authentication
+# Generate tokens using: snaprag auth generate --name your_token_name
+AUTH_TOKEN=your_token_name
+AUTH_SECRET=hex_encoded_secret_key_here
 ```
 
 3. **Run**:
@@ -146,6 +151,28 @@ make serve
 ```
 
 **Note**: The `.env` file is automatically loaded when running `make serve` or `make build-prod`.
+
+#### API Authentication
+
+If your SnapRAG API server has authentication enabled, you can configure authentication tokens in the `.env` file:
+
+1. **Generate a token** on the server:
+```bash
+snaprag auth generate --name production_client
+```
+
+2. **Add to `.env`**:
+```bash
+AUTH_TOKEN=production_client
+AUTH_SECRET=a1b2c3d4e5f6...  # The hex-encoded secret from step 1
+```
+
+3. **Rebuild** the application:
+```bash
+make serve  # or make build-prod
+```
+
+All API requests will automatically include authentication headers (`X-Token`, `X-Timestamp`, `X-Signature`) when these environment variables are set.
 
 #### Getting WalletConnect Project ID
 

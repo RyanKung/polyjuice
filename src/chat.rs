@@ -197,4 +197,3 @@ fn ChatInput(props: &ChatInputProps) -> Html {
         </div>
     }
 }
-

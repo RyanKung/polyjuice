@@ -1,5 +1,5 @@
-use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::Request;
 use web_sys::RequestInit;
@@ -43,6 +43,10 @@ pub async fn fetch_casts_stats(
         .set("Content-Type", "application/json")
         .map_err(|e| format!("Failed to set Content-Type: {:?}", e))?;
 
+    // Add authentication headers if configured
+    crate::api::add_auth_headers(&headers, "GET", &url, None)
+        .map_err(|e| format!("Failed to add auth headers: {}", e))?;
+
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
         .await
         .map_err(|e| format!("Fetch failed: {:?}", e))?;
@@ -64,36 +68,42 @@ pub async fn fetch_casts_stats(
     .map_err(|e| format!("Failed to get text: {:?}", e))?;
 
     let body = text.as_string().unwrap_or_default();
-    
+
     // Parse as ApiResponse first
-    let api_response: crate::models::ApiResponse<serde_json::Value> = serde_json::from_str(&body)
-        .map_err(|e| format!("Failed to parse API response: {}", e))?;
-    
+    let api_response: crate::models::ApiResponse<serde_json::Value> =
+        serde_json::from_str(&body).map_err(|e| format!("Failed to parse API response: {}", e))?;
+
     if !api_response.success {
-        return Err(api_response.error.unwrap_or_else(|| "API request failed".to_string()));
+        return Err(api_response
+            .error
+            .unwrap_or_else(|| "API request failed".to_string()));
     }
-    
+
     // Extract data from response
-    let data = api_response.data.ok_or_else(|| "No data in response".to_string())?;
-    
+    let data = api_response
+        .data
+        .ok_or_else(|| "No data in response".to_string())?;
+
     // Check if it's a pending job
     if let Some(status) = data.get("status") {
         if let Some(status_str) = status.as_str() {
             if status_str == "pending" || status_str == "processing" {
-                let message = data.get("message")
+                let message = data
+                    .get("message")
                     .and_then(|m| m.as_str())
                     .unwrap_or("Processing...");
                 return Err(format!("Job {}: {}", status_str, message));
             }
         }
     }
-    
+
     // Parse as CastsStatsResponse
     let response: crate::models::CastsStatsResponse = serde_json::from_value(data)
         .map_err(|e| format!("Failed to parse CastsStatsResponse: {}", e))?;
-    
+
     // Convert date_distribution to daily_stats with timestamps
-    let daily_stats = response.date_distribution
+    let daily_stats = response
+        .date_distribution
         .into_iter()
         .map(|dd| {
             // Parse date string to get timestamp
@@ -105,14 +115,18 @@ pub async fn fetch_casts_stats(
             }
         })
         .collect();
-    
+
     // Combine top_nouns and top_verbs into word_cloud
     // Calculate total count for percentage calculation
     let total_word_count: usize = response.top_nouns.iter().map(|w| w.count).sum::<usize>()
         + response.top_verbs.iter().map(|w| w.count).sum::<usize>();
-    
+
     let mut word_cloud = Vec::new();
-    for word in response.top_nouns.into_iter().chain(response.top_verbs.into_iter()) {
+    for word in response
+        .top_nouns
+        .into_iter()
+        .chain(response.top_verbs.into_iter())
+    {
         let percentage = if total_word_count > 0 {
             word.count as f32 / total_word_count as f32
         } else {
@@ -124,10 +138,10 @@ pub async fn fetch_casts_stats(
             percentage,
         });
     }
-    
+
     // Sort by count descending
     word_cloud.sort_by(|a, b| b.count.cmp(&a.count));
-    
+
     Ok(crate::models::CastsStats {
         fid,
         daily_stats,
@@ -148,11 +162,11 @@ fn parse_date_to_timestamp(date_str: &str) -> i64 {
         ) {
             // Month is 0-based in JavaScript Date (0 = January, 11 = December)
             let month = (month_str - 1).max(0);
-            
+
             // Create date using Date constructor string
             let date_str_js = format!("{}-{:02}-{:02}T00:00:00Z", year_str, month_str, day_str);
             let parsed_date = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(&date_str_js));
-            
+
             return (parsed_date.get_time() / 1000.0) as i64;
         }
     }
@@ -163,20 +177,17 @@ fn parse_date_to_timestamp(date_str: &str) -> i64 {
 pub fn get_current_year_timestamps() -> (i64, i64) {
     let now = js_sys::Date::new_0();
     let year = now.get_full_year();
-    
+
     // Start of year: January 1, 00:00:00
-    let start_date = js_sys::Date::new_with_year_month_day_hr_min_sec_milli(
-        year, 0, 1, 0, 0, 0, 0
-    );
-    
+    let start_date = js_sys::Date::new_with_year_month_day_hr_min_sec_milli(year, 0, 1, 0, 0, 0, 0);
+
     // End of year: December 31, 23:59:59
-    let end_date = js_sys::Date::new_with_year_month_day_hr_min_sec_milli(
-        year, 11, 31, 23, 59, 59, 999
-    );
-    
+    let end_date =
+        js_sys::Date::new_with_year_month_day_hr_min_sec_milli(year, 11, 31, 23, 59, 59, 999);
+
     let start_timestamp = (start_date.get_time() / 1000.0) as i64;
     let end_timestamp = (end_date.get_time() / 1000.0) as i64;
-    
+
     (start_timestamp, end_timestamp)
 }
 
@@ -228,7 +239,7 @@ pub fn Dashboard(props: &DashboardProps) -> Html {
     html! {
         <div class="dashboard-container">
             <h2 class="dashboard-title">{"Activity Dashboard"}</h2>
-            
+
             if *is_loading {
                 <div class="loading-container">
                     <div class="skeleton-spinner"></div>
@@ -268,23 +279,19 @@ struct ActivityChartProps {
 fn ActivityChart(props: &ActivityChartProps) -> Html {
     // Group stats by month for better visualization
     // Calculate max count for color scaling
-    let max_count = props.daily_stats
-        .iter()
-        .map(|s| s.count)
-        .max()
-        .unwrap_or(1);
+    let max_count = props.daily_stats.iter().map(|s| s.count).max().unwrap_or(1);
 
     // Get all days in current year
     let now = js_sys::Date::new_0();
     let year = now.get_full_year();
     let mut all_days = Vec::new();
-    
+
     // Days in each month (non-leap year)
     let days_in_months = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    
+
     // Check if leap year
     let is_leap_year = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-    
+
     // Start from January 1
     for month in 0..12 {
         let mut days_in_month = days_in_months[month];
@@ -292,22 +299,18 @@ fn ActivityChart(props: &ActivityChartProps) -> Html {
         if month == 1 && is_leap_year {
             days_in_month = 29;
         }
-        
+
         for day in 1..=days_in_month {
-            let date_str = format!(
-                "{:04}-{:02}-{:02}",
-                year,
-                month + 1,
-                day
-            );
-            
+            let date_str = format!("{:04}-{:02}-{:02}", year, month + 1, day);
+
             // Find matching stat
-            let count = props.daily_stats
+            let count = props
+                .daily_stats
                 .iter()
                 .find(|s| s.date == date_str)
                 .map(|s| s.count)
                 .unwrap_or(0);
-            
+
             all_days.push((date_str, count));
         }
     }
@@ -338,7 +341,7 @@ fn ActivityChart(props: &ActivityChartProps) -> Html {
                     } else {
                         format!("{}: No casts", date_str)
                     };
-                    
+
                     html! {
                         <div
                             class={format!("chart-day {}", intensity_class)}
@@ -376,10 +379,7 @@ fn WordCloud(props: &WordCloudProps) -> Html {
     let top_words = sorted_words.into_iter().take(50).collect::<Vec<_>>();
 
     // Calculate max count for font size scaling
-    let max_count = top_words
-        .first()
-        .map(|w| w.count)
-        .unwrap_or(1);
+    let max_count = top_words.first().map(|w| w.count).unwrap_or(1);
 
     html! {
         <div class="word-cloud">
@@ -387,7 +387,7 @@ fn WordCloud(props: &WordCloudProps) -> Html {
                 // Font size based on frequency (12px to 32px)
                 let font_size = 12.0 + (word.count as f32 / max_count as f32) * 20.0;
                 let opacity = 0.6 + (word.count as f32 / max_count as f32) * 0.4;
-                
+
                 html! {
                     <span
                         class="word-cloud-item"
@@ -404,4 +404,3 @@ fn WordCloud(props: &WordCloudProps) -> Html {
         </div>
     }
 }
-
