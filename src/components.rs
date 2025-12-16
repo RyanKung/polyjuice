@@ -2,17 +2,6 @@ use web_sys::InputEvent;
 use yew::prelude::*;
 
 use crate::wallet::DiscoveredWallet;
-use crate::wallet::WalletAccount;
-
-#[allow(dead_code)]
-#[derive(Properties, PartialEq, Clone)]
-pub struct WalletStatusProps {
-    pub wallet_account: Option<WalletAccount>,
-    pub wallet_initialized: bool,
-    pub wallet_error: Option<String>,
-    pub on_connect: Callback<()>,
-    pub on_disconnect: Callback<()>,
-}
 
 #[derive(Properties, Clone)]
 pub struct WalletListProps {
@@ -30,69 +19,6 @@ impl PartialEq for WalletListProps {
                     && a.info.name == b.info.name
                     && a.info.icon == b.info.icon
             })
-    }
-}
-
-/// Wallet status component
-#[function_component]
-pub fn WalletStatus(props: &WalletStatusProps) -> Html {
-    if !props.wallet_initialized {
-        return html! {};
-    }
-
-    // Show error message if there's an error
-    let error_html = if let Some(error) = &props.wallet_error {
-        html! {
-            <div class="wallet-status disconnected" style="margin-bottom: 8px;">
-                <span style="font-size: 12px;">{error}</span>
-            </div>
-        }
-    } else {
-        html! {}
-    };
-
-    html! {
-        <div class="wallet-section">
-            {error_html}
-            {
-                if let Some(account) = &props.wallet_account {
-                    if account.is_connected {
-                        // Display FID if available, otherwise display address
-                        let display_text = if let Some(fid) = account.fid {
-                            format!("FID: {}", fid)
-                        } else if let Some(ref address) = account.address {
-                            format!("{}...{}",
-                                &address[..4.min(address.len())],
-                                &address[address.len().saturating_sub(4)..]
-                            )
-                        } else {
-                            "Connected".to_string()
-                        };
-
-                        html! {
-                            <div class="wallet-status connected" onclick={props.on_disconnect.clone().reform(|_| ())} style="cursor: pointer;">
-                                <span style="font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace; font-size: 14px;">
-                                    {display_text}
-                                </span>
-                                <span style="margin-left: 8px; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">{"✕"}</span>
-                            </div>
-                        }
-                    } else {
-                        html! {
-                            <button onclick={props.on_connect.clone().reform(|_| ())} class="wallet-button">
-                                {"Connect"}
-                            </button>
-                        }
-                    }
-                } else {
-                    html! {
-                        <button onclick={props.on_connect.clone().reform(|_| ())} class="wallet-button">
-                            {"Connect"}
-                        </button>
-                    }
-                }
-            }
-        </div>
     }
 }
 
@@ -248,23 +174,6 @@ pub fn ErrorMessage(props: &ErrorMessageProps) -> Html {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Properties, PartialEq, Clone)]
-pub struct BackButtonProps {
-    pub on_back: Callback<()>,
-}
-
-/// Back button component
-#[function_component]
-pub fn BackButton(props: &BackButtonProps) -> Html {
-    html! {
-        <div class="back-to-search">
-            <button class="back-button" onclick={props.on_back.clone().reform(|_| ())}>
-                {"←"}
-            </button>
-        </div>
-    }
-}
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct FloatingChatButtonProps {
@@ -281,23 +190,6 @@ pub fn FloatingChatButton(props: &FloatingChatButtonProps) -> Html {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Properties, PartialEq, Clone)]
-pub struct LinkButtonProps {
-    pub on_click: Callback<()>,
-}
-
-/// Link button component (top left)
-#[function_component]
-pub fn LinkButton(props: &LinkButtonProps) -> Html {
-    html! {
-        <div class="link-button-container">
-            <button class="link-button" onclick={props.on_click.clone().reform(|_| ())}>
-                {"🔗"}
-            </button>
-        </div>
-    }
-}
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct BottomTabProps {

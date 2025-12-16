@@ -30,8 +30,6 @@ pub struct WalletAccount {
 #[derive(Debug, Clone)]
 pub struct DiscoveredWallet {
     pub info: WalletInfo,
-    #[allow(dead_code)]
-    pub provider: JsValue, // Note: JsValue cannot be serialized, so this struct is only used in Rust/WASM
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -129,38 +127,6 @@ pub fn clear_wallet_from_storage() -> Result<(), String> {
     Ok(())
 }
 
-// Check if provider has accounts (EIP-1193)
-#[allow(dead_code)]
-fn get_provider_accounts(provider: &JsValue) -> Option<Array> {
-    Reflect::get(provider, &"selectedAddress".into())
-        .ok()
-        .and_then(|addr| {
-            if !addr.is_null() && !addr.is_undefined() {
-                let arr = Array::new();
-                if let Some(addr_str) = addr.as_string() {
-                    arr.push(&addr_str.into());
-                    Some(arr)
-                } else {
-                    None
-                }
-            } else {
-                // Try accounts property
-                Reflect::get(provider, &"accounts".into())
-                    .ok()
-                    .and_then(|a| a.dyn_ref::<Array>().cloned())
-            }
-        })
-}
-
-// Check if provider is connected
-#[allow(dead_code)]
-fn is_provider_connected(provider: &JsValue) -> bool {
-    if let Some(accounts) = get_provider_accounts(provider) {
-        accounts.length() > 0
-    } else {
-        false
-    }
-}
 
 // Initialize wallet system - discover wallets via EIP-6963
 pub async fn initialize() -> Result<(), String> {
@@ -272,7 +238,7 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
         for i in 0..wallets_arr.length() {
             if let Some(wallet_obj) = wallets_arr.get(i).dyn_ref::<Object>() {
                 if let Ok(info) = Reflect::get(wallet_obj, &"info".into()) {
-                    if let Ok(provider) = Reflect::get(wallet_obj, &"provider".into()) {
+                    if let Ok(_provider) = Reflect::get(wallet_obj, &"provider".into()) {
                         // Parse wallet info from JS object
                         if let Some(info_obj) = info.dyn_ref::<Object>() {
                             let uuid = Reflect::get(info_obj, &"uuid".into())
@@ -305,7 +271,6 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
                                         icon: icon.clone(),
                                         rdns: rdns.clone(),
                                     },
-                                    provider,
                                 });
                                 web_sys::console::log_1(
                                     &format!("✅ Added EIP-6963 wallet: {} (uuid: {})", name, uuid)
@@ -340,7 +305,6 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
                             icon: get_wallet_icon_url("Rabby"),
                             rdns: Some("io.rabby".to_string()),
                         },
-                        provider: rabby,
                     });
                     web_sys::console::log_1(&"✅ Added wallet from window.rabby: Rabby".into());
                 }
@@ -366,7 +330,7 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
                     if let Ok(ethereum) = Reflect::get(provider, &"ethereum".into()) {
                         if !ethereum.is_null() && !ethereum.is_undefined() {
                             web_sys::console::log_1(&"✅ Found window.phantom.ethereum".into());
-                            if let Some(eth_provider) = ethereum.dyn_ref::<Object>() {
+                            if let Some(_eth_provider) = ethereum.dyn_ref::<Object>() {
                                 seen_wallets.insert("Phantom".to_string());
                                 wallets.push(DiscoveredWallet {
                                     info: WalletInfo {
@@ -375,7 +339,6 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
                                         icon: get_wallet_icon_url("Phantom"),
                                         rdns: Some("app.phantom".to_string()),
                                     },
-                                    provider: eth_provider.into(),
                                 });
                                 web_sys::console::log_1(
                                     &"✅ Added wallet from window.phantom: Phantom".into(),
@@ -506,7 +469,6 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
                                         icon: get_wallet_icon_url(&name),
                                         rdns: None,
                                     },
-                                    provider: provider.into(),
                                 });
                                 web_sys::console::log_1(
                                     &format!("✅ Added wallet: {}", name).into(),
@@ -573,7 +535,6 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
                                 icon: get_wallet_icon_url(&name_clone),
                                 rdns: None,
                             },
-                            provider: ethereum,
                         });
                         web_sys::console::log_1(
                             &format!("✅ Added wallet: {} with UUID", name).into(),
@@ -631,8 +592,6 @@ fn get_all_supported_wallets(
         if !detected_names.contains(name) {
             // Create a placeholder wallet without a real provider
             // The provider will be null/undefined, which we can check when connecting
-            let placeholder_provider = JsValue::NULL;
-
             all_wallets.push(DiscoveredWallet {
                 info: WalletInfo {
                     uuid: format!("placeholder_{}", name.to_lowercase().replace(" ", "_")),
@@ -640,7 +599,6 @@ fn get_all_supported_wallets(
                     icon: get_wallet_icon_url(name),
                     rdns: Some(rdns.to_string()),
                 },
-                provider: placeholder_provider,
             });
             web_sys::console::log_1(&format!("➕ Added placeholder wallet: {}", name).into());
         }
@@ -1297,14 +1255,6 @@ fn setup_provider_events(window: &Window, provider: &JsValue) -> Result<(), Stri
     Ok(())
 }
 
-// Connect wallet (show wallet list - this will be handled by UI)
-#[allow(dead_code)]
-pub async fn connect() -> Result<(), String> {
-    web_sys::console::log_1(&"🔌 Wallet connect requested - UI should show wallet list".into());
-    // The actual connection will be done via connect_to_wallet()
-    // This function is kept for compatibility
-    Ok(())
-}
 
 // Disconnect wallet
 pub async fn disconnect() -> Result<(), String> {
@@ -1446,13 +1396,6 @@ pub async fn ping_endpoint_service(url: &str) -> Result<f64, String> {
     Ok(end_time - start_time)
 }
 
-// Address profile response structure
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-struct AddressProfileResponse {
-    fid: Option<i64>,
-    fids: Option<Vec<i64>>,
-}
 
 // Get full profile data for an address (includes avatar, username, etc.)
 pub async fn get_profile_for_address(

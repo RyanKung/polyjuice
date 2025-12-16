@@ -1,9 +1,7 @@
 use web_sys::InputEvent;
 use yew::prelude::*;
 
-use crate::analysis_loaders::*;
 use crate::models::*;
-use crate::wallet::WalletAccount;
 
 // MBTI type descriptions
 const MBTI_DESCRIPTIONS: &[(&str, &str)] = &[
@@ -31,67 +29,6 @@ const MBTI_DESCRIPTIONS: &[(&str, &str)] = &[
     ("ESFP", "Entertainer - Spontaneous, enthusiastic, and fun"),
 ];
 
-#[allow(dead_code)]
-#[derive(Properties, PartialEq, Clone)]
-pub struct ProfileViewProps {
-    pub search_result: Option<SearchResult>,
-    pub api_url: String,
-    pub wallet_account: Option<WalletAccount>,
-}
-
-/// Profile view component
-#[function_component]
-pub fn ProfileView(props: &ProfileViewProps) -> Html {
-    if let Some(result) = &props.search_result {
-        html! {
-            <div class="card profile-card">
-                <div class="card-content">
-                    <div class="profile-info">
-                        <div class="profile-picture">
-                            if let Some(pfp_url) = &result.profile.pfp_url {
-                                <img src={pfp_url.clone()} alt="Profile" />
-                            } else {
-                                <div class="profile-picture-placeholder">
-                                    {"👤"}
-                                </div>
-                            }
-                        </div>
-
-                        <div class="user-details">
-                            <h2>{result.profile.display_name.clone().unwrap_or_else(|| "Unknown".to_string())}</h2>
-                            if let Some(username) = &result.profile.username {
-                                <p class="username">{"@"}{username}</p>
-                            }
-                            <div class="fid-badge">{"FID: "}{result.profile.fid}</div>
-
-                            if let Some(bio) = &result.profile.bio {
-                                <p class="bio">{bio}</p>
-                            }
-                        </div>
-                    </div>
-
-                    // MBTI Analysis Loader - manages its own state
-                    <MbtiAnalysisLoader
-                        fid={result.profile.fid}
-                        username={result.profile.username.clone()}
-                        api_url={props.api_url.clone()}
-                        wallet_account={props.wallet_account.clone()}
-                    />
-
-                    // Social Analysis Loader - manages its own state
-                    <SocialAnalysisLoader
-                        fid={result.profile.fid}
-                        username={result.profile.username.clone()}
-                        api_url={props.api_url.clone()}
-                        wallet_account={props.wallet_account.clone()}
-                    />
-                </div>
-            </div>
-        }
-    } else {
-        html! {}
-    }
-}
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct MbtiAnalysisProps {
@@ -527,105 +464,6 @@ pub fn SocialAnalysis(props: &SocialAnalysisProps) -> Html {
     }
 }
 
-/// Pending jobs notification component
-#[allow(dead_code)]
-#[derive(Properties, PartialEq, Clone)]
-pub struct PendingJobsNotificationProps {
-    pub jobs: Vec<crate::models::PendingJob>,
-}
-
-#[function_component]
-fn PendingJobsNotification(props: &PendingJobsNotificationProps) -> Html {
-    let has_failed = props
-        .jobs
-        .iter()
-        .any(|j| j.status.as_deref() == Some("failed"));
-    let has_processing = props
-        .jobs
-        .iter()
-        .any(|j| matches!(j.status.as_deref(), Some("pending") | Some("processing")));
-
-    let (bg_color, border_color, text_color, title, description) = if has_failed {
-        (
-            "#f8d7da",
-            "#f5c6cb",
-            "#721c24",
-            "⚠️ Some Tasks Failed",
-            "Some analyses failed. Please try again or check the error messages below.",
-        )
-    } else if has_processing {
-        ("#fff3cd", "#ffc107", "#856404", "⏳ Background Tasks in Progress",
-         "Some analyses are still processing in the background. You can come back later to check the results.")
-    } else {
-        (
-            "#d4edda",
-            "#c3e6cb",
-            "#155724",
-            "✅ Tasks Completed",
-            "All background tasks have completed.",
-        )
-    };
-
-    html! {
-        <div class="pending-jobs-notification" style={format!("margin-top: 20px; padding: 15px; background: {}; border: 1px solid {}; border-radius: 8px;", bg_color, border_color)}>
-            <h4 style={format!("margin: 0 0 10px 0; color: {}; display: flex; align-items: center; gap: 8px;", text_color)}>
-                {if has_processing && !has_failed {
-                    html! { <span style="animation: spin 1s linear infinite; display: inline-block;">{"⏳"}</span> }
-                } else {
-                    html! {}
-                }}
-                {title}
-            </h4>
-            <p style={format!("margin: 0 0 10px 0; color: {}; font-weight: 500;", text_color)}>
-                {description}
-            </p>
-            <ul style={format!("margin: 0 0 10px 0; padding-left: 20px; color: {};", text_color)}>
-                {for props.jobs.iter().map(|job| {
-                    let (status_icon, status_color, status_text) = match job.status.as_deref() {
-                        Some("pending") => ("⏳", "#856404", "Queued"),
-                        Some("processing") => ("⚙️", "#856404", "Processing"),
-                        Some("completed") => ("✅", "#155724", "Completed"),
-                        Some("failed") => ("❌", "#721c24", "Failed"),
-                        _ => ("⏳", "#856404", "Processing"),
-                    };
-                    html! {
-                        <li style={format!("margin: 5px 0; color: {};", status_color)}>
-                            <strong>{status_icon} {&job.job_type}</strong>
-                            {" ("}
-                            <span style="font-weight: 500;">{status_text}</span>
-                            {")"}
-                            {": "}
-                            {job.message.as_ref().unwrap_or(&"Processing...".to_string())}
-                        </li>
-                    }
-                })}
-            </ul>
-            {if has_processing {
-                html! {
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button
-                    onclick={Callback::from(|_| {
-                        // Reload page while preserving current URL hash
-                        // Note: hash is preserved automatically by browser on reload
-                        let window = web_sys::window().unwrap();
-                        let location = window.location();
-                        location.reload().unwrap();
-                    })}
-                            style={format!("padding: 8px 16px; background: {}; border: none; border-radius: 4px; cursor: pointer; color: {}; font-weight: 500;", border_color, text_color)}
-                >
-                    {"🔄 Refresh Page"}
-                </button>
-                        <div style={format!("padding: 8px 16px; color: {}; font-size: 14px; display: flex; align-items: center;", text_color)}>
-                    {"💡 Tip: Results will be ready in a few minutes"}
-                </div>
-            </div>
-                }
-            } else {
-                html! {}
-            }}
-        </div>
-    }
-}
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct EndpointViewProps {
