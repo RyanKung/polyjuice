@@ -31,6 +31,7 @@ const MBTI_DESCRIPTIONS: &[(&str, &str)] = &[
     ("ESFP", "Entertainer - Spontaneous, enthusiastic, and fun"),
 ];
 
+#[allow(dead_code)]
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProfileViewProps {
     pub search_result: Option<SearchResult>,
@@ -527,6 +528,7 @@ pub fn SocialAnalysis(props: &SocialAnalysisProps) -> Html {
 }
 
 /// Pending jobs notification component
+#[allow(dead_code)]
 #[derive(Properties, PartialEq, Clone)]
 pub struct PendingJobsNotificationProps {
     pub jobs: Vec<crate::models::PendingJob>,

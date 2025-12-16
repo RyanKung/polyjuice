@@ -15,6 +15,7 @@ use crate::wallet::WalletAccount;
 // ============================================================================
 
 /// Helper function to update pending_jobs in search_result
+#[allow(dead_code)]
 fn update_pending_job(
     search_result: &UseStateHandle<Option<SearchResult>>,
     job_type: &str,
@@ -49,6 +50,7 @@ fn update_pending_job(
 }
 
 /// Create a status callback for updating UI during background polling
+#[allow(dead_code)]
 fn create_polling_status_callback(
     search_result: UseStateHandle<Option<SearchResult>>,
     job_type: &'static str,
@@ -59,6 +61,7 @@ fn create_polling_status_callback(
 }
 
 /// Parse JOB_STATUS error message format: "JOB_STATUS:{status}:JOB_KEY:{job_key}:MESSAGE:{message}"
+#[allow(dead_code)]
 fn parse_job_status_error(
     error: &str,
     default_job_key: String,
@@ -105,6 +108,7 @@ fn parse_job_status_error(
 }
 
 /// Process API result and extract pending job information
+#[allow(dead_code)]
 fn process_analysis_result<T>(
     result: Result<T, String>,
     job_type: &str,

@@ -30,6 +30,7 @@ pub struct WalletAccount {
 #[derive(Debug, Clone)]
 pub struct DiscoveredWallet {
     pub info: WalletInfo,
+    #[allow(dead_code)]
     pub provider: JsValue, // Note: JsValue cannot be serialized, so this struct is only used in Rust/WASM
 }
 
@@ -129,6 +130,7 @@ pub fn clear_wallet_from_storage() -> Result<(), String> {
 }
 
 // Check if provider has accounts (EIP-1193)
+#[allow(dead_code)]
 fn get_provider_accounts(provider: &JsValue) -> Option<Array> {
     Reflect::get(provider, &"selectedAddress".into())
         .ok()
@@ -151,6 +153,7 @@ fn get_provider_accounts(provider: &JsValue) -> Option<Array> {
 }
 
 // Check if provider is connected
+#[allow(dead_code)]
 fn is_provider_connected(provider: &JsValue) -> bool {
     if let Some(accounts) = get_provider_accounts(provider) {
         accounts.length() > 0
@@ -328,7 +331,7 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
         if let Ok(rabby) = Reflect::get(&window, &"rabby".into()) {
             if !rabby.is_null() && !rabby.is_undefined() {
                 web_sys::console::log_1(&"✅ Found window.rabby".into());
-                if let Some(provider) = rabby.dyn_ref::<Object>() {
+                if let Some(_provider) = rabby.dyn_ref::<Object>() {
                     seen_wallets.insert("Rabby".to_string());
                     wallets.push(DiscoveredWallet {
                         info: WalletInfo {
@@ -520,7 +523,7 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
                         }
                     }
                 }
-            } else if let Some(provider) = ethereum.dyn_ref::<Object>() {
+            } else if let Some(_provider) = ethereum.dyn_ref::<Object>() {
                 // Single provider
 
                 // Check if MetaMask was already found via EIP-6963 (preferred, avoids Rabby hijacking)
@@ -604,7 +607,7 @@ pub async fn discover_wallets() -> Result<Vec<DiscoveredWallet>, String> {
 // Get all supported wallets list
 // Returns wallets with detected ones first, then undetected ones
 fn get_all_supported_wallets(
-    mut detected_wallets: Vec<DiscoveredWallet>,
+    detected_wallets: Vec<DiscoveredWallet>,
     detected_names: std::collections::HashSet<String>,
 ) -> Vec<DiscoveredWallet> {
     // List of all supported wallets (in preferred order)
@@ -1210,7 +1213,7 @@ fn find_provider_by_uuid(window: &Window, uuid: &str) -> Result<JsValue, String>
                             }
                         }
                     }
-                } else if let Some(provider) = ethereum.dyn_ref::<Object>() {
+                } else if let Some(_provider) = ethereum.dyn_ref::<Object>() {
                     // Single provider
                     // Skip Rabby check when looking for MetaMask/Rainbow/Base
                     let skip_rabby = uuid == "metamask" || uuid == "rainbow" || uuid == "base";
@@ -1295,6 +1298,7 @@ fn setup_provider_events(window: &Window, provider: &JsValue) -> Result<(), Stri
 }
 
 // Connect wallet (show wallet list - this will be handled by UI)
+#[allow(dead_code)]
 pub async fn connect() -> Result<(), String> {
     web_sys::console::log_1(&"🔌 Wallet connect requested - UI should show wallet list".into());
     // The actual connection will be done via connect_to_wallet()
@@ -1443,6 +1447,7 @@ pub async fn ping_endpoint_service(url: &str) -> Result<f64, String> {
 }
 
 // Address profile response structure
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 struct AddressProfileResponse {
     fid: Option<i64>,

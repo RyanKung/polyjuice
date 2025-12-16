@@ -4,6 +4,7 @@ use yew::prelude::*;
 use crate::wallet::DiscoveredWallet;
 use crate::wallet::WalletAccount;
 
+#[allow(dead_code)]
 #[derive(Properties, PartialEq, Clone)]
 pub struct WalletStatusProps {
     pub wallet_account: Option<WalletAccount>,
@@ -247,6 +248,7 @@ pub fn ErrorMessage(props: &ErrorMessageProps) -> Html {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Properties, PartialEq, Clone)]
 pub struct BackButtonProps {
     pub on_back: Callback<()>,
@@ -279,6 +281,7 @@ pub fn FloatingChatButton(props: &FloatingChatButtonProps) -> Html {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Properties, PartialEq, Clone)]
 pub struct LinkButtonProps {
     pub on_click: Callback<()>,

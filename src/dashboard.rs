@@ -161,7 +161,7 @@ fn parse_date_to_timestamp(date_str: &str) -> i64 {
             date_str[8..10].parse::<i32>(),
         ) {
             // Month is 0-based in JavaScript Date (0 = January, 11 = December)
-            let month = (month_str - 1).max(0);
+            let _month = (month_str - 1).max(0);
 
             // Create date using Date constructor string
             let date_str_js = format!("{}-{:02}-{:02}T00:00:00Z", year_str, month_str, day_str);

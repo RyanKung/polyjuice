@@ -336,11 +336,11 @@ fn App() -> Html {
                 let loading_tasks_clone = loading_tasks.clone();
                 let error_message_clone = error_message.clone();
                 let api_url_clone = (*api_url).clone();
-                let chat_session_clone = chat_session.clone();
-                let chat_messages_clone = chat_messages.clone();
-                let is_chat_loading_clone = is_chat_loading.clone();
-                let chat_error_clone = chat_error.clone();
-                let wallet_account_clone = wallet_account.clone();
+                let _chat_session_clone = chat_session.clone();
+                let _chat_messages_clone = chat_messages.clone();
+                let _is_chat_loading_clone = is_chat_loading.clone();
+                let _chat_error_clone = chat_error.clone();
+                let _wallet_account_clone = wallet_account.clone();
                 let current_view_clone = current_view.clone();
 
                 spawn_local(async move {
