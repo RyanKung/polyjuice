@@ -287,6 +287,8 @@ pub struct TopReactor {
     pub username: Option<String>,
     pub display_name: Option<String>,
     pub interaction_count: usize,
+    #[serde(default)]
+    pub pfp_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

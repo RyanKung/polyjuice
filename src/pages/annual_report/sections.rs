@@ -1,3 +1,5 @@
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 use crate::models::{
@@ -19,12 +21,12 @@ pub fn AnnualReportCover(props: &AnnualReportCoverProps) -> Html {
     html! {
         <div class="report-card-content" style="
             width: 100%;
-            height: calc(100% - 60px);
+            height: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 100px 40px 40px 40px;
+            justify-content: flex-start;
+            padding: 80px 40px 40px 40px;
             box-sizing: border-box;
         ">
             <div class="cover-header" style="
@@ -36,52 +38,52 @@ pub fn AnnualReportCover(props: &AnnualReportCoverProps) -> Html {
                         src={pfp_url.clone()} 
                         alt="Profile" 
                         style="
-                            width: 120px;
-                            height: 120px;
+                            width: 100px;
+                            height: 100px;
                             border-radius: 50%;
-                            border: 4px solid rgba(255, 255, 255, 0.3);
-                            margin-bottom: 24px;
+                            border: 3px solid rgba(255, 255, 255, 0.3);
+                            margin-bottom: 20px;
                             object-fit: cover;
                         "
                     />
                 } else {
                     <div style="
-                        width: 120px;
-                        height: 120px;
+                        width: 100px;
+                        height: 100px;
                         border-radius: 50%;
-                        border: 4px solid rgba(255, 255, 255, 0.3);
-                        margin: 0 auto 24px;
+                        border: 3px solid rgba(255, 255, 255, 0.3);
+                        margin: 0 auto 20px;
                         display: flex;
                         align-items: center;
                         justify-content: center;
-                        font-size: 60px;
+                        font-size: 50px;
                         background: rgba(255, 255, 255, 0.1);
                     ">{"👤"}</div>
                 }
                 <div class="cover-info">
                     <h1 style="
-                        font-size: 48px;
+                        font-size: 36px;
                         font-weight: 700;
-                        margin: 0 0 16px 0;
+                        margin: 0 0 12px 0;
                         color: white;
                         text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
                     ">{"Your Farcaster 2025"}</h1>
                     <p style="
-                        font-size: 20px;
+                        font-size: 16px;
                         color: rgba(255, 255, 255, 0.9);
-                        margin: 0 0 24px 0;
+                        margin: 0 0 20px 0;
                         line-height: 1.5;
                     ">{"This year, you made your voice heard and built connections"}</p>
                     if let Some(username) = &props.profile.username {
                         <p style="
-                            font-size: 24px;
+                            font-size: 20px;
                             font-weight: 600;
                             color: white;
-                            margin: 0 0 8px 0;
+                            margin: 0 0 6px 0;
                         ">{format!("@{}", username)}</p>
                     }
                     <p style="
-                        font-size: 16px;
+                        font-size: 14px;
                         color: rgba(255, 255, 255, 0.7);
                         margin: 0;
                     ">{format!("FID: {}", props.profile.fid)}</p>
@@ -100,35 +102,29 @@ pub struct IdentitySectionProps {
 
 #[function_component]
 pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
-    // Calculate days since registration
-    // registered_at is a Farcaster timestamp, need to convert to Unix timestamp
-    let days_since_registration = props
-        .profile
-        .registered_at
-        .map(|farcaster_timestamp| {
-            let unix_timestamp = farcaster_to_unix(farcaster_timestamp);
-            let now = js_sys::Date::now() / 1000.0; // Current time in seconds
-            ((now - unix_timestamp as f64) / 86400.0) as i64
-        })
-        .unwrap_or(0);
-
-    // Format first cast date
+    // Format first cast as "XXX Ago"
     // cast.timestamp is a Farcaster timestamp, need to convert to Unix timestamp
-    let first_cast_date = props
+    let first_cast_ago = props
         .temporal
         .first_cast
         .as_ref()
         .map(|cast| {
             let unix_timestamp = farcaster_to_unix(cast.timestamp);
-            let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
-                unix_timestamp as f64 * 1000.0,
-            ));
-            format!(
-                "{}-{:02}-{:02}",
-                date.get_full_year(),
-                date.get_month() + 1,
-                date.get_date()
-            )
+            let now = js_sys::Date::now() / 1000.0; // Current time in seconds
+            let diff_seconds = now - (unix_timestamp as f64);
+            let diff_days = (diff_seconds / 86400.0) as i64;
+            let diff_months = diff_days / 30;
+            let diff_years = diff_days / 365;
+            
+            if diff_years > 0 {
+                format!("{} {} ago", diff_years, if diff_years == 1 { "year" } else { "years" })
+            } else if diff_months > 0 {
+                format!("{} {} ago", diff_months, if diff_months == 1 { "month" } else { "months" })
+            } else if diff_days > 0 {
+                format!("{} {} ago", diff_days, if diff_days == 1 { "day" } else { "days" })
+            } else {
+                "Today".to_string()
+            }
         })
         .unwrap_or_else(|| "N/A".to_string());
 
@@ -188,19 +184,8 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
                     padding: 24px;
                     border: 1px solid rgba(255, 255, 255, 0.2);
                 ">
-                    <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">{"Registration Date"}</div>
-                    <div style="font-size: 24px; font-weight: 600; color: white;">{format!("Day {} on Farcaster", days_since_registration)}</div>
-                </div>
-                <div style="
-                    background: rgba(255, 255, 255, 0.1);
-                    backdrop-filter: blur(10px);
-                    -webkit-backdrop-filter: blur(10px);
-                    border-radius: 16px;
-                    padding: 24px;
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                ">
                     <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">{"First Cast"}</div>
-                    <div style="font-size: 24px; font-weight: 600; color: white;">{first_cast_date}</div>
+                    <div style="font-size: 24px; font-weight: 600; color: white;">{first_cast_ago}</div>
                 </div>
                 <div style="
                     background: rgba(255, 255, 255, 0.1);
@@ -256,13 +241,54 @@ pub fn VoiceFrequencySection(props: &VoiceFrequencySectionProps) -> Html {
         .map(|nc| nc.avg_casts_per_user)
         .unwrap_or(0.0);
 
-    let most_active_month = props
+    // Format most active month as "February" with zodiac sign
+    let (most_active_month, zodiac_sign) = props
         .temporal
         .monthly_distribution
         .iter()
         .max_by_key(|m| m.count)
-        .map(|m| m.month.clone())
-        .unwrap_or_else(|| "N/A".to_string());
+        .map(|m| {
+            // Parse YYYY-MM format
+            let parts: Vec<&str> = m.month.split('-').collect();
+            if parts.len() >= 2 {
+                let month_num: u32 = parts[1].parse().unwrap_or(1);
+                let month_name = match month_num {
+                    1 => "January",
+                    2 => "February",
+                    3 => "March",
+                    4 => "April",
+                    5 => "May",
+                    6 => "June",
+                    7 => "July",
+                    8 => "August",
+                    9 => "September",
+                    10 => "October",
+                    11 => "November",
+                    12 => "December",
+                    _ => "Unknown",
+                };
+                // Zodiac signs based on month
+                let zodiac = match month_num {
+                    1 => "♑", // Capricorn
+                    2 => "♒", // Aquarius
+                    3 => "♓", // Pisces
+                    4 => "♈", // Aries
+                    5 => "♉", // Taurus
+                    6 => "♊", // Gemini
+                    7 => "♋", // Cancer
+                    8 => "♌", // Leo
+                    9 => "♍", // Virgo
+                    10 => "♎", // Libra
+                    11 => "♏", // Scorpio
+                    12 => "♐", // Sagittarius
+                    _ => "",
+                };
+                (month_name.to_string(), zodiac.to_string())
+            } else {
+                ("N/A".to_string(), "".to_string())
+            }
+        })
+        .unwrap_or_else(|| ("N/A".to_string(), "".to_string()));
 
     let most_active_hour = props
         .temporal
@@ -357,7 +383,16 @@ pub fn VoiceFrequencySection(props: &VoiceFrequencySectionProps) -> Html {
                         border: 1px solid rgba(255, 255, 255, 0.2);
                     ">
                         <div style="font-size: 12px; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">{"Most Active Month"}</div>
-                        <div style="font-size: 20px; font-weight: 600; color: white;">{most_active_month}</div>
+                        <div style="font-size: 20px; font-weight: 600; color: white;">
+                            {most_active_month.clone()}
+                            {if !zodiac_sign.is_empty() {
+                                html! {
+                                    <span style="margin-left: 8px; font-size: 24px;">{zodiac_sign.clone()}</span>
+                                }
+                            } else {
+                                html! {}
+                            }}
+                        </div>
                 </div>
                     <div style="
                         background: rgba(255, 255, 255, 0.1);
@@ -647,60 +682,154 @@ pub fn TopInteractiveUsersSection(props: &TopInteractiveUsersSectionProps) -> Ht
             <h2 style="
                 font-size: 36px;
                 font-weight: 700;
-                margin: 0 0 32px 0;
+                margin: 0 0 48px 0;
                 color: white;
                 text-align: center;
             ">{"Top Interactive Users"}</h2>
             <div style="
                 display: flex;
-                flex-direction: column;
-                gap: 24px;
-                max-width: 800px;
+                flex-wrap: wrap;
+                justify-content: center;
+                align-items: center;
+                gap: 32px;
+                max-width: 900px;
                 margin: 0 auto;
                 width: 100%;
+                min-height: 300px;
+                position: relative;
             ">
                 {if !props.engagement.top_reactors.is_empty() {
                     html! {
-                        <div style="
-                            background: rgba(255, 255, 255, 0.1);
-                            backdrop-filter: blur(10px);
-                            -webkit-backdrop-filter: blur(10px);
-                            border-radius: 16px;
-                            padding: 24px;
-                            border: 1px solid rgba(255, 255, 255, 0.2);
-                        ">
-                            <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 16px;">{"Top 3 Most Interactive Users"}</div>
-                            <div style="display: flex; flex-direction: column; gap: 12px;">
-                                {for props.engagement.top_reactors.iter().take(3).map(|reactor| {
-                                    html! {
-                                        <div style="
-                                            display: flex;
-                                            justify-content: space-between;
-                                            align-items: center;
-                                            padding: 12px;
-                                            background: rgba(255, 255, 255, 0.05);
-                                            border-radius: 8px;
-                                        ">
-                                            <span style="
-                                                font-size: 16px;
-                                                font-weight: 500;
-                                                color: white;
-                                            ">
-                                                {reactor.display_name.as_ref()
-                                                    .or(reactor.username.as_ref())
-                                                    .map(|n| n.clone())
-                                                    .unwrap_or_else(|| format!("FID: {}", reactor.fid))}
-                                            </span>
-                                            <span style="
-                                                font-size: 14px;
-                                                color: rgba(255, 255, 255, 0.7);
-                                            ">{format!("{} times", reactor.interaction_count)}</span>
-                                        </div>
+                        <>
+                            {{
+                                // Sort reactors by interaction count and calculate sizes
+                                // Display all top reactors (up to 10)
+                                let mut reactors_with_sizes: Vec<_> = props.engagement.top_reactors.iter()
+                                    .map(|reactor| {
+                                        // Calculate bubble size based on interaction count
+                                        // Use a base size and scale based on count
+                                        let max_count = props.engagement.top_reactors.iter()
+                                            .map(|r| r.interaction_count)
+                                            .max()
+                                            .unwrap_or(1);
+                                        let min_size = 80.0;
+                                        let max_size = 140.0;
+                                        let size = if max_count > 0 {
+                                            min_size + (reactor.interaction_count as f32 / max_count as f32) * (max_size - min_size)
+                                        } else {
+                                            min_size
+                                        };
+                                        
+                                        // Generate random offsets for positioning
+                                        // Use FID as seed for consistent positioning
+                                        let seed = reactor.fid as u64;
+                                        let offset_x = ((seed * 7) % 100) as i32 - 50; // -50 to 50
+                                        let offset_y = ((seed * 13) % 100) as i32 - 50; // -50 to 50
+                                        
+                                        (reactor, size, offset_x, offset_y)
+                                    })
+                                    .collect();
+                                
+                                reactors_with_sizes.sort_by(|a, b| b.0.interaction_count.cmp(&a.0.interaction_count));
+                                
+                                html! {
+                                    <>
+                                        {for reactors_with_sizes.iter().enumerate().map(|(idx, (reactor, size, offset_x, offset_y))| {
+                                            let bubble_size = format!("{}px", *size as i32);
+                                            let avatar_url = reactor.pfp_url.as_ref().cloned();
+                                            let username = reactor.username.as_ref()
+                                                .or(reactor.display_name.as_ref())
+                                                .map(|n| n.clone())
+                                                .unwrap_or_else(|| format!("FID {}", reactor.fid));
+                                            
+                                            html! {
+                                                <div style={format!("
+                                                    position: relative;
+                                                    width: {};
+                                                    height: {};
+                                                    display: flex;
+                                                    flex-direction: column;
+                                                    align-items: center;
+                                                    justify-content: center;
+                                                    background: rgba(255, 255, 255, 0.15);
+                                                    backdrop-filter: blur(15px);
+                                                    -webkit-backdrop-filter: blur(15px);
+                                                    border-radius: 50%;
+                                                    border: 2px solid rgba(255, 255, 255, 0.3);
+                                                    padding: 16px;
+                                                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                                                    transform: translate({}px, {}px);
+                                                    animation: float 3s ease-in-out infinite;
+                                                    animation-delay: {}s;
+                                                ", bubble_size, bubble_size, offset_x, offset_y, idx as f32 * 0.3)}>
+                                                    <div style="
+                                                        width: 60%;
+                                                        height: 60%;
+                                                        border-radius: 50%;
+                                                        background: rgba(255, 255, 255, 0.2);
+                                                        display: flex;
+                                                        align-items: center;
+                                                        justify-content: center;
+                                                        margin-bottom: 8px;
+                                                        overflow: hidden;
+                                                    ">
+                                                        {if let Some(url) = avatar_url {
+                                                            html! {
+                                                                <img 
+                                                                    src={url}
+                                                                    alt=""
+                                                                    style="
+                                                                        width: 100%;
+                                                                        height: 100%;
+                                                                        object-fit: cover;
+                                                                    "
+                                                                />
+                                                            }
+                                                        } else {
+                                                            // Show loading state while fetching
+                                                            html! {
+                                                                <div style="
+                                                                    width: 100%;
+                                                                    height: 100%;
+                                                                    display: flex;
+                                                                    align-items: center;
+                                                                    justify-content: center;
+                                                                    background: rgba(255, 255, 255, 0.1);
+                                                                "></div>
+                                                            }
+                                                        }}
+                                                    </div>
+                                                    <div style="
+                                                        font-size: 12px;
+                                                        font-weight: 600;
+                                                        color: white;
+                                                        text-align: center;
+                                                        margin-top: 4px;
+                                                        text-overflow: ellipsis;
+                                                        overflow: hidden;
+                                                        white-space: nowrap;
+                                                        max-width: 100%;
+                                                    ">
+                                                        {username}
+                                                    </div>
+                                                </div>
+                                            }
+                                        })}
+                                    </>
+                                }
+                            }}
+                            <style>{"
+                                @keyframes float {
+                                    0%, 100% {
+                                        transform: translateY(0px);
                                     }
-                                })}
-                        </div>
-                    </div>
-                }
+                                    50% {
+                                        transform: translateY(-10px);
+                                    }
+                                }
+                            "}</style>
+                        </>
+                    }
                 } else {
                     html! {
                         <div style="
@@ -829,12 +958,12 @@ pub fn EngagementSection(props: &EngagementSectionProps) -> Html {
                 {if let Some(popular_cast) = &props.engagement.most_popular_cast {
                     html! {
                         <div style="
-                            background: rgba(255, 255, 255, 0.1);
+                            background: rgba(102, 126, 234, 0.2);
                             backdrop-filter: blur(10px);
                             -webkit-backdrop-filter: blur(10px);
                             border-radius: 16px;
                             padding: 24px;
-                            border: 1px solid rgba(255, 255, 255, 0.2);
+                            border: 1px solid rgba(118, 75, 162, 0.3);
                         ">
                             <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 12px;">{"Most Popular Cast"}</div>
                             <p style="
@@ -1737,6 +1866,565 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
                 } else {
                     html! {}
                 }}
+        </div>
+    }
+}
+
+// Personality Tag Section Component - Classifies user into one tag
+#[derive(Properties, PartialEq, Clone)]
+pub struct PersonalityTagSectionProps {
+    pub temporal: TemporalActivityResponse,
+    pub engagement: EngagementResponse,
+    pub content_style: ContentStyleResponse,
+    pub follower_growth: FollowerGrowthResponse,
+    pub casts_stats: CastsStatsResponse,
+}
+
+#[derive(Clone, PartialEq)]
+struct PersonalityTag {
+    name: String,
+    description: String,
+    image_path: String,
+    score: f32,
+}
+
+#[function_component]
+pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
+    let total_casts = props.temporal.total_casts.max(props.casts_stats.total_casts);
+    
+    // Calculate scores for each tag
+    let mut tags = Vec::new();
+    
+    // 1. Night Philosopher - Check late night activity (0-5 AM)
+    let late_night_activity: usize = props
+        .temporal
+        .hourly_distribution
+        .iter()
+        .filter(|h| h.hour >= 0 && h.hour < 6)
+        .map(|h| h.count)
+        .sum();
+    let late_night_ratio = if total_casts > 0 {
+        late_night_activity as f32 / total_casts as f32
+    } else {
+        0.0
+    };
+    tags.push(PersonalityTag {
+        name: "Night Philosopher".to_string(),
+        description: "Often shares deep thoughts in the early hours".to_string(),
+        image_path: "/imgs/Philosopher.png".to_string(),
+        score: late_night_ratio * 100.0,
+    });
+    
+    // 2. Meme Merchant - Check emoji usage
+    let total_emoji_count: usize = props.content_style.top_emojis.iter().map(|e| e.count).sum();
+    let emoji_ratio = if total_casts > 0 {
+        (total_emoji_count as f32 / total_casts as f32).min(1.0)
+    } else {
+        0.0
+    };
+    let emoji_diversity_score = (props.content_style.top_emojis.len() as f32 / 10.0).min(1.0) * 30.0;
+    tags.push(PersonalityTag {
+        name: "Meme Merchant".to_string(),
+        description: "High-frequency meme creator and sharer".to_string(),
+        image_path: "/imgs/meme.png".to_string(),
+        score: emoji_ratio * 70.0 + emoji_diversity_score,
+    });
+    
+    // 3. Alpha Curator - Check recast ratio
+    let recast_ratio = if total_casts > 0 {
+        (props.engagement.recasts_received as f32 / total_casts as f32).min(1.0)
+    } else {
+        0.0
+    };
+    tags.push(PersonalityTag {
+        name: "Alpha Curator".to_string(),
+        description: "Frequently shares quality content from others".to_string(),
+        image_path: "/imgs/alpha.png".to_string(),
+        score: recast_ratio * 100.0,
+    });
+    
+    // 4. Social Butterfly - Check interaction rate
+    let interaction_rate = if total_casts > 0 {
+        ((props.engagement.reactions_received + props.engagement.replies_received) as f32 / total_casts as f32).min(10.0)
+    } else {
+        0.0
+    };
+    tags.push(PersonalityTag {
+        name: "Social Butterfly".to_string(),
+        description: "Highly engaged with exceptional interaction rates".to_string(),
+        image_path: "/imgs/meme.png".to_string(), // Using meme.png as fallback, can be updated later
+        score: (interaction_rate / 10.0) * 100.0,
+    });
+    
+    // 5. Rising Star - Check follower growth
+    let growth_rate = if props.follower_growth.followers_at_start > 0 {
+        (props.follower_growth.net_growth as f32 / props.follower_growth.followers_at_start.max(1) as f32).min(5.0)
+    } else if props.follower_growth.net_growth > 0 {
+        1.0 // New user with growth
+    } else {
+        0.0
+    };
+    let absolute_growth_score = (props.follower_growth.net_growth as f32 / 200.0).min(1.0) * 50.0;
+    tags.push(PersonalityTag {
+        name: "Rising Star".to_string(),
+        description: "Rapidly growing with fast follower growth".to_string(),
+        image_path: "/imgs/newstar.png".to_string(),
+        score: (growth_rate / 5.0) * 50.0 + absolute_growth_score,
+    });
+    
+    // Find the tag with highest score
+    let matched_tag = tags.iter().max_by(|a, b| {
+        a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal)
+    }).cloned().unwrap_or_else(|| PersonalityTag {
+        name: "Active User".to_string(),
+        description: "An active member of the Farcaster community".to_string(),
+        image_path: "/imgs/meme.png".to_string(),
+        score: 0.0,
+    });
+
+    // Setup 3D card rotation effect using JavaScript injection
+    use_effect_with((), move |_| {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        
+        // Check if script already exists
+        if document.get_element_by_id("tarot-card-script").is_none() {
+            let script = document.create_element("script").unwrap();
+            script.set_id("tarot-card-script");
+            script.set_text_content(Some(r#"
+                (function() {
+                    function initTarotCard(cardElement) {
+                        if (cardElement.dataset.initialized === 'true') return;
+                        cardElement.dataset.initialized = 'true';
+                        
+                        const inner = cardElement.querySelector('.tarot-card-inner');
+                        if (!inner) return;
+                        
+                        let isDragging = false;
+                        let startX = 0;
+                        let startY = 0;
+                        let rotateX = 0;
+                        let rotateY = 0;
+                        
+                        const handleStart = (clientX, clientY) => {
+                            isDragging = true;
+                            startX = clientX;
+                            startY = clientY;
+                        };
+                        
+                        const handleMove = (clientX, clientY) => {
+                            if (!isDragging) return;
+                            const deltaX = clientX - startX;
+                            const deltaY = clientY - startY;
+                            rotateY = deltaX * 0.5;
+                            rotateX = -deltaY * 0.5;
+                            inner.style.transform = `rotateY(${rotateY}deg) rotateX(${rotateX}deg)`;
+                        };
+                        
+                        const handleEnd = () => {
+                            if (!isDragging) return;
+                            isDragging = false;
+                            const returnAnimation = () => {
+                                rotateY *= 0.9;
+                                rotateX *= 0.9;
+                                inner.style.transform = `rotateY(${rotateY}deg) rotateX(${rotateX}deg)`;
+                                if (Math.abs(rotateY) > 0.1 || Math.abs(rotateX) > 0.1) {
+                                    requestAnimationFrame(returnAnimation);
+                                } else {
+                                    rotateY = 0;
+                                    rotateX = 0;
+                                    inner.style.transform = 'rotateY(0deg) rotateX(0deg)';
+                                }
+                            };
+                            requestAnimationFrame(returnAnimation);
+                        };
+                        
+                        cardElement.addEventListener('mousedown', (e) => {
+                            e.preventDefault();
+                            handleStart(e.clientX, e.clientY);
+                        });
+                        
+                        const mousemoveHandler = (e) => {
+                            if (isDragging) handleMove(e.clientX, e.clientY);
+                        };
+                        document.addEventListener('mousemove', mousemoveHandler);
+                        
+                        document.addEventListener('mouseup', handleEnd);
+                        
+                        cardElement.addEventListener('touchstart', (e) => {
+                            e.preventDefault();
+                            if (e.touches.length > 0) {
+                                handleStart(e.touches[0].clientX, e.touches[0].clientY);
+                            }
+                        });
+                        
+                        cardElement.addEventListener('touchmove', (e) => {
+                            e.preventDefault();
+                            if (isDragging && e.touches.length > 0) {
+                                handleMove(e.touches[0].clientX, e.touches[0].clientY);
+                            }
+                        });
+                        
+                        cardElement.addEventListener('touchend', handleEnd);
+                    }
+                    
+                    // Initialize all tarot cards
+                    function initAllCards() {
+                        const cards = document.querySelectorAll('.tarot-card');
+                        cards.forEach(initTarotCard);
+                    }
+                    
+                    // Initialize when DOM is ready
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', initAllCards);
+                    } else {
+                        initAllCards();
+                    }
+                    
+                    // Also use MutationObserver to handle dynamically added cards
+                    const observer = new MutationObserver(initAllCards);
+                    observer.observe(document.body, { childList: true, subtree: true });
+                })();
+            "#));
+            document.head().unwrap().append_child(&script).ok();
+        }
+        
+        // Initialize cards after a short delay to ensure DOM is ready
+        let timeout_closure = Closure::<dyn FnMut()>::new(move || {
+            // Use JavaScript eval to initialize cards
+            let js_code = r#"
+                const cards = document.querySelectorAll('.tarot-card');
+                cards.forEach(card => {
+                    if (card.dataset.initialized === 'true') return;
+                    card.dataset.initialized = 'true';
+                    const inner = card.querySelector('.tarot-card-inner');
+                    if (!inner) return;
+                    let isDragging = false;
+                    let startX = 0, startY = 0;
+                    let currentRotateX = 0, currentRotateY = 0;
+                    let baseRotateY = 0;
+                    
+                    const handleStart = (x, y) => { 
+                        isDragging = true; 
+                        startX = x; 
+                        startY = y; 
+                    };
+                    
+                    const handleMove = (x, y) => {
+                        if (!isDragging) return;
+                        const deltaX = x - startX;
+                        const deltaY = y - startY;
+                        
+                        // Accumulate rotation for 360 degree rotation
+                        baseRotateY += deltaX * 0.5;
+                        currentRotateX = -deltaY * 0.5;
+                        
+                        // Normalize rotateY to 0-360 range (for continuous rotation)
+                        baseRotateY = ((baseRotateY % 360) + 360) % 360;
+                        
+                        inner.style.transform = `rotateY(${baseRotateY}deg) rotateX(${currentRotateX}deg)`;
+                    };
+                    
+                    const handleEnd = () => {
+                        if (!isDragging) return;
+                        isDragging = false;
+                        const animate = () => {
+                            currentRotateX *= 0.9;
+                            inner.style.transform = `rotateY(${baseRotateY}deg) rotateX(${currentRotateX}deg)`;
+                            if (Math.abs(currentRotateX) > 0.1) {
+                                requestAnimationFrame(animate);
+                            } else {
+                                currentRotateX = 0;
+                                inner.style.transform = `rotateY(${baseRotateY}deg) rotateX(0deg)`;
+                            }
+                        };
+                        requestAnimationFrame(animate);
+                    };
+                    
+                    card.addEventListener('mousedown', (e) => { 
+                        e.preventDefault(); 
+                        handleStart(e.clientX, e.clientY); 
+                    });
+                    document.addEventListener('mousemove', (e) => { 
+                        if (isDragging) handleMove(e.clientX, e.clientY); 
+                    });
+                    document.addEventListener('mouseup', handleEnd);
+                    card.addEventListener('touchstart', (e) => { 
+                        e.preventDefault(); 
+                        if (e.touches[0]) handleStart(e.touches[0].clientX, e.touches[0].clientY); 
+                    });
+                    card.addEventListener('touchmove', (e) => { 
+                        e.preventDefault(); 
+                        if (isDragging && e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY); 
+                    });
+                    card.addEventListener('touchend', handleEnd);
+                });
+            "#;
+            let _ = js_sys::eval(js_code);
+        });
+        window.set_timeout_with_callback_and_timeout_and_arguments_0(
+            timeout_closure.as_ref().unchecked_ref::<js_sys::Function>(),
+            200
+        );
+        timeout_closure.forget();
+        
+        || ()
+    });
+
+    html! {
+        <div class="report-card-content" style="
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            box-sizing: border-box;
+        ">
+            <div style="
+                text-align: center;
+                width: 100%;
+                max-width: 600px;
+            ">
+                <div 
+                    class="tarot-card"
+                    style="
+                        width: 280px;
+                        height: 400px;
+                        margin: 0 auto 32px;
+                        perspective: 1000px;
+                        cursor: pointer;
+                    "
+                >
+                    <div 
+                        class="tarot-card-inner"
+                        style="
+                            position: relative;
+                            width: 100%;
+                            height: 100%;
+                            transform-style: preserve-3d;
+                            transition: transform 0.1s ease-out;
+                        "
+                    >
+                        <div
+                            class="tarot-card-front"
+                            style="
+                                position: absolute;
+                                width: 100%;
+                                height: 100%;
+                                backface-visibility: hidden;
+                                -webkit-backface-visibility: hidden;
+                                transform: rotateY(0deg);
+                            "
+                        >
+                            <img 
+                                src={matched_tag.image_path.clone()}
+                                alt={matched_tag.name.clone()}
+                                style="
+                                    width: 100%;
+                                    height: 100%;
+                                    object-fit: cover;
+                                    border-radius: 16px;
+                                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+                                    border: 3px solid rgba(255, 255, 255, 0.3);
+                                "
+                            />
+                        </div>
+                        <div
+                            class="tarot-card-back"
+                            style="
+                                position: absolute;
+                                width: 100%;
+                                height: 100%;
+                                backface-visibility: hidden;
+                                -webkit-backface-visibility: hidden;
+                                transform: rotateY(180deg);
+                                border-radius: 16px;
+                                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+                                background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000);
+                                background-size: 200% 100%;
+                                animation: rainbow-border-animation 3s linear infinite;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                padding: 2px;
+                                box-sizing: border-box;
+                            "
+                        >
+                            <div style="
+                                position: relative;
+                                width: 100%;
+                                height: 100%;
+                                border-radius: 14px;
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                padding: 40px;
+                                box-sizing: border-box;
+                            ">
+                                <img 
+                                    src="/imgs/polyjuice.png"
+                                    alt="Polyjuice"
+                                    class="embossed-logo"
+                                    style="
+                                        width: 100%;
+                                        height: auto;
+                                        max-width: 200px;
+                                        object-fit: contain;
+                                        filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.6)) drop-shadow(-1px -1px 2px rgba(255, 255, 255, 0.4)) brightness(1.1) contrast(1.2);
+                                        opacity: 0.95;
+                                    "
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h2 style="
+                    font-size: 36px;
+                    font-weight: 700;
+                    color: white;
+                    margin: 0 0 16px 0;
+                    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+                ">{matched_tag.name.clone()}</h2>
+                
+                <p style="
+                    font-size: 18px;
+                    color: rgba(255, 255, 255, 0.9);
+                    margin: 0 0 40px 0;
+                    line-height: 1.6;
+                ">{matched_tag.description.clone()}</p>
+
+                <div style="
+                    background: rgba(255, 255, 255, 0.1);
+                    backdrop-filter: blur(10px);
+                    -webkit-backdrop-filter: blur(10px);
+                    border-radius: 16px;
+                    padding: 24px;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    margin-top: 20px;
+                ">
+                    <p style="
+                        font-size: 14px;
+                        color: rgba(255, 255, 255, 0.7);
+                        margin: 0;
+                        line-height: 1.5;
+                    ">{"This tag is based on your activity patterns, engagement style, and growth metrics throughout the year."}</p>
+                </div>
+            </div>
+            <style>{r#"
+                .tarot-card {
+                    touch-action: none;
+                }
+                
+                .tarot-card-inner {
+                    will-change: transform;
+                }
+                
+                @media (hover: hover) {
+                    .tarot-card:hover .tarot-card-inner {
+                        transform: rotateY(5deg) rotateX(5deg);
+                    }
+                }
+                
+                @keyframes rainbow-border-animation {
+                    0% {
+                        background-position: 0% 50%;
+                    }
+                    100% {
+                        background-position: 200% 50%;
+                    }
+                }
+            "#}</style>
+            <script>{r#"
+                (function() {
+                    const cards = document.querySelectorAll('.tarot-card');
+                    cards.forEach(card => {
+                        const inner = card.querySelector('.tarot-card-inner');
+                        let isDragging = false;
+                        let startX = 0;
+                        let startY = 0;
+                        let currentX = 0;
+                        let currentY = 0;
+                        let rotateX = 0;
+                        let rotateY = 0;
+                        
+                        const handleStart = (clientX, clientY) => {
+                            isDragging = true;
+                            startX = clientX;
+                            startY = clientY;
+                        };
+                        
+                        const handleMove = (clientX, clientY) => {
+                            if (!isDragging) return;
+                            
+                            const deltaX = clientX - startX;
+                            const deltaY = clientY - startY;
+                            
+                            rotateY = deltaX * 0.5;
+                            rotateX = -deltaY * 0.5;
+                            
+                            inner.style.transform = `rotateY(${rotateY}deg) rotateX(${rotateX}deg)`;
+                        };
+                        
+                        const handleEnd = () => {
+                            if (!isDragging) return;
+                            isDragging = false;
+                            
+                            // Smooth return to center
+                            const returnAnimation = () => {
+                                rotateY *= 0.9;
+                                rotateX *= 0.9;
+                                inner.style.transform = `rotateY(${rotateY}deg) rotateX(${rotateX}deg)`;
+                                
+                                if (Math.abs(rotateY) > 0.1 || Math.abs(rotateX) > 0.1) {
+                                    requestAnimationFrame(returnAnimation);
+                                } else {
+                                    rotateY = 0;
+                                    rotateX = 0;
+                                    inner.style.transform = 'rotateY(0deg) rotateX(0deg)';
+                                }
+                            };
+                            requestAnimationFrame(returnAnimation);
+                        };
+                        
+                        // Mouse events
+                        card.addEventListener('mousedown', (e) => {
+                            e.preventDefault();
+                            handleStart(e.clientX, e.clientY);
+                        });
+                        
+                        document.addEventListener('mousemove', (e) => {
+                            if (isDragging) handleMove(e.clientX, e.clientY);
+                        });
+                        
+                        document.addEventListener('mouseup', () => {
+                            handleEnd();
+                        });
+                        
+                        // Touch events
+                        card.addEventListener('touchstart', (e) => {
+                            e.preventDefault();
+                            const touch = e.touches[0];
+                            handleStart(touch.clientX, touch.clientY);
+                        });
+                        
+                        card.addEventListener('touchmove', (e) => {
+                            e.preventDefault();
+                            if (isDragging && e.touches.length > 0) {
+                                const touch = e.touches[0];
+                                handleMove(touch.clientX, touch.clientY);
+                            }
+                        });
+                        
+                        card.addEventListener('touchend', () => {
+                            handleEnd();
+                        });
+                    });
+                })();
+            "#}</script>
         </div>
     }
 }

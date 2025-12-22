@@ -24,9 +24,10 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
     let profile = use_state(|| None::<ProfileWithRegistration>);
     let casts_stats = use_state(|| None::<CastsStatsResponse>);
     let engagement_2024 = use_state(|| None::<EngagementResponse>);
-    let is_loading = use_state(|| false); // Don't show loading initially
+    let is_loading = use_state(|| false); // Track if data is still loading
     let show_intro = use_state(|| true); // Show intro screen initially
-    let show_loading = use_state(|| false); // Only show loading after clicking begin
+    let has_clicked_begin = use_state(|| false); // Track if user clicked begin
+    let data_loading_complete = use_state(|| false); // Track if data loading is complete
     let _error = use_state(|| None::<String>);
     let loading_status = use_state(|| "Loading annual report...".to_string());
     let current_page = use_state(|| 0);
@@ -43,7 +44,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
         let casts_stats = casts_stats.clone();
         let engagement_2024 = engagement_2024.clone();
         let is_loading = is_loading.clone();
-        let show_intro = show_intro.clone();
+        let data_loading_complete = data_loading_complete.clone();
         let loading_status = loading_status.clone();
         let api_url_clone = api_url.clone();
         let wallet_account_clone = wallet_account.clone();
@@ -56,7 +57,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
             let casts_stats = casts_stats.clone();
             let _engagement_2024 = engagement_2024.clone();
             let is_loading = is_loading.clone();
-            let show_intro = show_intro.clone();
+            let data_loading_complete = data_loading_complete.clone();
             let loading_status = loading_status.clone();
             let api_url_clone = api_url_clone.clone();
             let wallet_account_clone = wallet_account_clone.clone();
@@ -65,6 +66,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
 
             // Start loading data in background (don't show loading UI yet)
             web_sys::console::log_1(&"🚀 Starting annual report data loading in background...".into());
+            is_loading.set(true); // Mark as loading
 
             spawn_local(async move {
                 // Load annual report using unified endpoint
@@ -152,7 +154,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 
                                 web_sys::console::log_1(&"✅ All data loading completed".into());
                                 is_loading.set(false);
-                                show_intro.set(false); // Hide intro if data is ready
+                                data_loading_complete.set(true); // Mark data loading as complete
                                 loading_status.set("Complete!".to_string());
                                 
                                 // Setup scroll listener after data is loaded
@@ -199,7 +201,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                            web_sys::console::error_1(&error_msg.clone().into());
                            web_sys::console::error_1(&format!("📦 Raw API response: {}", serde_json::to_string(&api_data_for_error).unwrap_or_else(|_| "Failed to serialize".to_string())).into());
                            is_loading.set(false);
-                           show_intro.set(false); // Hide intro on error
+                           data_loading_complete.set(true); // Mark as complete even on error
                            loading_status.set(format!("Failed to parse annual report: {}", parse_err));
                             }
                         }
@@ -209,7 +211,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                             &format!("❌ Failed to load annual report: {}", e).into(),
                         );
                         is_loading.set(false);
-                        show_intro.set(false); // Hide intro on error
+                        data_loading_complete.set(true); // Mark as complete even on error
                         loading_status.set("Failed to load annual report".to_string());
                     }
                 }
@@ -221,7 +223,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
 
     // Calculate total number of cards
     let total_cards = if annual_report.is_some() && profile.is_some() {
-        12 // Cover + 11 sections (Identity, Voice Frequency, Engagement, Engagement Quality, Activity Distribution, Top Interactive Users, Growth Trend, Style, Content Themes, Highlights, CTA)
+        13 // Cover + 12 sections (Identity, Voice Frequency, Engagement, Engagement Quality, Activity Distribution, Top Interactive Users, Growth Trend, Style, Content Themes, Highlights, CTA, Personality Tag)
     } else {
         0
     };
@@ -263,7 +265,96 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
             e.prevent_default();
         })}
         >
-                if *is_loading {
+                // Show intro screen first
+                if *show_intro {
+                    <>
+                        // Fixed background image at bottom
+                        <img 
+                            src="/imgs/report-bg-0.png"
+                            alt=""
+                            style="
+                                position: fixed;
+                                bottom: 0;
+                                left: 0;
+                                width: 100vw;
+                                height: auto;
+                                z-index: 0;
+                                pointer-events: none;
+                                object-fit: contain;
+                                object-position: bottom center;
+                            "
+                        />
+                        <div style="
+                            position: fixed;
+                            top: 0;
+                            left: 0;
+                            width: 100%;
+                            height: 100vh;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: center;
+                            z-index: 1000;
+                        ">
+                        <div style="
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            gap: 32px;
+                            text-align: center;
+                            padding: 40px;
+                        ">
+                            <h1 style="
+                                font-size: 32px;
+                                font-weight: 700;
+                                color: white;
+                                margin: 0;
+                                text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+                                white-space: nowrap;
+                                overflow: hidden;
+                                text-overflow: ellipsis;
+                            ">{"Your year with Base"}</h1>
+                            <button
+                                onclick={Callback::from({
+                                    let show_intro = show_intro.clone();
+                                    let has_clicked_begin = has_clicked_begin.clone();
+                                    move |_| {
+                                        has_clicked_begin.set(true);
+                                        // Hide intro - loading or content will be shown based on data state
+                                        show_intro.set(false);
+                                    }
+                                })}
+                                style="
+                                    padding: 16px 48px;
+                                    font-size: 18px;
+                                    font-weight: 600;
+                                    color: white;
+                                    background: rgba(102, 126, 234, 0.3);
+                                    backdrop-filter: blur(10px);
+                                    -webkit-backdrop-filter: blur(10px);
+                                    border: 2px solid rgba(118, 75, 162, 0.4);
+                                    border-radius: 30px;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                    text-transform: none;
+                                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+                                "
+                                class="begin-button"
+                            >
+                                {"lets begin"}
+                            </button>
+                        </div>
+                        <style>{"
+                            .begin-button:hover {
+                                background: rgba(102, 126, 234, 0.4) !important;
+                                border-color: rgba(118, 75, 162, 0.6) !important;
+                                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3) !important;
+                                transform: scale(1.05);
+                            }
+                        "}</style>
+                        </div>
+                    </>
+                } else if *is_loading && *has_clicked_begin {
                 <div style="
                     position: fixed;
                     top: 0;
@@ -363,7 +454,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                         }
                     "}</style>
                 </div>
-            } else {
+                } else {
                 <>
                     // Show error if annual report failed to load
                     {if annual_report.is_none() {
@@ -378,17 +469,17 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                             <>
                                 // Fixed background image at bottom
                                 <img 
-                                    src="/imgs/report-background.png"
+                                    src="/imgs/report-bg.png"
                                     alt=""
                                     style="
                                         position: fixed;
                                         bottom: 0;
                                         left: 0;
                                         width: 100vw;
-                                        height: auto;
+                                        height: 100vh;
                                         z-index: 0;
                                         pointer-events: none;
-                                        object-fit: contain;
+                                        object-fit: cover;
                                         object-position: bottom center;
                                     "
                                 />
@@ -615,7 +706,37 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                         html! {}
                                     }}
 
-                                    // Section 6: 2025 Call to Action Card
+                                    // Section 6: Personality Tag Card (Second to Last)
+                                    {if let (Some(temporal), Some(engagement), Some(style), Some(followers)) = (
+                            annual_report.as_ref().map(|r| &r.temporal_activity),
+                            annual_report.as_ref().map(|r| &r.engagement),
+                            annual_report.as_ref().map(|r| &r.content_style),
+                            annual_report.as_ref().map(|r| &r.follower_growth),
+                        ) {
+                                        let casts = casts_stats.as_ref().cloned().unwrap_or_else(|| CastsStatsResponse {
+                                            total_casts: 0,
+                                            date_distribution: Vec::new(),
+                                            date_range: None,
+                                            language_distribution: std::collections::HashMap::new(),
+                                            top_nouns: Vec::new(),
+                                            top_verbs: Vec::new(),
+                                        });
+                                        html! {
+                                            <ReportCard>
+                                                <PersonalityTagSection
+                                                    temporal={temporal.clone()}
+                                                    engagement={engagement.clone()}
+                                                    content_style={style.clone()}
+                                                    follower_growth={followers.clone()}
+                                                    casts_stats={casts}
+                                                />
+                                            </ReportCard>
+                                        }
+                                    } else {
+                                        html! {}
+                                    }}
+
+                                    // Section 7: 2025 Call to Action Card (Last Page)
                                     <ReportCard with_padding_top={false}>
                                         <CallToActionSection
                                             profile={(*profile).clone()}

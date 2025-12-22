@@ -11,11 +11,7 @@ pub struct ReportCardProps {
 
 #[function_component]
 pub fn ReportCard(props: &ReportCardProps) -> Html {
-    let padding_style = if props.with_padding_top {
-        "padding-top: 60px;"
-    } else {
-        ""
-    };
+    let padding_style = ""; // No padding-top to keep content flush with headers
 
     html! {
         <div class="annual-report-card" style={format!("
