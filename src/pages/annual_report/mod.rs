@@ -1,5 +1,7 @@
 pub mod utils;
 pub mod components;
+pub mod sections;
+pub mod page;
 
 use yew::prelude::*;
 use crate::wallet::WalletAccount;
@@ -11,6 +13,6 @@ pub struct AnnualReportPageProps {
     pub wallet_account: Option<WalletAccount>,
 }
 
-pub use utils::*;
 pub use components::*;
+pub use page::AnnualReportPage;
 
