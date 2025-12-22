@@ -80,26 +80,43 @@ pub async fn fetch_casts_stats(
     }
 
     // Extract data from response
-    let data = api_response
+    let outer_data = api_response
         .data
         .ok_or_else(|| "No data in response".to_string())?;
 
-    // Check if it's a pending job
-    if let Some(status) = data.get("status") {
+    // Handle nested structure: data.data contains the actual stats
+    // The response structure is: { "data": { "data": {...}, "status": "...", "message": "..." } }
+    let data = if let Some(inner_data) = outer_data.get("data") {
+        // If data.data exists, use it; otherwise use data directly
+        inner_data.clone()
+    } else {
+        outer_data.clone()
+    };
+
+    // Check if it's a pending job (check outer data for status)
+    if let Some(status) = outer_data.get("status") {
         if let Some(status_str) = status.as_str() {
             if status_str == "pending" || status_str == "processing" {
-                let message = data
+                let message = outer_data
                     .get("message")
                     .and_then(|m| m.as_str())
                     .unwrap_or("Processing...");
                 return Err(format!("Job {}: {}", status_str, message));
+            }
+            if status_str == "updating" {
+                web_sys::console::log_1(&"🔄 Casts stats are updating, using cached data".into());
+                // Continue with cached data
             }
         }
     }
 
     // Parse as CastsStatsResponse
     let response: crate::models::CastsStatsResponse = serde_json::from_value(data)
-        .map_err(|e| format!("Failed to parse CastsStatsResponse: {}", e))?;
+        .map_err(|e| {
+            let error_msg = format!("Failed to parse CastsStatsResponse: {}", e);
+            web_sys::console::warn_1(&error_msg.clone().into());
+            error_msg
+        })?;
 
     // Convert date_distribution to daily_stats with timestamps
     let daily_stats = response

@@ -2,6 +2,9 @@
 target = "index.html"
 dist = "dist"
 public_url = "/"
+# Disable subresource integrity in development to avoid cache issues
+# Set TRUNK_BUILD_NO_SRI=1 environment variable to disable SRI
+# Or use: TRUNK_BUILD_NO_SRI=1 trunk build
 
 [watch]
 watch = ["src"]

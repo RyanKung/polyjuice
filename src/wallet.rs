@@ -1455,12 +1455,16 @@ pub async fn get_profile_for_address(
             Ok(api_response) => {
                 if api_response.success {
                     if let Some(data) = api_response.data {
-                        // The API returns data in nested structure: data.data
-                        if let Some(inner_data) = data.get("data") {
+                        // Try to parse profile data
+                        // First, check if data is nested (data.data), otherwise use data directly
+                        let profile_data = if let Some(inner_data) = data.get("data") {
+                            inner_data.clone()
+                        } else {
+                            data
+                        };
+
                             // Try to parse as ProfileData
-                            match serde_json::from_value::<crate::models::ProfileData>(
-                                inner_data.clone(),
-                            ) {
+                        match serde_json::from_value::<crate::models::ProfileData>(profile_data) {
                                 Ok(profile) => {
                                     web_sys::console::log_1(
                                         &format!(
@@ -1475,7 +1479,6 @@ pub async fn get_profile_for_address(
                                     web_sys::console::log_1(
                                         &format!("⚠️ Failed to parse profile data: {}", e).into(),
                                     );
-                                }
                             }
                         }
                     }

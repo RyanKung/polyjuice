@@ -4,15 +4,15 @@
 .PHONY: all
 all: serve
 
-# Build WalletConnect bundle
-.PHONY: build-walletconnect
-build-walletconnect:
-	@echo "Building WalletConnect bundle..."
-	npm run build:walletconnect
+# Build Farcaster SDK bundle
+.PHONY: build-farcaster
+build-farcaster:
+	@echo "Building Farcaster SDK bundle..."
+	npm run build:farcaster
 
 # Build the project
 .PHONY: build
-build: build-walletconnect
+build: build-farcaster
 	@echo "Building WebAssembly application..."
 	cargo build --target wasm32-unknown-unknown
 
@@ -25,7 +25,7 @@ clean:
 
 # Serve the application with Trunk (with watch mode)
 .PHONY: serve
-serve: build-walletconnect
+serve: build-farcaster
 	@echo "Starting Trunk development server with watch mode..."
 	@echo "Server will be available at: http://127.0.0.1:8080"
 	@echo "Changes to files will automatically trigger rebuild"
@@ -35,17 +35,17 @@ serve: build-walletconnect
 		echo "🌐 Loading configuration from .env file..."; \
 		export $$(grep -v '^#' .env | grep -v '^$$' | xargs) && echo "📡 API Server: $$SNAPRAG_API_URL"; \
 		echo ""; \
-		export $$(grep -v '^#' .env | grep -v '^$$' | xargs) && unset NO_COLOR && trunk serve --port 8080 --address 127.0.0.1 --disable-address-lookup --watch .; \
+		export $$(grep -v '^#' .env | grep -v '^$$' | xargs) && unset NO_COLOR && TRUNK_BUILD_NO_SRI=true trunk serve --port 8080 --address 127.0.0.1 --disable-address-lookup --watch .; \
 	else \
 		echo "⚠️  Warning: .env file not found. Using default API URL: https://snaprag.0xbase.ai"; \
 		echo "💡 Tip: Copy .env.example to .env and configure your API URL"; \
 		echo ""; \
-		unset NO_COLOR && trunk serve --port 8080 --address 127.0.0.1 --disable-address-lookup --watch .; \
+		unset NO_COLOR && TRUNK_BUILD_NO_SRI=true trunk serve --port 8080 --address 127.0.0.1 --disable-address-lookup --watch .; \
 	fi
 
 # Build for production
 .PHONY: build-prod
-build-prod: build-walletconnect
+build-prod: build-farcaster
 	@echo "Building for production..."
 	@if [ -f .env ]; then \
 		export $$(grep -v '^#' .env | grep -v '^$$' | xargs) && echo "API URL: $$SNAPRAG_API_URL"; \
@@ -57,10 +57,11 @@ build-prod: build-walletconnect
 	else \
 		unset NO_COLOR && trunk build --release; \
 	fi
+	@echo "✅ Production build complete. Integrity checks are enabled for security."
 
 # Build for production deployment (uses snaprag.0xbase.ai)
 .PHONY: build-deploy
-build-deploy: build-walletconnect
+build-deploy: build-farcaster
 	@echo "Building for production deployment..."
 	@echo "Using API URL: https://snaprag.0xbase.ai/"
 	SNAPRAG_API_URL=https://snaprag.0xbase.ai/ unset NO_COLOR && trunk build --release

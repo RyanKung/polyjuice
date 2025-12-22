@@ -4,14 +4,14 @@ use yew::prelude::*;
 use crate::dashboard::Dashboard;
 use crate::farcaster;
 use crate::models::ProfileData;
-use crate::services::create_profile_endpoint;
-use crate::services::make_request_with_payment;
+use crate::services::{create_profile_endpoint, make_request_with_payment};
 use crate::wallet::WalletAccount;
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct ProfilePageProps {
     pub wallet_account: Option<WalletAccount>,
     pub api_url: String,
+    pub on_show_annual_report: Option<Callback<i64>>,
 }
 
 /// Profile page component (shows current user's profile in Farcaster environment or from wallet)
@@ -55,6 +55,7 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
         use_effect_with(wallet_account.clone(), move |account| {
             if let Some(account) = account {
                 if account.is_connected {
+                    // Try to fetch profile if we have FID or address
                     if let Some(fid) = account.fid {
                         // Check if we already have this profile loaded
                         let should_fetch = wallet_profile
@@ -90,6 +91,40 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                     Err(e) => {
                                         web_sys::console::warn_1(
                                             &format!("⚠️ Failed to fetch wallet profile: {}", e)
+                                                .into(),
+                                        );
+                                        is_loading_wallet_profile_clone.set(false);
+                                    }
+                                }
+                            });
+                        }
+                    } else if let Some(address) = &account.address {
+                        // No FID yet, try to fetch profile by address
+                        let should_fetch = wallet_profile.is_none();
+
+                        if should_fetch && !*is_loading_wallet_profile {
+                            is_loading_wallet_profile.set(true);
+                            let api_url_clone = api_url.clone();
+                            let wallet_profile_clone = wallet_profile.clone();
+                            let is_loading_wallet_profile_clone = is_loading_wallet_profile.clone();
+                            let address_clone = address.clone();
+
+                            spawn_local(async move {
+                                match crate::wallet::get_profile_for_address(
+                                    &api_url_clone,
+                                    &address_clone,
+                                )
+                                .await
+                                {
+                                    Ok(profile) => {
+                                        if let Some(profile) = profile {
+                                            wallet_profile_clone.set(Some(profile));
+                                        }
+                                        is_loading_wallet_profile_clone.set(false);
+                                    }
+                                    Err(e) => {
+                                        web_sys::console::warn_1(
+                                            &format!("⚠️ Failed to fetch profile by address: {}", e)
                                                 .into(),
                                         );
                                         is_loading_wallet_profile_clone.set(false);
@@ -135,6 +170,20 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                 </div>
                             </div>
 
+                            // Annual Report Button
+                            if let Some(fid) = user.fid {
+                                if let Some(on_show) = &props.on_show_annual_report {
+                                    <div class="annual-report-button-container">
+                                        <button
+                                            class="annual-report-button"
+                                            onclick={on_show.clone().reform(move |_| fid)}
+                                        >
+                                            {"🎉 View 2025 Annual Report"}
+                                        </button>
+                                    </div>
+                                }
+                            }
+
                             // Dashboard component
                             if let Some(fid) = user.fid {
                                 <Dashboard
@@ -169,6 +218,23 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                             </div>
                         </div>
 
+                        // Annual Report Button
+                        {if let Some(on_show) = &props.on_show_annual_report {
+                            let profile_fid = profile.fid;
+                            html! {
+                                <div class="annual-report-button-container">
+                                    <button
+                                        class="annual-report-button"
+                                        onclick={on_show.clone().reform(move |_| profile_fid)}
+                                    >
+                                        {"🎉 View 2025 Annual Report"}
+                                    </button>
+                                </div>
+                            }
+                        } else {
+                            html! {}
+                        }}
+
                         // Dashboard component
                         <Dashboard
                             fid={profile.fid}
@@ -187,46 +253,3 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
     }
 }
 
-/// About page component
-#[function_component]
-pub fn AboutPage() -> Html {
-    html! {
-        <div class="about-page">
-            <div class="about-page-content">
-                <div class="about-header">
-                    <div class="logo-image">
-                        <img src="/logo.png" alt="Polyjuice Logo" />
-                    </div>
-                    <h1>{"polyjuice"}</h1>
-                    <p class="tagline">{"Discover & Chat with Farcaster Users"}</p>
-                </div>
-
-                <div class="about-section">
-                    <h2>{"About"}</h2>
-                    <p>{"Polyjuice is a powerful tool for discovering and interacting with Farcaster users. Search for users by FID or username, view their profiles, and chat with them using AI-powered conversations."}</p>
-                </div>
-
-                <div class="about-section">
-                    <h2>{"Features"}</h2>
-                    <ul class="about-features">
-                        <li>{"🔍 Search Farcaster users by FID or username"}</li>
-                        <li>{"👤 View detailed user profiles and analytics"}</li>
-                        <li>{"💬 Chat with users using AI"}</li>
-                        <li>{"📊 MBTI personality analysis"}</li>
-                        <li>{"🌐 Social network insights"}</li>
-                    </ul>
-                </div>
-
-                <div class="about-section">
-                    <h2>{"Built With"}</h2>
-                    <ul class="about-tech">
-                        <li>{"Rust + WebAssembly"}</li>
-                        <li>{"Yew Framework"}</li>
-                        <li>{"Farcaster Mini App SDK"}</li>
-                        <li>{"EIP-1193 & EIP-6963"}</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    }
-}

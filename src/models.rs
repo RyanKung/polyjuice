@@ -197,12 +197,18 @@ pub struct EndpointData {
 // Casts Stats Structures - API Response format
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CastsStatsResponse {
-    pub date_distribution: Vec<DateDistribution>,
-    pub date_range: DateRange,
-    pub language_distribution: std::collections::HashMap<String, usize>,
-    pub top_nouns: Vec<TopWord>,
-    pub top_verbs: Vec<TopWord>,
+    #[serde(default)]
     pub total_casts: usize,
+    #[serde(default)]
+    pub date_distribution: Vec<DateDistribution>,
+    #[serde(default)]
+    pub date_range: Option<DateRange>,
+    #[serde(default)]
+    pub language_distribution: std::collections::HashMap<String, usize>,
+    #[serde(default)]
+    pub top_nouns: Vec<TopWord>,
+    #[serde(default)]
+    pub top_verbs: Vec<TopWord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -238,4 +244,167 @@ pub struct DailyCastStat {
     pub date: String, // Format: YYYY-MM-DD
     pub count: usize,
     pub timestamp: i64, // Unix timestamp for that day
+}
+
+// Annual Report Structures
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AnnualReportResponse {
+    pub fid: i64,
+    pub username: Option<String>,
+    pub display_name: Option<String>,
+    pub year: i32,
+    pub engagement: EngagementResponse,
+    pub temporal_activity: TemporalActivityResponse,
+    pub content_style: ContentStyleResponse,
+    pub follower_growth: FollowerGrowthResponse,
+    pub domain_status: DomainStatusResponse,
+    pub network_comparison: Option<NetworkComparison>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EngagementResponse {
+    pub reactions_received: usize,
+    pub recasts_received: usize,
+    pub replies_received: usize,
+    pub total_engagement: usize,
+    pub most_popular_cast: Option<PopularCast>,
+    pub top_reactors: Vec<TopReactor>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PopularCast {
+    pub message_hash: String,
+    pub text: String,
+    pub reactions: usize,
+    pub recasts: usize,
+    pub replies: usize,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TopReactor {
+    pub fid: i64,
+    pub username: Option<String>,
+    pub display_name: Option<String>,
+    pub interaction_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TemporalActivityResponse {
+    #[serde(default)]
+    pub total_casts: usize,
+    #[serde(default)]
+    pub total_casts_in_year: Option<usize>,
+    pub hourly_distribution: Vec<HourlyDistribution>,
+    pub monthly_distribution: Vec<MonthlyDistribution>,
+    pub most_active_hour: Option<i32>,
+    pub most_active_month: Option<String>,
+    pub first_cast: Option<CastInfo>,
+    pub last_cast: Option<CastInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HourlyDistribution {
+    pub hour: i32,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MonthlyDistribution {
+    pub month: String, // Format: YYYY-MM
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CastInfo {
+    pub message_hash: String,
+    pub text: String,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ContentStyleResponse {
+    pub top_emojis: Vec<EmojiFrequency>,
+    pub top_words: Vec<WordFrequency>,
+    #[serde(default)]
+    pub avg_cast_length: f32,
+    #[serde(default)]
+    pub total_characters: usize,
+    #[serde(default)]
+    pub frames_used: usize,
+    #[serde(default)]
+    pub frames_created: usize,
+    #[serde(default)]
+    pub channels_created: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EmojiFrequency {
+    pub emoji: String,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FollowerGrowthResponse {
+    pub current_followers: usize,
+    pub current_following: usize,
+    pub followers_at_start: usize,
+    pub following_at_start: usize,
+    pub net_growth: i64,
+    pub monthly_snapshots: Vec<MonthlySnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MonthlySnapshot {
+    pub month: String, // Format: YYYY-MM
+    pub followers: usize,
+    pub following: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DomainStatusResponse {
+    pub has_ens: bool,
+    pub ens_name: Option<String>,
+    pub has_farcaster_name: bool,
+    pub farcaster_name: Option<String>,
+    pub username_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NetworkComparison {
+    pub avg_casts_per_user: f32,
+    pub avg_reactions_per_user: f32,
+    pub avg_followers_per_user: f32,
+    pub total_active_users: usize,
+    pub percentiles: Option<Percentiles>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Percentiles {
+    pub casts: Option<PercentileData>,
+    pub reactions: Option<PercentileData>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PercentileData {
+    pub p50: usize,
+    pub p75: usize,
+    pub p90: usize,
+}
+
+// Profile with registered_at for annual report
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ProfileWithRegistration {
+    pub fid: i64,
+    pub username: Option<String>,
+    pub display_name: Option<String>,
+    pub bio: Option<String>,
+    pub pfp_url: Option<String>,
+    pub location: Option<String>,
+    pub twitter_username: Option<String>,
+    pub github_username: Option<String>,
+    pub registered_at: Option<i64>,
+    pub total_casts: Option<usize>,
+    pub total_reactions: Option<usize>,
+    pub total_links: Option<usize>,
 }

@@ -66,6 +66,8 @@ fn App() -> Html {
     let is_chat_loading = use_state(|| false);
     let chat_error = use_state(|| None::<String>);
     let current_view = use_state(|| "profile".to_string()); // "profile" or "chat"
+    let show_annual_report = use_state(|| false); // Whether to show annual report
+    let annual_report_fid = use_state(|| None::<i64>); // FID for annual report
 
     // Endpoint state management
     let endpoint_data = use_state(|| None::<EndpointData>);
@@ -591,7 +593,22 @@ fn App() -> Html {
     };
 
     // Determine left action button based on current page state
-    let left_action = if (*search_query).is_some() {
+    let left_action = if *show_annual_report {
+        // Annual report page - show back button
+        Some(html! {
+            <button class="back-button" onclick={Callback::from({
+                let show_annual_report = show_annual_report.clone();
+                let on_smart_back = on_smart_back.clone();
+                move |_| {
+                    // Close annual report and return to home page
+                    show_annual_report.set(false);
+                    on_smart_back.emit(());
+                }
+            })} style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: white;">
+                {"←"}
+            </button>
+        })
+    } else if (*search_query).is_some() {
         // Results page - show back button
         Some(html! {
             <button class="back-button" onclick={on_smart_back.clone().reform(|_| ())} style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: white;">
@@ -702,11 +719,37 @@ fn App() -> Html {
                             } else {
                                 // Tab-based pages (only show when no search results)
                                 {
-                                    if (*active_tab).as_str() == "profile" {
+                                    if *show_annual_report {
+                                        if let Some(fid) = *annual_report_fid {
+                                            html! {
+                                                <div class="annual-report-container">
+                                                    <AnnualReportPage
+                                                        fid={fid}
+                                                        api_url={(*api_url).clone()}
+                                                        wallet_account={(*wallet_account).clone()}
+                                                    />
+                                                </div>
+                                            }
+                                        } else {
+                                            html! {
+                                                <div class="error-container">
+                                                    <p>{"No FID available for annual report"}</p>
+                                                </div>
+                                            }
+                                        }
+                                    } else if (*active_tab).as_str() == "profile" {
                                         html! {
                                             <ProfilePage
                                                 wallet_account={(*wallet_account).clone()}
                                                 api_url={(*api_url).clone()}
+                                                on_show_annual_report={Callback::from({
+                                                    let show_annual_report = show_annual_report.clone();
+                                                    let annual_report_fid = annual_report_fid.clone();
+                                                    move |fid: i64| {
+                                                        annual_report_fid.set(Some(fid));
+                                                        show_annual_report.set(true);
+                                                    }
+                                                })}
                                             />
                                         }
                                     } else if (*active_tab).as_str() == "search" {
@@ -776,8 +819,8 @@ fn App() -> Html {
                             }
                         </div>
 
-                        // Bottom Tab Navigation (only show when not in endpoint view and no search query)
-                        if (*search_query).is_none() {
+                        // Bottom Tab Navigation (only show when not in endpoint view, no search query, and not showing annual report)
+                        if (*search_query).is_none() && !*show_annual_report {
                             <BottomTab active_tab={(*active_tab).clone()} on_tab_change={on_tab_change} />
                         }
                     }

@@ -8,8 +8,6 @@
   },
   "dependencies": {
     "@farcaster/miniapp-sdk": "^0.2.1",
-    "@walletconnect/ethereum-provider": "^2.14.0",
-    "@walletconnect/modal": "^2.7.0",
     "abstract-leveldown": "^2.6.3",
     "ajv": "^6.12.6",
     "ansi-regex": "^5.0.1",
@@ -273,8 +271,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build:walletconnect": "webpack --config webpack.config.js",
-    "build": "npm run build:walletconnect"
+    "build:farcaster": "webpack --config webpack.config.js",
+    "build": "npm run build:farcaster"
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",

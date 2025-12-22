@@ -36,19 +36,29 @@ pub fn Header(props: &HeaderProps) -> Html {
         use_effect_with(wallet_account.clone(), move |account| {
             if let Some(account) = account {
                 if account.is_connected {
-                    if let Some(fid) = account.fid {
-                        // Only fetch if we don't already have the profile or if FID changed
-                        let should_fetch =
-                            user_profile.as_ref().map(|p| p.fid != fid).unwrap_or(true);
+                    // Try to fetch profile if we have an address
+                    // We can fetch by address even if FID is not yet available
+                    if let Some(address) = &account.address {
+                        // Check if we should fetch:
+                        // 1. If we have FID, check if profile FID matches
+                        // 2. If we don't have FID yet, check if we already have a profile for this address
+                        let should_fetch = if let Some(fid) = account.fid {
+                            // If we have FID, only fetch if profile doesn't match
+                            user_profile.as_ref().map(|p| p.fid != fid).unwrap_or(true)
+                        } else {
+                            // If no FID yet, check if we have any profile loaded
+                            // If we have a profile, keep it; otherwise try to fetch
+                            user_profile.is_none()
+                        };
 
                         if should_fetch && !*is_loading_profile {
                             is_loading_profile.set(true);
                             let api_url_clone = api_url.clone();
                             let user_profile_clone = user_profile.clone();
                             let is_loading_profile_clone = is_loading_profile.clone();
-
-                            if let Some(address) = &account.address {
                                 let address_clone = address.clone();
+                            let current_fid = account.fid;
+
                                 spawn_local(async move {
                                     match crate::wallet::get_profile_for_address(
                                         &api_url_clone,
@@ -57,8 +67,27 @@ pub fn Header(props: &HeaderProps) -> Html {
                                     .await
                                     {
                                         Ok(profile) => {
-                                            user_profile_clone.set(profile);
-                                            is_loading_profile_clone.set(false);
+                                        if let Some(profile) = profile {
+                                            // Only set profile if it matches current FID (if available)
+                                            // or if we don't have FID yet (profile might have FID)
+                                            if let Some(fid) = current_fid {
+                                                if profile.fid == fid {
+                                                    user_profile_clone.set(Some(profile));
+                                                } else {
+                                                    web_sys::console::log_1(
+                                                        &"⚠️ Profile FID mismatch, skipping".into(),
+                                                    );
+                                                }
+                                            } else {
+                                                // No FID yet, accept any profile we get
+                                                user_profile_clone.set(Some(profile));
+                                            }
+                                        } else {
+                                            web_sys::console::log_1(
+                                                &"ℹ️ No profile found for this address".into(),
+                                            );
+                                        }
+                                        is_loading_profile_clone.set(false);
                                         }
                                         Err(e) => {
                                             web_sys::console::log_1(
@@ -69,12 +98,9 @@ pub fn Header(props: &HeaderProps) -> Html {
                                         }
                                     }
                                 });
-                            } else {
-                                is_loading_profile.set(false);
-                            }
                         }
                     } else {
-                        // No FID, clear profile
+                        // No address, clear profile
                         user_profile.set(None);
                     }
                 } else {
