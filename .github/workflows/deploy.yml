@@ -70,7 +70,9 @@ jobs:
 
       - name: Build
         env:
-          SNAPRAG_API_URL: https://snaprag.0xbase.ai/
+          SNAPRAG_API_URL: ${{ secrets.SNAPRAG_API_URL }}
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
         run: trunk build --release
 
       - name: Setup Pages
