@@ -10,7 +10,6 @@ pub struct HeaderProps {
     pub wallet_account: Option<WalletAccount>,
     pub wallet_initialized: bool,
     pub wallet_error: Option<String>,
-    pub on_connect: Callback<()>,
     pub on_disconnect: Callback<()>,
     pub api_url: String,
     #[prop_or_default]
@@ -306,28 +305,12 @@ pub fn Header(props: &HeaderProps) -> Html {
                                 }
                             }
                         } else {
-                            // Not connected - show Connect button
-                            html! {
-                                <button
-                                    class="connect-button"
-                                    onclick={props.on_connect.clone().reform(|_| ())}
-                                    style="background: #007AFF; color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;"
-                                >
-                                    {"Connect"}
-                                </button>
-                            }
+                            // Not connected - no connect button
+                            html! {}
                         }
                     } else {
-                        // No account - show Connect button
-                        html! {
-                            <button
-                                class="connect-button"
-                                onclick={props.on_connect.clone().reform(|_| ())}
-                                style="background: #007AFF; color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;"
-                            >
-                                {"Connect"}
-                            </button>
-                        }
+                        // No account - no connect button
+                        html! {}
                     }
                 }
             </div>

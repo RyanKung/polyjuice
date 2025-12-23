@@ -71,59 +71,19 @@ pub async fn perform_search(
 // Handler Creators
 // ============================================================================
 
-/// Create wallet connect handler - shows wallet list
-pub fn create_wallet_connect_handler(
-    show_wallet_list: UseStateHandle<bool>,
-    discovered_wallets: UseStateHandle<Vec<wallet::DiscoveredWallet>>,
-    wallet_error: UseStateHandle<Option<String>>,
-) -> Callback<()> {
-    Callback::from(move |_| {
-        let show_wallet_list = show_wallet_list.clone();
-        let discovered_wallets = discovered_wallets.clone();
-        let wallet_error = wallet_error.clone();
-        spawn_local(async move {
-            web_sys::console::log_1(&"🔌 Connect button clicked - discovering wallets...".into());
-            wallet_error.set(None); // Clear any previous errors
-
-            // Discover wallets when user clicks Connect
-            // Wait a bit for EIP-6963 events to be received
-            gloo_timers::future::TimeoutFuture::new(500).await;
-
-            match wallet::discover_wallets().await {
-                Ok(wallets) => {
-                    web_sys::console::log_1(
-                        &format!("✅ Discovered {} wallets", wallets.len()).into(),
-                    );
-                    discovered_wallets.set(wallets);
-                    show_wallet_list.set(true); // Show wallet list after discovery
-                }
-                Err(e) => {
-                    web_sys::console::log_1(
-                        &format!("❌ Failed to discover wallets: {}", e).into(),
-                    );
-                    wallet_error.set(Some(e));
-                }
-            }
-        });
-    })
-}
-
 /// Create wallet select handler
 pub fn create_wallet_select_handler(
     wallet_error: UseStateHandle<Option<String>>,
     wallet_account: UseStateHandle<Option<WalletAccount>>,
-    show_wallet_list: UseStateHandle<bool>,
     api_url: UseStateHandle<String>,
 ) -> Callback<String> {
     Callback::from(move |uuid: String| {
         let wallet_error = wallet_error.clone();
         let wallet_account = wallet_account.clone();
-        let show_wallet_list = show_wallet_list.clone();
         let api_url = (*api_url).clone();
         spawn_local(async move {
             web_sys::console::log_1(&format!("🔌 Connecting to wallet: {}", uuid).into());
             wallet_error.set(None);
-            show_wallet_list.set(false);
 
             match crate::wallet::connect_to_wallet(&uuid).await {
                 Ok(_) => {

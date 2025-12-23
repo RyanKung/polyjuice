@@ -31,8 +31,6 @@ fn App() -> Html {
     let wallet_account = use_state(|| None::<wallet::WalletAccount>);
     let wallet_initialized = use_state(|| false);
     let wallet_error = use_state(|| None::<String>);
-    let show_wallet_list = use_state(|| false);
-    let discovered_wallets = use_state(Vec::<wallet::DiscoveredWallet>::new);
 
     // Track if we're in Farcaster Mini App environment
     let is_farcaster_env = use_state(|| false);
@@ -288,6 +286,10 @@ fn App() -> Html {
     }
 
     // Restore state from URL path on mount and handle browser navigation
+    // Clone annual_report_fid and show_annual_report early so they can be used both in use_effect_with and later
+    let annual_report_fid_for_effect = annual_report_fid.clone();
+    let show_annual_report_for_effect = show_annual_report.clone();
+    
     {
         let search_input = search_input.clone();
         let search_query_state = search_query.clone();
@@ -301,6 +303,8 @@ fn App() -> Html {
         let chat_error = chat_error.clone();
         let wallet_account = wallet_account.clone();
         let current_view = current_view.clone();
+        let annual_report_fid_for_restore = annual_report_fid_for_effect.clone();
+        let show_annual_report_for_restore = show_annual_report_for_effect.clone();
 
         // Function to restore state from URL path
         let restore_from_path = {
@@ -364,15 +368,33 @@ fn App() -> Html {
         use_effect_with((), move |_| {
             // Check if there's a URL path to restore from on initial load
             if let Some((query, view)) = crate::services::get_url_path() {
+                // Handle annual-report URL separately
+                if view == "annual-report" {
+                    if let Ok(fid) = query.parse::<i64>() {
+                        annual_report_fid_for_restore.set(Some(fid));
+                        show_annual_report_for_restore.set(true);
+                    }
+                } else {
                 restore_from_path(query, view);
+                }
             }
 
             // Set up popstate listener for browser back/forward navigation
             let loading_tasks_for_popstate = loading_tasks.clone();
             let search_query_state = search_query_state.clone();
+            let annual_report_fid_for_popstate = annual_report_fid_for_restore.clone();
+            let show_annual_report_for_popstate = show_annual_report_for_restore.clone();
             crate::services::setup_popstate_listener(move |path| {
                 if let Some((query, view)) = path {
+                    // Handle annual-report URL separately
+                    if view == "annual-report" {
+                        if let Ok(fid) = query.parse::<i64>() {
+                            annual_report_fid_for_popstate.set(Some(fid));
+                            show_annual_report_for_popstate.set(true);
+                        }
+                    } else {
                     restore_from_path(query, view);
+                    }
                 } else {
                     // Returned to home page - clear all state
                     search_query_state.set(None);
@@ -382,6 +404,8 @@ fn App() -> Html {
                     chat_messages.set(Vec::new());
                     loading_tasks_for_popstate.set(std::collections::HashSet::new()); // Important: reset loading state
                     current_view.set("profile".to_string());
+                    show_annual_report_for_popstate.set(false);
+                    annual_report_fid_for_popstate.set(None);
                 }
             });
 
@@ -390,23 +414,6 @@ fn App() -> Html {
     }
 
     // Create handlers
-    let on_connect_wallet = create_wallet_connect_handler(
-        show_wallet_list.clone(),
-        discovered_wallets.clone(),
-        wallet_error.clone(),
-    );
-    let on_select_wallet = create_wallet_select_handler(
-        wallet_error.clone(),
-        wallet_account.clone(),
-        show_wallet_list.clone(),
-        api_url.clone(),
-    );
-    let on_close_wallet_list = Callback::from({
-        let show_wallet_list = show_wallet_list.clone();
-        move |_| {
-            show_wallet_list.set(false);
-        }
-    });
     let on_disconnect_wallet = create_wallet_disconnect_handler(wallet_account.clone());
 
     let on_search = create_search_handler(
@@ -597,11 +604,15 @@ fn App() -> Html {
         // Annual report page - show back button
         Some(html! {
             <button class="back-button" onclick={Callback::from({
-                let show_annual_report = show_annual_report.clone();
+                let show_annual_report_clone = show_annual_report.clone();
+                let annual_report_fid_clone = annual_report_fid.clone();
                 let on_smart_back = on_smart_back.clone();
                 move |_| {
                     // Close annual report and return to home page
-                    show_annual_report.set(false);
+                    show_annual_report_clone.set(false);
+                    annual_report_fid_clone.set(None);
+                    // Update URL back to home
+                    crate::services::clear_url_path();
                     on_smart_back.emit(());
                 }
             })} style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: white;">
@@ -635,7 +646,6 @@ fn App() -> Html {
                     wallet_account={(*wallet_account).clone()}
                     wallet_initialized={*wallet_initialized}
                     wallet_error={(*wallet_error).clone()}
-                    on_connect={on_connect_wallet.clone()}
                     on_disconnect={on_disconnect_wallet.clone()}
                     api_url={(*api_url).clone()}
                     left_action={left_action}
@@ -721,12 +731,30 @@ fn App() -> Html {
                                 {
                                     if *show_annual_report {
                                         if let Some(fid) = *annual_report_fid {
+                                            // Generate share URL for annual report
+                                            let share_url = web_sys::window()
+                                                .and_then(|w| w.location().origin().ok())
+                                                .map(|origin| format!("{}/annual-report/{}", origin, fid));
+                                            
+                                            // Get current user FID from farcaster context or wallet account
+                                            let current_user_fid = if *is_farcaster_env {
+                                                (*farcaster_context).as_ref()
+                                                    .and_then(|ctx| ctx.user.as_ref())
+                                                    .and_then(|user| user.fid)
+                                            } else {
+                                                (*wallet_account).as_ref()
+                                                    .and_then(|acc| acc.fid)
+                                            };
+                                            
                                             html! {
                                                 <div class="annual-report-container">
                                                     <AnnualReportPage
                                                         fid={fid}
                                                         api_url={(*api_url).clone()}
                                                         wallet_account={(*wallet_account).clone()}
+                                                        is_farcaster_env={*is_farcaster_env}
+                                                        share_url={share_url}
+                                                        current_user_fid={current_user_fid}
                                                     />
                                                 </div>
                                             }
@@ -743,11 +771,13 @@ fn App() -> Html {
                                                 wallet_account={(*wallet_account).clone()}
                                                 api_url={(*api_url).clone()}
                                                 on_show_annual_report={Callback::from({
-                                                    let show_annual_report = show_annual_report.clone();
-                                                    let annual_report_fid = annual_report_fid.clone();
+                                                    let show_annual_report_clone = show_annual_report.clone();
+                                                    let annual_report_fid_clone = annual_report_fid.clone();
                                                     move |fid: i64| {
-                                                        annual_report_fid.set(Some(fid));
-                                                        show_annual_report.set(true);
+                                                        annual_report_fid_clone.set(Some(fid));
+                                                        show_annual_report_clone.set(true);
+                                                        // Update URL to /annual-report/{fid}
+                                                        crate::services::update_annual_report_url(fid);
                                                     }
                                                 })}
                                             />
@@ -766,22 +796,6 @@ fn App() -> Html {
                                                         <p class="tagline">{"Discover & Chat with Farcaster Users"}</p>
                                                     </div>
 
-                                                    {
-                                                        // WalletStatus is now in Header, but we still need WalletList
-                                                        if !*is_farcaster_env {
-                                                            html! {
-                                                                if *show_wallet_list {
-                                                                    <WalletList
-                                                                        wallets={(*discovered_wallets).clone()}
-                                                                        on_select_wallet={on_select_wallet.clone()}
-                                                                        on_close={on_close_wallet_list.clone()}
-                                                                    />
-                                                                }
-                                                            }
-                                                        } else {
-                                                            html! {}
-                                                        }
-                                                    }
                                                 </div>
 
                                                 <div class="search-content">
