@@ -65,9 +65,6 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Build WalletConnect bundle
-        run: npm run build:walletconnect
-
       - name: Build
         env:
           SNAPRAG_API_URL: https://snaprag.0xbase.ai/
