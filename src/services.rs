@@ -741,12 +741,14 @@ pub fn create_mbti_endpoint(search_query: &str, is_fid: bool) -> EndpointInfo {
 }
 
 /// Update URL path using History API (supports browser back/forward)
-/// Format: /profile/{query} or /chat/{query}
+/// Format: /profile/{query}, /chat/{query}, or /annual-report/{fid}
 pub fn update_url_path(query: &str, view: &str) {
     let window = web_sys::window().unwrap();
     let history = window.history().unwrap();
     let path = if view == "chat" {
         format!("/chat/{}", query)
+    } else if view == "annual-report" {
+        format!("/annual-report/{}", query)
     } else {
         format!("/profile/{}", query)
     };
@@ -757,6 +759,11 @@ pub fn update_url_path(query: &str, view: &str) {
     let _ = history.push_state_with_url(&state, "", Some(&path));
 
     web_sys::console::log_1(&format!("📍 Updated URL path: {}", path).into());
+}
+
+/// Update URL to annual report path
+pub fn update_annual_report_url(fid: i64) {
+    update_url_path(&fid.to_string(), "annual-report");
 }
 
 /// Clear URL path (return to home)
@@ -772,7 +779,8 @@ pub fn clear_url_path() {
 }
 
 /// Get current URL path and parse it
-/// Returns (query, view) where view is "profile" or "chat"
+/// Returns (query, view) where view is "profile", "chat", or "annual-report"
+/// For annual-report, query is the FID
 pub fn get_url_path() -> Option<(String, String)> {
     let window = web_sys::window().unwrap();
     let location = window.location();
@@ -782,10 +790,10 @@ pub fn get_url_path() -> Option<(String, String)> {
         return None;
     }
 
-    // Parse format: /profile/{query} or /chat/{query}
+    // Parse format: /profile/{query}, /chat/{query}, or /annual-report/{fid}
     if let Some(path) = pathname.strip_prefix("/") {
         if let Some((view, query)) = path.split_once('/') {
-            if view == "profile" || view == "chat" {
+            if view == "profile" || view == "chat" || view == "annual-report" {
                 return Some((query.to_string(), view.to_string()));
             }
         }

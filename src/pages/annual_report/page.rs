@@ -25,17 +25,31 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
     let casts_stats = use_state(|| None::<CastsStatsResponse>);
     let engagement_2024 = use_state(|| None::<EngagementResponse>);
     let is_loading = use_state(|| false); // Track if data is still loading
-    let show_intro = use_state(|| true); // Show intro screen initially
-    let has_clicked_begin = use_state(|| false); // Track if user clicked begin
+    let fid = props.fid;
+    let api_url = props.api_url.clone();
+    let wallet_account = props.wallet_account.clone();
+    let is_farcaster_env = props.is_farcaster_env;
+    let share_url = props.share_url.clone();
+    let current_user_fid = props.current_user_fid;
+    
+    // Check if viewing own report
+    // Only consider it as own report if current_user_fid is Some and matches the fid
+    let is_own_report = if let Some(user_fid) = current_user_fid {
+        user_fid == fid
+    } else {
+        false // If no current user FID, treat as viewing someone else's report
+    };
+    
+    // When viewing own report, show intro screen first, then content after clicking "lets begin"
+    // When viewing someone else's report, skip intro screen and show personality tag page directly, then content after clicking button
+    let show_intro = use_state(|| is_own_report); // Only show intro for own report
+    let has_clicked_begin = use_state(|| false); // Track if user clicked begin (for own report)
+    let show_content = use_state(|| false); // Always start with false, show content only after clicking button or for own report after intro
     let data_loading_complete = use_state(|| false); // Track if data loading is complete
     let _error = use_state(|| None::<String>);
     let loading_status = use_state(|| "Loading annual report...".to_string());
     let current_page = use_state(|| 0);
     let scroll_container_ref = use_node_ref();
-
-    let fid = props.fid;
-    let api_url = props.api_url.clone();
-    let wallet_account = props.wallet_account.clone();
 
     // Load annual report data in background
     {
@@ -223,7 +237,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
 
     // Calculate total number of cards
     let total_cards = if annual_report.is_some() && profile.is_some() {
-        13 // Cover + 12 sections (Identity, Voice Frequency, Engagement, Engagement Quality, Activity Distribution, Top Interactive Users, Growth Trend, Style, Content Themes, Highlights, CTA, Personality Tag)
+        13 // Cover + 12 sections (Identity, Voice Frequency, Engagement, Engagement Quality, Activity Distribution, Top Interactive Users, Growth Trend, Style, Content Themes, Highlights, Personality Tag, CTA)
     } else {
         0
     };
@@ -265,8 +279,8 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
             e.prevent_default();
         })}
         >
-                // Show intro screen first
-                if *show_intro {
+                // Show intro screen first (only for own report and when not showing content yet)
+                if is_own_report && !*show_content && !*has_clicked_begin {
                     <>
                         // Fixed background image at bottom
                         <img 
@@ -318,10 +332,12 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 onclick={Callback::from({
                                     let show_intro = show_intro.clone();
                                     let has_clicked_begin = has_clicked_begin.clone();
+                                    let show_content = show_content.clone();
                                     move |_| {
                                         has_clicked_begin.set(true);
-                                        // Hide intro - loading or content will be shown based on data state
+                                        // Hide intro and show content
                                         show_intro.set(false);
+                                        show_content.set(true);
                                     }
                                 })}
                                 style="
@@ -464,6 +480,132 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                         <p>{(*loading_status).clone()}</p>
                     </div>
                         }
+                } else if !is_own_report && !*show_content {
+                        // Show entry page for other users (personality tag image with button) - skip intro screen
+                        {if let (Some(temporal), Some(engagement), Some(style), Some(followers)) = (
+                            annual_report.as_ref().map(|r| &r.temporal_activity),
+                            annual_report.as_ref().map(|r| &r.engagement),
+                            annual_report.as_ref().map(|r| &r.content_style),
+                            annual_report.as_ref().map(|r| &r.follower_growth),
+                        ) {
+                            let casts = casts_stats.as_ref().cloned().unwrap_or_else(|| CastsStatsResponse {
+                                total_casts: 0,
+                                date_distribution: Vec::new(),
+                                date_range: None,
+                                language_distribution: std::collections::HashMap::new(),
+                                top_nouns: Vec::new(),
+                                top_verbs: Vec::new(),
+                            });
+                            
+                            // Calculate personality tag image (reuse helper functions from sections module)
+                            use super::sections::{calculate_personality_tag, get_image_url};
+                            let (_tag_name, image_path) = calculate_personality_tag(
+                                temporal,
+                                engagement,
+                                style,
+                                followers,
+                                &casts,
+                            );
+                            let image_url = get_image_url(&image_path);
+                            
+                            // Get username for button text (this is the owner of the report being viewed)
+                            let username = profile.as_ref()
+                                .and_then(|p| p.username.as_ref())
+                                .map(|u| u.clone())
+                                .unwrap_or_else(|| format!("FID {}", fid));
+                            
+                            let show_content_clone = show_content.clone();
+                            html! {
+                                <>
+                                    // Fixed background image at bottom (similar to intro screen)
+                                    <img 
+                                        src="/imgs/report-bg-0.png"
+                                        alt=""
+                                        style="
+                                            position: fixed;
+                                            bottom: 0;
+                                            left: 0;
+                                            width: 100vw;
+                                            height: auto;
+                                            z-index: 0;
+                                            pointer-events: none;
+                                            object-fit: contain;
+                                            object-position: bottom center;
+                                        "
+                                    />
+                                    <div style="
+                                        position: fixed;
+                                        top: 0;
+                                        left: 0;
+                                        width: 100%;
+                                        height: 100vh;
+                                        display: flex;
+                                        flex-direction: column;
+                                        align-items: center;
+                                        justify-content: center;
+                                        z-index: 1000;
+                                    ">
+                                        <div style="
+                                            display: flex;
+                                            flex-direction: column;
+                                            align-items: center;
+                                            gap: 32px;
+                                            text-align: center;
+                                            padding: 40px;
+                                        ">
+                                            <img 
+                                                src={image_url.clone()}
+                                                alt="Personality Tag"
+                                                style="
+                                                    width: 300px;
+                                                    height: 400px;
+                                                    object-fit: cover;
+                                                    border-radius: 16px;
+                                                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+                                                    border: 3px solid rgba(255, 255, 255, 0.3);
+                                                "
+                                            />
+                                            <button
+                                                onclick={Callback::from({
+                                                    let show_content_clone = show_content_clone.clone();
+                                                    move |_| {
+                                                        show_content_clone.set(true);
+                                                    }
+                                                })}
+                                                style="
+                                                    padding: 16px 48px;
+                                                    font-size: 18px;
+                                                    font-weight: 600;
+                                                    color: white;
+                                                    background: rgba(102, 126, 234, 0.3);
+                                                    backdrop-filter: blur(10px);
+                                                    -webkit-backdrop-filter: blur(10px);
+                                                    border: 2px solid rgba(118, 75, 162, 0.4);
+                                                    border-radius: 30px;
+                                                    cursor: pointer;
+                                                    transition: all 0.3s ease;
+                                                    text-transform: none;
+                                                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+                                                "
+                                                class="begin-button"
+                                            >
+                                                {format!("View {}'s Annual Report", username)}
+                                            </button>
+                                        </div>
+                                        <style>{"
+                                            .begin-button:hover {
+                                                background: rgba(102, 126, 234, 0.4) !important;
+                                                border-color: rgba(118, 75, 162, 0.6) !important;
+                                                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3) !important;
+                                                transform: scale(1.05);
+                                            }
+                                        "}</style>
+                                    </div>
+                                </>
+                            }
+                        } else {
+                            html! {}
+                        }}
                 } else {
                         html! {
                             <>
@@ -536,7 +678,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                         }
                                     })}
                                 >
-                                    // Cover Page Card
+                                    // Cover Page Card (only shown in scroll container after clicking button)
                                     {if let Some(p) = &*profile {
                                         html! {
                                             <ReportCard>
@@ -547,26 +689,30 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                         html! {}
                                     }}
 
-                                    // Section 1: Your Farcaster Identity Card
-                                    {if let (Some(p), Some(temporal), Some(followers)) = (
-                            &*profile,
-                            annual_report.as_ref().map(|r| &r.temporal_activity),
-                            annual_report.as_ref().map(|r| &r.follower_growth),
-                        ) {
+                                    // Show rest of the report content only if show_content is true
+                                    {if *show_content {
                                         html! {
-                                            <ReportCard>
-                                                <IdentitySection
-                                                    profile={p.clone()}
-                                                    temporal={temporal.clone()}
-                                                    followers={followers.clone()}
-                                                />
-                                            </ReportCard>
-                                        }
-                                    } else {
-                                        html! {}
-                                    }}
+                                            <>
+                                                // Section 1: Your Farcaster Identity Card
+                                                {if let (Some(p), Some(temporal), Some(followers)) = (
+                                                    &*profile,
+                                                    annual_report.as_ref().map(|r| &r.temporal_activity),
+                                                    annual_report.as_ref().map(|r| &r.follower_growth),
+                                                ) {
+                                                    html! {
+                                                        <ReportCard>
+                                                            <IdentitySection
+                                                                profile={p.clone()}
+                                                                temporal={temporal.clone()}
+                                                                followers={followers.clone()}
+                                                            />
+                                                        </ReportCard>
+                                                    }
+                                                } else {
+                                                    html! {}
+                                                }}
 
-                                    // Section 2: Your Voice Frequency Card
+                                                // Section 2: Your Voice Frequency Card
                         {if let Some(temporal) = annual_report.as_ref().map(|r| &r.temporal_activity) {
                             let casts = casts_stats.as_ref().cloned().unwrap_or_else(|| CastsStatsResponse {
                                 total_casts: 0,
@@ -736,17 +882,26 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                         html! {}
                                     }}
 
-                                    // Section 7: 2025 Call to Action Card (Last Page)
-                                    <ReportCard with_padding_top={false}>
-                                        <CallToActionSection
-                                            profile={(*profile).clone()}
-                                            annual_report={(*annual_report).clone()}
-                                        />
-                                    </ReportCard>
+                                                // Section 7: 2025 Call to Action Card (Last Page)
+                                                <ReportCard with_padding_top={false}>
+                                                    <CallToActionSection
+                                                        profile={(*profile).clone()}
+                                                        annual_report={(*annual_report).clone()}
+                                                        is_farcaster_env={is_farcaster_env}
+                                                        share_url={share_url.clone()}
+                                                        is_own_report={is_own_report}
+                                                        current_user_fid={current_user_fid}
+                                                    />
+                                                </ReportCard>
+                                            </>
+                                        }
+                                    } else {
+                                        html! {}
+                                    }}
                                 </div>
 
-                                // Pagination indicators (glassmorphism dots)
-                                {if total_cards > 0 {
+                                // Pagination indicators (glassmorphism dots) - only show when content is visible
+                                {if *show_content && total_cards > 0 {
                                     html! {
                                         <div class="pagination-indicators" style="
                                             position: fixed;

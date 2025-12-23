@@ -360,6 +360,51 @@ pub fn haptic_impact(style: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Compose a cast using Farcaster SDK
+/// This opens the native compose UI with pre-filled text
+/// embeds is an optional array of URLs to embed (e.g., images)
+pub async fn compose_cast(text: &str, embeds: Option<Vec<String>>) -> Result<(), String> {
+    let window = get_window()?;
+    let sdk = get_farcaster_sdk(&window)?;
+
+    // Get actions.composeCast method
+    let actions =
+        Reflect::get(&sdk, &"actions".into()).map_err(|_| "SDK actions not found".to_string())?;
+
+    let compose_cast_fn = Reflect::get(&actions, &"composeCast".into())
+        .ok()
+        .and_then(|f| f.dyn_ref::<js_sys::Function>().cloned())
+        .ok_or("actions.composeCast is not a function".to_string())?;
+
+    // Create options object with text
+    let options = Object::new();
+    Reflect::set(&options, &"text".into(), &text.into())
+        .map_err(|_| "Failed to set text option".to_string())?;
+
+    // Add embeds if provided
+    if let Some(embed_urls) = embeds {
+        let embed_array = js_sys::Array::new();
+        for url in embed_urls {
+            embed_array.push(&url.into());
+        }
+        Reflect::set(&options, &"embeds".into(), &embed_array)
+            .map_err(|_| "Failed to set embeds option".to_string())?;
+    }
+
+    // Call composeCast with options
+    let compose_promise = compose_cast_fn
+        .call1(&actions, &options)
+        .map_err(|e| format!("Failed to call composeCast: {:?}", e))?;
+
+    let promise = Promise::from(compose_promise);
+    JsFuture::from(promise)
+        .await
+        .map_err(|e| format!("Failed to await composeCast: {:?}", e))?;
+
+    web_sys::console::log_1(&"✅ Compose cast opened successfully".into());
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

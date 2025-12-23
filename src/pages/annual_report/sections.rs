@@ -1,7 +1,9 @@
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::{spawn_local, JsFuture};
 use yew::prelude::*;
 
+use crate::farcaster;
 use crate::models::{
     AnnualReportResponse, CastsStatsResponse, ContentStyleResponse,
     EngagementResponse, FollowerGrowthResponse,
@@ -296,7 +298,7 @@ pub fn VoiceFrequencySection(props: &VoiceFrequencySectionProps) -> Html {
         .map(|h| format!("{}:00", h))
         .unwrap_or_else(|| "N/A".to_string());
 
-    let max_monthly_count = props
+    let _max_monthly_count = props
         .temporal
         .monthly_distribution
         .iter()
@@ -1712,30 +1714,180 @@ pub fn HighlightsSection(props: &HighlightsSectionProps) -> Html {
 pub struct CallToActionSectionProps {
     pub profile: Option<ProfileWithRegistration>,
     pub annual_report: Option<AnnualReportResponse>,
+    pub is_farcaster_env: bool,
+    pub share_url: Option<String>,
+    pub is_own_report: bool,
+    pub current_user_fid: Option<i64>,
 }
 
-#[function_component]
-pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
-    let share_text = use_state(|| String::new());
-    let is_sharing = use_state(|| false);
+// Helper function to copy text to clipboard (async version for modern Clipboard API)
+async fn copy_to_clipboard_async(text: &str) -> bool {
+    let window = web_sys::window().unwrap();
+    
+    // Try modern Clipboard API first using js_sys::Reflect
+    if let Ok(navigator_val) = js_sys::Reflect::get(&window, &"navigator".into()) {
+        if !navigator_val.is_null() && !navigator_val.is_undefined() {
+            if let Ok(clipboard_val) = js_sys::Reflect::get(&navigator_val, &"clipboard".into()) {
+                if !clipboard_val.is_null() && !clipboard_val.is_undefined() {
+                    if let Ok(write_text_fn) = js_sys::Reflect::get(&clipboard_val, &"writeText".into()) {
+                        if let Some(write_fn) = write_text_fn.dyn_ref::<js_sys::Function>() {
+                            if let Ok(promise_val) = write_fn.call1(&clipboard_val, &text.into()) {
+                            if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
+                                match JsFuture::from(promise).await {
+                                        Ok(_) => {
+                                            web_sys::console::log_1(&"✅ Text copied using Clipboard API".into());
+                                            return true;
+                                        }
+                                        Err(e) => {
+                                            web_sys::console::warn_1(&format!("⚠️ Clipboard API failed: {:?}", e).into());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Fallback: use document.execCommand
+    let document = window.document().unwrap();
+    let textarea = document.create_element("textarea").unwrap();
+    let textarea_js: &wasm_bindgen::JsValue = textarea.as_ref();
+    
+    if js_sys::Reflect::set(textarea_js, &"value".into(), &text.into()).is_err() {
+        return false;
+    }
+    
+    let style = match js_sys::Reflect::get(textarea_js, &"style".into()) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    
+    js_sys::Reflect::set(&style, &"position".into(), &"fixed".into()).ok();
+    js_sys::Reflect::set(&style, &"left".into(), &"-9999px".into()).ok();
+    
+    if document.body().unwrap().append_child(&textarea).is_err() {
+        return false;
+    }
+    
+    js_sys::Reflect::get(textarea_js, &"select".into())
+        .and_then(|f| js_sys::Function::from(f).call0(textarea_js))
+        .ok();
+    
+    let success = js_sys::Reflect::get(&document, &"execCommand".into())
+        .and_then(|f| {
+            js_sys::Function::from(f)
+                .call2(&document, &"copy".into(), &wasm_bindgen::JsValue::FALSE)
+                .map(|_| true)
+        })
+        .unwrap_or(false);
+    
+    document.body().unwrap().remove_child(&textarea).ok();
+    success
+}
 
-    let on_share = {
-        let share_text = share_text.clone();
-        let is_sharing = is_sharing.clone();
-        let profile = props.profile.clone();
-        let report = props.annual_report.clone();
+// Helper function to calculate personality tag (reused from PersonalityTagSection logic)
+pub(crate) fn calculate_personality_tag(
+    temporal: &crate::models::TemporalActivityResponse,
+    engagement: &crate::models::EngagementResponse,
+    content_style: &crate::models::ContentStyleResponse,
+    follower_growth: &crate::models::FollowerGrowthResponse,
+    casts_stats: &crate::models::CastsStatsResponse,
+) -> (String, String) {
+    // This matches the logic in PersonalityTagSection
+    let total_casts = temporal.total_casts.max(casts_stats.total_casts);
 
-        Callback::from(move |_| {
-            is_sharing.set(true);
+    let mut tags: Vec<(String, String, f32)> = Vec::new();
+    
+    // 1. Night Philosopher
+    let late_night_activity: usize = temporal
+        .hourly_distribution
+        .iter()
+        .filter(|h| h.hour >= 0 && h.hour < 6)
+        .map(|h| h.count)
+        .sum();
+    let late_night_ratio = if total_casts > 0 {
+        late_night_activity as f32 / total_casts as f32
+    } else {
+        0.0
+    };
+    tags.push(("Night Philosopher".to_string(), "/imgs/Philosopher.png".to_string(), late_night_ratio * 100.0));
+    
+    // 2. Meme Merchant
+    let total_emoji_count: usize = content_style.top_emojis.iter().map(|e| e.count).sum();
+    let emoji_ratio = if total_casts > 0 {
+        (total_emoji_count as f32 / total_casts as f32).min(1.0)
+    } else {
+        0.0
+    };
+    let emoji_diversity_score = (content_style.top_emojis.len() as f32 / 10.0).min(1.0) * 30.0;
+    tags.push(("Meme Merchant".to_string(), "/imgs/meme.png".to_string(), emoji_ratio * 70.0 + emoji_diversity_score));
+    
+    // 3. Alpha Curator
+    let recast_ratio = if total_casts > 0 {
+        (engagement.recasts_received as f32 / total_casts as f32).min(1.0)
+    } else {
+        0.0
+    };
+    tags.push(("Alpha Curator".to_string(), "/imgs/alpha.png".to_string(), recast_ratio * 100.0));
+    
+    // 4. Social Butterfly
+    let interaction_rate = if total_casts > 0 {
+        ((engagement.reactions_received + engagement.replies_received) as f32 / total_casts as f32).min(10.0)
+    } else {
+        0.0
+    };
+    tags.push(("Social Butterfly".to_string(), "/imgs/meme.png".to_string(), (interaction_rate / 10.0) * 100.0));
+    
+    // 5. Rising Star
+    let growth_rate = if follower_growth.followers_at_start > 0 {
+        (follower_growth.net_growth as f32 / follower_growth.followers_at_start.max(1) as f32).min(5.0)
+    } else if follower_growth.net_growth > 0 {
+        1.0
+    } else {
+        0.0
+    };
+    let absolute_growth_score = (follower_growth.net_growth as f32 / 200.0).min(1.0) * 50.0;
+    tags.push(("Rising Star".to_string(), "/imgs/newstar.png".to_string(), (growth_rate / 5.0) * 50.0 + absolute_growth_score));
+    
+    // Find the tag with highest score
+    let matched = tags.iter().max_by(|a, b| {
+        a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal)
+    }).cloned().unwrap_or_else(|| ("Active User".to_string(), "/imgs/meme.png".to_string(), 0.0));
+    
+    (matched.0, matched.1) // Return (name, image_path)
+}
+
+// Helper function to convert relative image path to absolute URL
+pub(crate) fn get_image_url(image_path: &str) -> String {
+    if image_path.starts_with("http://") || image_path.starts_with("https://") {
+        return image_path.to_string();
+    }
+    
+    // Get current origin
+    if let Some(window) = web_sys::window() {
+        if let Ok(origin) = window.location().origin() {
+            return format!("{}{}", origin, image_path);
+        }
+    }
+    
+    // Fallback to relative path
+    image_path.to_string()
+}
+
+// Helper function to build share text
+fn build_share_text(profile: &Option<ProfileWithRegistration>, report: &Option<AnnualReportResponse>) -> String {
             let mut text = String::from("🎉 Farcaster 2025 Annual Report\n\n");
 
-            if let Some(p) = &profile {
+    if let Some(p) = profile {
                 if let Some(username) = &p.username {
                     text.push_str(&format!("@{}'s 2025 Annual Report\n\n", username));
                 }
             }
 
-            if let Some(r) = &report {
+    if let Some(r) = report {
                 text.push_str(&format!("📊 Published {} Casts this year\n", r.engagement.total_engagement));
                 text.push_str(&format!("❤️ Received {} likes\n", r.engagement.reactions_received));
                 text.push_str(&format!("🔁 Received {} recasts\n", r.engagement.recasts_received));
@@ -1752,38 +1904,146 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
 
             text.push_str("\n#MyFarcaster2025\n");
             text.push_str("The story of Web3 is written by you.");
+    text
+}
 
-            share_text.set(text.clone());
+#[function_component]
+pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
+    let share_text = use_state(|| String::new());
+    let is_sharing = use_state(|| false);
+    let share_status = use_state(|| None::<String>); // Success/error message
+    let is_farcaster_env = props.is_farcaster_env;
+    let share_url = props.share_url.clone();
+    let is_own_report = props.is_own_report;
+    let current_user_fid = props.current_user_fid;
 
-            // Copy to clipboard using js_sys
-            let window = web_sys::window().unwrap();
-            let document = window.document().unwrap();
-            let textarea = document.create_element("textarea").unwrap();
-            let textarea_js: &wasm_bindgen::JsValue = textarea.as_ref();
-            js_sys::Reflect::set(textarea_js, &"value".into(), &text.into()).unwrap();
-            let style = js_sys::Reflect::get(textarea_js, &"style".into()).unwrap();
-            js_sys::Reflect::set(&style, &"position".into(), &"fixed".into()).unwrap();
-            js_sys::Reflect::set(&style, &"left".into(), &"-9999px".into()).unwrap();
-            document.body().unwrap().append_child(&textarea).unwrap();
-            js_sys::Reflect::get(textarea_js, &"select".into())
-                .and_then(|f| js_sys::Function::from(f).call0(textarea_js))
-                .ok();
-            
-            let exec_command_result = js_sys::Reflect::get(&document, &"execCommand".into())
-                .and_then(|f| {
-                    js_sys::Function::from(f)
-                        .call2(&document, &"copy".into(), &wasm_bindgen::JsValue::FALSE)
-                });
-            
-            if exec_command_result.is_ok() {
-                web_sys::console::log_1(&"✅ Text copied to clipboard".into());
+    // Share text for display and copying
+    let share_text_content = build_share_text(&props.profile, &props.annual_report);
+    
+    // Calculate personality tag and get image URL
+    let personality_tag_image_url = if let Some(report) = &props.annual_report {
+        // Create a minimal CastsStatsResponse for the calculation
+        // Since we don't have casts_stats in props, we'll use total_casts from temporal_activity
+        let temp_casts_stats = crate::models::CastsStatsResponse {
+            total_casts: report.temporal_activity.total_casts,
+            date_distribution: Vec::new(),
+            date_range: None,
+            language_distribution: std::collections::HashMap::new(),
+            top_nouns: Vec::new(),
+            top_verbs: Vec::new(),
+        };
+        
+        let (_tag_name, image_path) = calculate_personality_tag(
+            &report.temporal_activity,
+            &report.engagement,
+            &report.content_style,
+            &report.follower_growth,
+            &temp_casts_stats,
+        );
+        Some(get_image_url(&image_path))
+    } else {
+        None
+    };
+
+    // Handler for Farcaster share (composeCast)
+    let on_farcaster_share = {
+        let is_sharing = is_sharing.clone();
+        let share_status = share_status.clone();
+        let text_for_share = share_text_content.clone();
+        let image_url = personality_tag_image_url.clone();
+
+        Callback::from(move |_| {
+            is_sharing.set(true);
+            share_status.set(None);
+
+            let text_clone = text_for_share.clone();
+            let share_status_clone = share_status.clone();
+            let is_sharing_clone = is_sharing.clone();
+            let embeds = image_url.as_ref().map(|url| vec![url.clone()]);
+
+            spawn_local(async move {
+                match farcaster::compose_cast(&text_clone, embeds).await {
+                    Ok(_) => {
+                        share_status_clone.set(Some("Share dialog opened!".to_string()));
+                        web_sys::console::log_1(&"✅ Compose cast opened successfully".into());
+                    }
+                    Err(e) => {
+                        share_status_clone.set(Some(format!("Failed to open share: {}", e)));
+                        web_sys::console::error_1(&format!("❌ Failed to compose cast: {}", e).into());
+                    }
+                }
+                is_sharing_clone.set(false);
+            });
+        })
+    };
+
+    // Handler for Twitter share
+    let on_twitter_share = {
+        let text = share_text_content.clone();
+        let url = share_url.clone();
+        let image_url = personality_tag_image_url.clone();
+
+        Callback::from(move |_| {
+            let mut share_text_for_twitter = if let Some(url_str) = &url {
+                format!("{} {}", text, url_str)
             } else {
-                web_sys::console::warn_1(&"⚠️ Failed to copy to clipboard".into());
+                text.clone()
+            };
+            
+            // Add image URL to the share text if available
+            if let Some(img_url) = &image_url {
+                share_text_for_twitter.push_str(&format!(" {}", img_url));
             }
             
-            document.body().unwrap().remove_child(&textarea).unwrap();
+            // URL encode the text
+            let encoded_text = js_sys::encode_uri_component(&share_text_for_twitter);
+            let twitter_url = format!("https://twitter.com/intent/tweet?text={}", encoded_text);
+            
+            if let Some(window) = web_sys::window() {
+                // Open in new window/tab
+                if let Ok(Some(_)) = window.open_with_url_and_target(&twitter_url, "_blank") {
+                    web_sys::console::log_1(&"✅ Twitter share opened".into());
+                } else {
+                    web_sys::console::error_1(&"⚠️ Failed to open Twitter share window".into());
+                }
+            }
+        })
+    };
 
-            is_sharing.set(false);
+    // Handler for copy to clipboard
+    let on_copy = {
+        let text = share_text_content.clone();
+        let share_text = share_text.clone();
+        let share_status = share_status.clone();
+        let is_sharing = is_sharing.clone();
+        let image_url = personality_tag_image_url.clone();
+
+        Callback::from(move |_| {
+            let mut text_with_image = text.clone();
+            
+            // Add image URL to the copied text if available
+            if let Some(img_url) = &image_url {
+                text_with_image.push_str(&format!("\n\nImage: {}", img_url));
+            }
+            
+            share_text.set(text_with_image.clone());
+            share_status.set(None);
+            is_sharing.set(true);
+
+            let text_clone = text_with_image.clone();
+            let share_status_clone = share_status.clone();
+            let is_sharing_clone = is_sharing.clone();
+
+            spawn_local(async move {
+                if copy_to_clipboard_async(&text_clone).await {
+                    share_status_clone.set(Some("Copied to clipboard!".to_string()));
+                    web_sys::console::log_1(&"✅ Text copied to clipboard".into());
+                } else {
+                    share_status_clone.set(Some("Failed to copy to clipboard".to_string()));
+                    web_sys::console::warn_1(&"⚠️ Failed to copy to clipboard".into());
+                }
+                is_sharing_clone.set(false);
+            });
         })
     };
 
@@ -1811,8 +2071,55 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
                 margin: 0 0 32px 0;
                 text-align: center;
             ">{"The story of Web3 is written by you."}</p>
+            
+            <div style="
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                align-items: center;
+                width: 100%;
+                max-width: 400px;
+            ">
+                {if !is_own_report {
+                    // Viewing someone else's report: show button to view own report
+                    html! {
                 <button
-                    onclick={on_share}
+                            onclick={Callback::from({
+                                let current_user_fid_clone = current_user_fid;
+                                move |_| {
+                                    if let Some(user_fid) = current_user_fid_clone {
+                                        crate::services::update_annual_report_url(user_fid);
+                                        // Force reload by reloading the page
+                                        if let Some(window) = web_sys::window() {
+                                            window.location().reload().ok();
+                                        }
+                                    }
+                                }
+                            })}
+                            style="
+                                background: rgba(0, 122, 255, 0.8);
+                                color: white;
+                                border: none;
+                                border-radius: 12px;
+                                padding: 16px 32px;
+                                font-size: 18px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: all 0.3s ease;
+                                backdrop-filter: blur(10px);
+                                -webkit-backdrop-filter: blur(10px);
+                                border: 1px solid rgba(255, 255, 255, 0.2);
+                                width: 100%;
+                            "
+                        >
+                            {"View Your Annual Report"}
+                        </button>
+                    }
+                } else if is_farcaster_env {
+                    // Farcaster environment: show compose cast button
+                    html! {
+                        <button
+                            onclick={on_farcaster_share.clone()}
                     disabled={*is_sharing}
                 style="
                     background: rgba(0, 122, 255, 0.8);
@@ -1827,15 +2134,95 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
                     backdrop-filter: blur(10px);
                     -webkit-backdrop-filter: blur(10px);
                     border: 1px solid rgba(255, 255, 255, 0.2);
+                                width: 100%;
                 "
                 >
                     {if *is_sharing {
-                        "Generating..."
+                                "Opening share..."
                     } else {
-                    "Share Your Annual Report"
+                                "Share on Farcaster"
                     }}
                 </button>
-                {if !(*share_text).is_empty() {
+                    }
+                } else {
+                    // Non-Farcaster environment: show Twitter and Copy buttons
+                    html! {
+                        <>
+                            <button
+                                onclick={on_twitter_share.clone()}
+                                disabled={*is_sharing}
+                                style="
+                                    background: rgba(29, 161, 242, 0.8);
+                                    color: white;
+                                    border: none;
+                                    border-radius: 12px;
+                                    padding: 16px 32px;
+                                    font-size: 18px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                    backdrop-filter: blur(10px);
+                                    -webkit-backdrop-filter: blur(10px);
+                                    border: 1px solid rgba(255, 255, 255, 0.2);
+                                    width: 100%;
+                                "
+                            >
+                                {"Share on Twitter"}
+                            </button>
+                            <button
+                                onclick={on_copy.clone()}
+                                disabled={*is_sharing}
+                                style="
+                                    background: rgba(0, 122, 255, 0.8);
+                                    color: white;
+                                    border: none;
+                                    border-radius: 12px;
+                                    padding: 16px 32px;
+                                    font-size: 18px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                    backdrop-filter: blur(10px);
+                                    -webkit-backdrop-filter: blur(10px);
+                                    border: 1px solid rgba(255, 255, 255, 0.2);
+                                    width: 100%;
+                                "
+                            >
+                                {if *is_sharing {
+                                    "Copying..."
+                                } else {
+                                    "Copy Link"
+                                }}
+                            </button>
+                        </>
+                    }
+                }}
+            </div>
+            
+            // Status message
+            {if let Some(status) = (*share_status).as_ref() {
+                html! {
+                    <div style="
+                        margin-top: 24px;
+                        padding: 12px 24px;
+                        background: rgba(255, 255, 255, 0.1);
+                        backdrop-filter: blur(10px);
+                        -webkit-backdrop-filter: blur(10px);
+                        border-radius: 8px;
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                        font-size: 14px;
+                        color: rgba(255, 255, 255, 0.9);
+                        text-align: center;
+                    ">
+                        {status.clone()}
+                    </div>
+                }
+            } else {
+                html! {}
+            }}
+            
+            // Show copied text in non-Farcaster environment
+            {if !is_farcaster_env && !(*share_text).is_empty() {
                     html! {
                     <div style="
                         margin-top: 32px;
@@ -1852,7 +2239,7 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
                             font-size: 14px;
                             color: rgba(255, 255, 255, 0.7);
                             margin: 0 0 12px 0;
-                        ">{"Share text copied to clipboard:"}</p>
+                        ">{"Share text:"}</p>
                         <div style="
                             font-size: 14px;
                             color: white;
