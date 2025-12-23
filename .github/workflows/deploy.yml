@@ -68,11 +68,39 @@ jobs:
       - name: Build Farcaster bundle
         run: npm run build:farcaster
 
+      - name: Validate required secrets (deployment only)
+        # Only validate secrets when deploying to Pages (not for pull requests)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        run: |
+          if [ -z "${{ secrets.SNAPRAG_API_URL }}" ]; then
+            echo "❌ Error: SNAPRAG_API_URL secret is required for deployment but not set"
+            echo "Please configure SNAPRAG_API_URL in GitHub Secrets"
+            exit 1
+          fi
+          if [ -z "${{ secrets.AUTH_TOKEN }}" ]; then
+            echo "❌ Error: AUTH_TOKEN secret is required for deployment but not set"
+            echo "Please configure AUTH_TOKEN in GitHub Secrets"
+            exit 1
+          fi
+          if [ -z "${{ secrets.AUTH_SECRET }}" ]; then
+            echo "❌ Error: AUTH_SECRET secret is required for deployment but not set"
+            echo "Please configure AUTH_SECRET in GitHub Secrets"
+            exit 1
+          fi
+          echo "✅ All required secrets are set for deployment"
+
       - name: Build
+        # Only use secrets when deploying (not for pull requests)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         env:
           SNAPRAG_API_URL: ${{ secrets.SNAPRAG_API_URL }}
           AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+        run: trunk build --release
+
+      - name: Build (without secrets for PRs)
+        # Build without secrets for pull requests
+        if: github.event_name == 'pull_request'
         run: trunk build --release
 
       - name: Setup Pages
