@@ -65,6 +65,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Build Farcaster bundle
+        run: npm run build:farcaster
+
       - name: Build
         env:
           SNAPRAG_API_URL: https://snaprag.0xbase.ai/
