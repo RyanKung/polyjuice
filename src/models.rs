@@ -14,6 +14,24 @@ pub struct ProfileData {
     pub github_username: Option<String>,
 }
 
+impl ProfileData {
+    /// Get a consistent display name for the user
+    /// Priority: display_name -> username -> format!("User {}", fid) -> "Unknown User"
+    pub fn get_display_name(&self) -> String {
+        if let Some(ref display_name) = self.display_name {
+            if !display_name.is_empty() {
+                return display_name.clone();
+            }
+        }
+        if let Some(ref username) = self.username {
+            if !username.is_empty() {
+                return format!("@{}", username);
+            }
+        }
+        format!("User {}", self.fid)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SocialData {
     pub fid: i64,
@@ -51,6 +69,24 @@ pub struct UserMention {
     pub display_name: Option<String>,
     pub count: usize,
     pub category: String,
+}
+
+impl UserMention {
+    /// Get a consistent display name for the user
+    /// Priority: display_name -> username -> format!("User {}", fid)
+    pub fn get_display_name(&self) -> String {
+        if let Some(ref display_name) = self.display_name {
+            if !display_name.is_empty() {
+                return display_name.clone();
+            }
+        }
+        if let Some(ref username) = self.username {
+            if !username.is_empty() {
+                return format!("@{}", username);
+            }
+        }
+        format!("User {}", self.fid)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -153,6 +189,34 @@ pub struct ChatSession {
     pub conversation_history: Vec<ChatMessage>,
     pub created_at: u64,
     pub last_activity: u64,
+}
+
+impl ChatSession {
+    /// Get a consistent display name for the user
+    /// Priority: display_name -> username -> format!("User {}", fid) -> "Unknown User"
+    pub fn get_display_name(&self) -> String {
+        if let Some(ref display_name) = self.display_name {
+            if !display_name.is_empty() {
+                return display_name.clone();
+            }
+        }
+        if let Some(ref username) = self.username {
+            if !username.is_empty() {
+                return format!("@{}", username);
+            }
+        }
+        format!("User {}", self.fid)
+    }
+
+    /// Get the first character of the display name for avatar placeholder
+    pub fn get_display_name_initial(&self) -> String {
+        let name = self.get_display_name();
+        name.chars()
+            .next()
+            .unwrap_or('?')
+            .to_uppercase()
+            .collect::<String>()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

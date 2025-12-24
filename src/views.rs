@@ -422,7 +422,7 @@ pub fn SocialAnalysis(props: &SocialAnalysisProps) -> Html {
                             html! {
                                 <div class="mentioned-item">
                                     <span class="mentioned-name">
-                                        {user.display_name.clone().unwrap_or_else(|| user.username.clone().unwrap_or_else(|| format!("FID {}", user.fid)))}
+                                        {user.get_display_name()}
                                     </span>
                                     <span class="mentioned-count">{format!("{} mentions", user.count)}</span>
                                     <span class="mentioned-category">{&user.category}</span>

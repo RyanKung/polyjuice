@@ -94,17 +94,17 @@ fn ChatHeader(props: &ChatHeaderProps) -> Html {
                         <img src={pfp_url.clone()} alt="Profile" />
                     } else {
                         <div class="chat-avatar-placeholder">
-                            {props.session.display_name.clone().unwrap_or_else(|| "Unknown".to_string()).chars().next().unwrap_or('?').to_uppercase().collect::<String>()}
+                            {props.session.get_display_name_initial()}
                         </div>
                     }
                 } else {
                     <div class="chat-avatar-placeholder">
-                        {props.session.display_name.clone().unwrap_or_else(|| "Unknown".to_string()).chars().next().unwrap_or('?').to_uppercase().collect::<String>()}
+                        {props.session.get_display_name_initial()}
                     </div>
                 }
             </div>
             <div class="chat-user-details">
-                <h3>{props.session.display_name.clone().unwrap_or_else(|| "Unknown".to_string())}</h3>
+                <h3>{props.session.get_display_name()}</h3>
                 <p>{"FID: "}{props.session.fid}</p>
             </div>
             <div class="chat-status">

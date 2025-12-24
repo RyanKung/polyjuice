@@ -134,7 +134,7 @@ pub fn ProfileLoader(props: &ProfileLoaderProps) -> Html {
                         </div>
 
                         <div class="user-details">
-                            <h2>{profile.display_name.clone().unwrap_or_else(|| "Unknown".to_string())}</h2>
+                            <h2>{profile.get_display_name()}</h2>
                             if let Some(username) = &profile.username {
                                 <p class="username">{"@"}{username}</p>
                             }

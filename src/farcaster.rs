@@ -23,6 +23,27 @@ pub struct ContextUser {
     pub pfp_url: Option<String>,
 }
 
+impl ContextUser {
+    /// Get a consistent display name for the user
+    /// Priority: display_name -> username -> format!("User {}", fid) -> "Unknown User"
+    pub fn get_display_name(&self) -> String {
+        if let Some(ref display_name) = self.display_name {
+            if !display_name.is_empty() {
+                return display_name.clone();
+            }
+        }
+        if let Some(ref username) = self.username {
+            if !username.is_empty() {
+                return format!("@{}", username);
+            }
+        }
+        if let Some(fid) = self.fid {
+            return format!("User {}", fid);
+        }
+        "Unknown User".to_string()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContextCast {
     pub hash: Option<String>,

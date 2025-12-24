@@ -817,6 +817,8 @@ fn App() -> Html {
                                             <ProfilePage
                                                 wallet_account={(*wallet_account).clone()}
                                                 api_url={(*api_url).clone()}
+                                                is_farcaster_env={*is_farcaster_env}
+                                                farcaster_context={(*farcaster_context).clone()}
                                                 on_show_annual_report={Callback::from({
                                                     let show_annual_report_clone = show_annual_report.clone();
                                                     let annual_report_fid_clone = annual_report_fid.clone();

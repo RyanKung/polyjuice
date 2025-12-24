@@ -12,35 +12,51 @@ pub struct ProfilePageProps {
     pub wallet_account: Option<WalletAccount>,
     pub api_url: String,
     pub on_show_annual_report: Option<Callback<i64>>,
+    pub is_farcaster_env: bool,
+    pub farcaster_context: Option<farcaster::MiniAppContext>,
 }
 
 /// Profile page component (shows current user's profile in Farcaster environment or from wallet)
 #[function_component]
 pub fn ProfilePage(props: &ProfilePageProps) -> Html {
-    let user_context = use_state(|| None::<farcaster::MiniAppContext>);
+    let user_context = use_state(|| props.farcaster_context.clone());
     let wallet_profile = use_state(|| None::<ProfileData>);
-    let is_loading = use_state(|| true);
+    let is_loading = use_state(|| false);
     let is_loading_wallet_profile = use_state(|| false);
 
-    // Try to get Farcaster Mini App context
+    // Update user_context when farcaster_context prop changes
+    {
+        let user_context = user_context.clone();
+        let farcaster_context = props.farcaster_context.clone();
+        use_effect_with(farcaster_context.clone(), move |_| {
+            user_context.set(farcaster_context.clone());
+            || ()
+        });
+    }
+
+    // Fallback: Try to get Farcaster Mini App context if not provided via props
     {
         let user_context = user_context.clone();
         let is_loading = is_loading.clone();
+        let is_farcaster_env = props.is_farcaster_env;
         use_effect_with((), move |_| {
-            let user_context = user_context.clone();
-            let is_loading = is_loading.clone();
-            spawn_local(async move {
-                match farcaster::get_context().await {
-                    Ok(context) => {
-                        user_context.set(Some(context));
-                        is_loading.set(false);
+            if is_farcaster_env && user_context.is_none() {
+                is_loading.set(true);
+                let user_context = user_context.clone();
+                let is_loading = is_loading.clone();
+                spawn_local(async move {
+                    match farcaster::get_context().await {
+                        Ok(context) => {
+                            user_context.set(Some(context));
+                            is_loading.set(false);
+                        }
+                        Err(_) => {
+                            // Not in Farcaster Mini App, that's okay - will check wallet
+                            is_loading.set(false);
+                        }
                     }
-                    Err(_) => {
-                        // Not in Farcaster Mini App, that's okay - will check wallet
-                        is_loading.set(false);
-                    }
-                }
-            });
+                });
+            }
             || ()
         });
     }
@@ -139,6 +155,19 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
         });
     }
 
+    // Calculate user_fid for Farcaster context if available
+    let farcaster_user_fid = if let Some(context) = &*user_context {
+        if let Some(user) = &context.user {
+            user.fid.or_else(|| {
+                props.wallet_account.as_ref().and_then(|acc| acc.fid)
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     html! {
         <div class="profile-page">
             <div class="profile-page-content">
@@ -159,19 +188,21 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                         <div class="profile-avatar-placeholder">{"👤"}</div>
                                     }
                                     <div class="profile-info">
-                                        <h2>{user.display_name.as_deref().unwrap_or("Unknown User")}</h2>
+                                        <h2>{user.get_display_name()}</h2>
                                         if let Some(username) = &user.username {
                                             <p class="profile-username">{format!("@{}", username)}</p>
                                         }
-                                        if let Some(fid) = user.fid {
+                                        if let Some(fid) = farcaster_user_fid {
                                             <p class="profile-fid">{format!("FID: {}", fid)}</p>
+                                        } else {
+                                            <p class="profile-fid" style="color: #ff3b30;">{"⚠️ FID not available"}</p>
                                         }
                                     </div>
                                 </div>
                             </div>
 
                             // Annual Report Button
-                            if let Some(fid) = user.fid {
+                            if let Some(fid) = farcaster_user_fid {
                                 if let Some(on_show) = &props.on_show_annual_report {
                                     <div class="annual-report-button-container">
                                         <button
@@ -182,10 +213,16 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                         </button>
                                     </div>
                                 }
+                            } else {
+                                <div class="annual-report-button-container">
+                                    <div style="padding: 12px; background: rgba(255, 59, 48, 0.1); border-radius: 8px; color: #ff3b30; text-align: center;">
+                                        <p style="margin: 0; font-size: 14px;">{"⚠️ Unable to load annual report: FID not available"}</p>
+                                    </div>
+                                </div>
                             }
 
                             // Dashboard component
-                            if let Some(fid) = user.fid {
+                            if let Some(fid) = farcaster_user_fid {
                                 <Dashboard
                                     fid={fid}
                                     api_url={props.api_url.clone()}
@@ -209,7 +246,7 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                     <div class="profile-avatar-placeholder">{"👤"}</div>
                                 }
                                 <div class="profile-info">
-                                    <h2>{profile.display_name.as_deref().unwrap_or("Unknown User")}</h2>
+                                    <h2>{profile.get_display_name()}</h2>
                                     if let Some(username) = &profile.username {
                                         <p class="profile-username">{format!("@{}", username)}</p>
                                     }
