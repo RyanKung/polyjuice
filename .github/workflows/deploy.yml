@@ -76,46 +76,70 @@ jobs:
         # Only validate secrets when deploying to Pages (not for pull requests)
         if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: |
-          # Validate SNAPRAG_API_URL
-          if [ -z "${{ secrets.SNAPRAG_API_URL }}" ]; then
-            echo "❌ Error: SNAPRAG_API_URL secret is required for deployment but not set"
-            echo "Please configure SNAPRAG_API_URL in GitHub Secrets"
-            exit 1
-          fi
-          # Validate URL format (must be a valid URL)
+          # Check if secrets are accessible (they may be empty if not found)
+          # Store secret values first to check if they exist
           API_URL="${{ secrets.SNAPRAG_API_URL }}"
+          TOKEN="${{ secrets.AUTH_TOKEN }}"
+          SECRET="${{ secrets.AUTH_SECRET }}"
+          
+          # Validate SNAPRAG_API_URL exists and is not empty
+          if [ -z "$API_URL" ]; then
+            echo "❌ Error: SNAPRAG_API_URL secret is not accessible or not set"
+            echo "Please check:"
+            echo "  1. Secret is configured in github-pages environment"
+            echo "  2. Build job has access to github-pages environment"
+            echo "  3. Secret name is exactly 'SNAPRAG_API_URL'"
+            exit 1
+          fi
+          
+          # Validate URL format (must be a valid URL)
           if ! echo "$API_URL" | grep -qE '^https?://'; then
-            echo "❌ Error: SNAPRAG_API_URL must be a valid URL starting with http:// or https://"
+            echo "❌ Error: SNAPRAG_API_URL format is invalid"
+            echo "Expected format: http://example.com or https://example.com"
+            echo "Current value length: ${#API_URL} characters"
             exit 1
           fi
-          # Validate AUTH_TOKEN
-          if [ -z "${{ secrets.AUTH_TOKEN }}" ]; then
-            echo "❌ Error: AUTH_TOKEN secret is required for deployment but not set"
-            echo "Please configure AUTH_TOKEN in GitHub Secrets"
-            exit 1
-          fi
-          # Validate AUTH_SECRET
-          if [ -z "${{ secrets.AUTH_SECRET }}" ]; then
-            echo "❌ Error: AUTH_SECRET secret is required for deployment but not set"
-            echo "Please configure AUTH_SECRET in GitHub Secrets"
-            exit 1
-          fi
+          
           # Validate that values are not just whitespace
           if [ -z "$(echo "$API_URL" | tr -d '[:space:]')" ]; then
             echo "❌ Error: SNAPRAG_API_URL cannot be empty or whitespace only"
             exit 1
           fi
-          TOKEN="${{ secrets.AUTH_TOKEN }}"
+          
+          # Validate AUTH_TOKEN exists and is not empty
+          if [ -z "$TOKEN" ]; then
+            echo "❌ Error: AUTH_TOKEN secret is not accessible or not set"
+            echo "Please check:"
+            echo "  1. Secret is configured in github-pages environment"
+            echo "  2. Build job has access to github-pages environment"
+            echo "  3. Secret name is exactly 'AUTH_TOKEN'"
+            exit 1
+          fi
+          
           if [ -z "$(echo "$TOKEN" | tr -d '[:space:]')" ]; then
             echo "❌ Error: AUTH_TOKEN cannot be empty or whitespace only"
             exit 1
           fi
-          SECRET="${{ secrets.AUTH_SECRET }}"
+          
+          # Validate AUTH_SECRET exists and is not empty
+          if [ -z "$SECRET" ]; then
+            echo "❌ Error: AUTH_SECRET secret is not accessible or not set"
+            echo "Please check:"
+            echo "  1. Secret is configured in github-pages environment"
+            echo "  2. Build job has access to github-pages environment"
+            echo "  3. Secret name is exactly 'AUTH_SECRET'"
+            exit 1
+          fi
+          
           if [ -z "$(echo "$SECRET" | tr -d '[:space:]')" ]; then
             echo "❌ Error: AUTH_SECRET cannot be empty or whitespace only"
             exit 1
           fi
+          
           echo "✅ All required secrets are validated (values not displayed for security)"
+          echo "✅ SNAPRAG_API_URL: configured (${#API_URL} chars)"
+          echo "✅ AUTH_TOKEN: configured (${#TOKEN} chars)"
+          echo "✅ AUTH_SECRET: configured (${#SECRET} chars)"
 
       - name: Build
         # Only use secrets when deploying (not for pull requests)
