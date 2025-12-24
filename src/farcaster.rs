@@ -267,7 +267,27 @@ pub async fn initialize() -> Result<(), String> {
     Ok(())
 }
 
+/// Validate that user has FID in Farcaster environment
+/// In Farcaster Mini App, user.fid must always exist if user exists
+pub fn validate_farcaster_user(user: &ContextUser) -> Result<(), String> {
+    if user.fid.is_none() {
+        let error_msg = format!(
+            "Farcaster user missing FID: user={:?}, username={:?}, display_name={:?}",
+            user.fid,
+            user.username,
+            user.display_name
+        );
+        web_sys::console::error_1(&error_msg.clone().into());
+        return Err(format!(
+            "Invalid Farcaster context: user.fid is required but missing. {}",
+            error_msg
+        ));
+    }
+    Ok(())
+}
+
 /// Get the current Mini App context (user, cast, channel)
+/// In Farcaster environment, user.fid must always exist
 pub async fn get_context() -> Result<MiniAppContext, String> {
     let window = get_window()?;
     let sdk = get_farcaster_sdk(&window)?;
@@ -300,6 +320,11 @@ pub async fn get_context() -> Result<MiniAppContext, String> {
     } else {
         None
     };
+
+    // Validate: In Farcaster environment, if user exists, fid must exist
+    if let Some(ref user) = user {
+        validate_farcaster_user(user)?;
+    }
 
     // Parse cast
     let cast = if let Ok(cast_value) = Reflect::get(context_obj, &"cast".into()) {

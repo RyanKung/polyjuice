@@ -109,21 +109,37 @@ fn App() -> Html {
                             // Get context after ready() and store it
                             match farcaster::get_context().await {
                                 Ok(context) => {
-                                    farcaster_context.set(Some(context.clone()));
+                                    // Validate: In Farcaster environment, user.fid must exist
                                     if let Some(user) = &context.user {
-                                        web_sys::console::log_1(
-                                            &format!(
-                                                "👤 Farcaster user: {} (FID: {:?})",
-                                                user.username.as_deref().unwrap_or("unknown"),
-                                                user.fid
-                                            )
-                                            .into(),
+                                        if user.fid.is_none() {
+                                            let error_msg = format!(
+                                                "❌ CRITICAL: Farcaster user missing FID! username={:?}, display_name={:?}",
+                                                user.username, user.display_name
+                                            );
+                                            web_sys::console::error_1(&error_msg.clone().into());
+                                            // Still set context but log error
+                                            farcaster_context.set(Some(context.clone()));
+                                        } else {
+                                            web_sys::console::log_1(
+                                                &format!(
+                                                    "👤 Farcaster user: {} (FID: {})",
+                                                    user.username.as_deref().unwrap_or("unknown"),
+                                                    user.fid.unwrap()
+                                                )
+                                                .into(),
+                                            );
+                                            farcaster_context.set(Some(context.clone()));
+                                        }
+                                    } else {
+                                        web_sys::console::warn_1(
+                                            &"⚠️ Farcaster context has no user".into(),
                                         );
+                                        farcaster_context.set(Some(context.clone()));
                                     }
                                 }
                                 Err(e) => {
-                                    web_sys::console::warn_1(
-                                        &format!("⚠️ Failed to get context: {}", e).into(),
+                                    web_sys::console::error_1(
+                                        &format!("❌ Failed to get Farcaster context: {}", e).into(),
                                     );
                                 }
                             }

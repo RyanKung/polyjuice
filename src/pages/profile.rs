@@ -156,16 +156,32 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
     }
 
     // Calculate user_fid for Farcaster context if available
-    let farcaster_user_fid = if let Some(context) = &*user_context {
+    // In Farcaster environment, fid MUST exist - error if missing
+    let (farcaster_user_fid, fid_error) = if let Some(context) = &*user_context {
         if let Some(user) = &context.user {
-            user.fid.or_else(|| {
-                props.wallet_account.as_ref().and_then(|acc| acc.fid)
-            })
+            if props.is_farcaster_env {
+                // In Farcaster environment, fid is REQUIRED
+                if let Some(fid) = user.fid {
+                    (Some(fid), None)
+                } else {
+                    let error_msg = format!(
+                        "Farcaster user missing FID: username={:?}, display_name={:?}",
+                        user.username, user.display_name
+                    );
+                    web_sys::console::error_1(&format!("❌ {}", error_msg).into());
+                    (None, Some(error_msg))
+                }
+            } else {
+                // Not in Farcaster environment, allow fallback
+                (user.fid.or_else(|| {
+                    props.wallet_account.as_ref().and_then(|acc| acc.fid)
+                }), None)
+            }
         } else {
-            None
+            (None, None)
         }
     } else {
-        None
+        (None, None)
     };
 
     html! {
@@ -179,30 +195,42 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                 } else if let Some(context) = &*user_context {
                     // Farcaster Mini App context
                     if let Some(user) = &context.user {
-                        <>
+                        // Check for FID error in Farcaster environment
+                        if let Some(error_msg) = &fid_error {
                             <div class="profile-card">
                                 <div class="profile-header">
-                                    if let Some(pfp_url) = &user.pfp_url {
-                                        <img src={pfp_url.clone()} alt="Profile" class="profile-avatar" />
-                                    } else {
-                                        <div class="profile-avatar-placeholder">{"👤"}</div>
-                                    }
                                     <div class="profile-info">
-                                        <h2>{user.get_display_name()}</h2>
-                                        if let Some(username) = &user.username {
-                                            <p class="profile-username">{format!("@{}", username)}</p>
-                                        }
-                                        if let Some(fid) = farcaster_user_fid {
-                                            <p class="profile-fid">{format!("FID: {}", fid)}</p>
-                                        } else {
-                                            <p class="profile-fid" style="color: #ff3b30;">{"⚠️ FID not available"}</p>
-                                        }
+                                        <h2 style="color: #ff3b30;">{"❌ Error: Missing FID"}</h2>
+                                        <div style="padding: 16px; background: rgba(255, 59, 48, 0.15); border-radius: 12px; margin-top: 16px; border: 2px solid rgba(255, 59, 48, 0.3);">
+                                            <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #ff3b30;">{"Critical Error"}</p>
+                                            <p style="margin: 0; font-size: 13px; color: rgba(255, 59, 48, 0.9); line-height: 1.5;">{error_msg}</p>
+                                            <p style="margin: 12px 0 0 0; font-size: 12px; color: rgba(255, 59, 48, 0.8);">
+                                                {"In Farcaster Mini App environment, user.fid is required but missing. This indicates a problem with the SDK or context."}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                        } else if let Some(fid) = farcaster_user_fid {
+                            <>
+                                <div class="profile-card">
+                                    <div class="profile-header">
+                                        if let Some(pfp_url) = &user.pfp_url {
+                                            <img src={pfp_url.clone()} alt="Profile" class="profile-avatar" />
+                                        } else {
+                                            <div class="profile-avatar-placeholder">{"👤"}</div>
+                                        }
+                                        <div class="profile-info">
+                                            <h2>{user.get_display_name()}</h2>
+                                            if let Some(username) = &user.username {
+                                                <p class="profile-username">{format!("@{}", username)}</p>
+                                            }
+                                            <p class="profile-fid">{format!("FID: {}", fid)}</p>
+                                        </div>
+                                    </div>
+                                </div>
 
-                            // Annual Report Button
-                            if let Some(fid) = farcaster_user_fid {
+                                // Annual Report Button
                                 if let Some(on_show) = &props.on_show_annual_report {
                                     <div class="annual-report-button-container">
                                         <button
@@ -213,22 +241,23 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                         </button>
                                     </div>
                                 }
-                            } else {
-                                <div class="annual-report-button-container">
-                                    <div style="padding: 12px; background: rgba(255, 59, 48, 0.1); border-radius: 8px; color: #ff3b30; text-align: center;">
-                                        <p style="margin: 0; font-size: 14px;">{"⚠️ Unable to load annual report: FID not available"}</p>
-                                    </div>
-                                </div>
-                            }
 
-                            // Dashboard component
-                            if let Some(fid) = farcaster_user_fid {
+                                // Dashboard component
                                 <Dashboard
                                     fid={fid}
                                     api_url={props.api_url.clone()}
                                 />
-                            }
-                        </>
+                            </>
+                        } else {
+                            <div class="profile-card">
+                                <div class="profile-info">
+                                    <h2 style="color: #ff3b30;">{"⚠️ FID Not Available"}</h2>
+                                    <p style="color: rgba(255, 59, 48, 0.9); margin-top: 12px;">
+                                        {"Unable to retrieve user FID. Please refresh the page."}
+                                    </p>
+                                </div>
+                            </div>
+                        }
                     } else {
                         <div class="profile-empty">
                             <p>{"No user profile available"}</p>
