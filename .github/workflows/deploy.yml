@@ -76,19 +76,29 @@ jobs:
         # Only validate secrets when deploying to Pages (not for pull requests)
         if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: |
+          echo "🔍 Checking environment access..."
+          echo "Environment: github-pages"
+          
           # Check if secrets are accessible (they may be empty if not found)
           # Store secret values first to check if they exist
           API_URL="${{ secrets.SNAPRAG_API_URL }}"
           TOKEN="${{ secrets.AUTH_TOKEN }}"
           SECRET="${{ secrets.AUTH_SECRET }}"
           
-          # Validate SNAPRAG_API_URL exists and is not empty
+          # Debug: Check if we can detect secrets (without showing values)
           if [ -z "$API_URL" ]; then
             echo "❌ Error: SNAPRAG_API_URL secret is not accessible or not set"
-            echo "Please check:"
-            echo "  1. Secret is configured in github-pages environment"
-            echo "  2. Build job has access to github-pages environment"
-            echo "  3. Secret name is exactly 'SNAPRAG_API_URL'"
+            echo ""
+            echo "Troubleshooting steps:"
+            echo "  1. Verify secret exists in github-pages environment:"
+            echo "     Settings → Environments → github-pages → Environment secrets"
+            echo "  2. Verify secret name is exactly 'SNAPRAG_API_URL' (case-sensitive)"
+            echo "  3. Check if environment has protection rules that block access"
+            echo "  4. Ensure build job has 'environment: github-pages' configured"
+            echo ""
+            echo "Current environment context check:"
+            echo "  - Job environment: github-pages"
+            echo "  - Secret access attempted: SNAPRAG_API_URL"
             exit 1
           fi
           
