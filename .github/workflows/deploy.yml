@@ -21,8 +21,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Specify environment to access environment secrets in github-pages
-    # This is needed for build job to access secrets during deployment
+    # Required to access Environment secrets in github-pages
+    # If using Environment secrets, job must specify environment
     environment:
       name: github-pages
     steps:
