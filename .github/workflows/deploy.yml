@@ -76,22 +76,46 @@ jobs:
         # Only validate secrets when deploying to Pages (not for pull requests)
         if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: |
+          # Validate SNAPRAG_API_URL
           if [ -z "${{ secrets.SNAPRAG_API_URL }}" ]; then
             echo "❌ Error: SNAPRAG_API_URL secret is required for deployment but not set"
             echo "Please configure SNAPRAG_API_URL in GitHub Secrets"
             exit 1
           fi
+          # Validate URL format (must be a valid URL)
+          API_URL="${{ secrets.SNAPRAG_API_URL }}"
+          if ! echo "$API_URL" | grep -qE '^https?://'; then
+            echo "❌ Error: SNAPRAG_API_URL must be a valid URL starting with http:// or https://"
+            exit 1
+          fi
+          # Validate AUTH_TOKEN
           if [ -z "${{ secrets.AUTH_TOKEN }}" ]; then
             echo "❌ Error: AUTH_TOKEN secret is required for deployment but not set"
             echo "Please configure AUTH_TOKEN in GitHub Secrets"
             exit 1
           fi
+          # Validate AUTH_SECRET
           if [ -z "${{ secrets.AUTH_SECRET }}" ]; then
             echo "❌ Error: AUTH_SECRET secret is required for deployment but not set"
             echo "Please configure AUTH_SECRET in GitHub Secrets"
             exit 1
           fi
-          echo "✅ All required secrets are set for deployment"
+          # Validate that values are not just whitespace
+          if [ -z "$(echo "$API_URL" | tr -d '[:space:]')" ]; then
+            echo "❌ Error: SNAPRAG_API_URL cannot be empty or whitespace only"
+            exit 1
+          fi
+          TOKEN="${{ secrets.AUTH_TOKEN }}"
+          if [ -z "$(echo "$TOKEN" | tr -d '[:space:]')" ]; then
+            echo "❌ Error: AUTH_TOKEN cannot be empty or whitespace only"
+            exit 1
+          fi
+          SECRET="${{ secrets.AUTH_SECRET }}"
+          if [ -z "$(echo "$SECRET" | tr -d '[:space:]')" ]; then
+            echo "❌ Error: AUTH_SECRET cannot be empty or whitespace only"
+            exit 1
+          fi
+          echo "✅ All required secrets are validated (values not displayed for security)"
 
       - name: Build
         # Only use secrets when deploying (not for pull requests)
@@ -100,7 +124,27 @@ jobs:
           SNAPRAG_API_URL: ${{ secrets.SNAPRAG_API_URL }}
           AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-        run: trunk build --release
+        run: |
+          # Final validation before build - ensure environment variables are set and not empty
+          if [ -z "$SNAPRAG_API_URL" ] || [ -z "$(echo "$SNAPRAG_API_URL" | tr -d '[:space:]')" ]; then
+            echo "❌ Error: SNAPRAG_API_URL environment variable is empty or invalid"
+            exit 1
+          fi
+          if [ -z "$AUTH_TOKEN" ] || [ -z "$(echo "$AUTH_TOKEN" | tr -d '[:space:]')" ]; then
+            echo "❌ Error: AUTH_TOKEN environment variable is empty or invalid"
+            exit 1
+          fi
+          if [ -z "$AUTH_SECRET" ] || [ -z "$(echo "$AUTH_SECRET" | tr -d '[:space:]')" ]; then
+            echo "❌ Error: AUTH_SECRET environment variable is empty or invalid"
+            exit 1
+          fi
+          # Validate URL format
+          if ! echo "$SNAPRAG_API_URL" | grep -qE '^https?://'; then
+            echo "❌ Error: SNAPRAG_API_URL must be a valid URL starting with http:// or https://"
+            exit 1
+          fi
+          echo "✅ Environment variables validated, starting build..."
+          trunk build --release
 
       - name: Build (without secrets for PRs)
         # Build without secrets for pull requests
