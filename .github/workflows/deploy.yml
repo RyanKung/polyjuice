@@ -21,6 +21,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Specify environment to access environment secrets in github-pages
+    # This is needed for build job to access secrets during deployment
+    environment:
+      name: github-pages
     steps:
       - name: Checkout
         uses: actions/checkout@v4
