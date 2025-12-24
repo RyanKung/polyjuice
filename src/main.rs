@@ -31,6 +31,8 @@ fn App() -> Html {
     let wallet_account = use_state(|| None::<wallet::WalletAccount>);
     let wallet_initialized = use_state(|| false);
     let wallet_error = use_state(|| None::<String>);
+    let show_wallet_list = use_state(|| false);
+    let discovered_wallets = use_state(|| Vec::<wallet::DiscoveredWallet>::new());
 
     // Track if we're in Farcaster Mini App environment
     let is_farcaster_env = use_state(|| false);
@@ -416,6 +418,50 @@ fn App() -> Html {
     // Create handlers
     let on_disconnect_wallet = create_wallet_disconnect_handler(wallet_account.clone());
 
+    // Handler for showing wallet list
+    let on_connect_wallet = {
+        let show_wallet_list = show_wallet_list.clone();
+        let discovered_wallets = discovered_wallets.clone();
+        Callback::from(move |_| {
+            let show_wallet_list = show_wallet_list.clone();
+            let discovered_wallets = discovered_wallets.clone();
+            spawn_local(async move {
+                // Discover wallets
+                match wallet::discover_wallets().await {
+                    Ok(wallets) => {
+                        web_sys::console::log_1(
+                            &format!("✅ Discovered {} wallets", wallets.len()).into(),
+                        );
+                        discovered_wallets.set(wallets.clone());
+                        show_wallet_list.set(true);
+                    }
+                    Err(e) => {
+                        web_sys::console::log_1(
+                            &format!("⚠️ Failed to discover wallets: {}", e).into(),
+                        );
+                        // Still show the modal even if discovery fails (might have cached wallets)
+                        show_wallet_list.set(true);
+                    }
+                }
+            });
+        })
+    };
+
+    // Handler for closing wallet list
+    let on_close_wallet_list = {
+        let show_wallet_list = show_wallet_list.clone();
+        Callback::from(move |_| {
+            show_wallet_list.set(false);
+        })
+    };
+
+    // Handler for selecting a wallet
+    let on_select_wallet = create_wallet_select_handler(
+        wallet_error.clone(),
+        wallet_account.clone(),
+        api_url.clone(),
+    );
+
     let on_search = create_search_handler(
         search_input.clone(),
         search_query.clone(),
@@ -647,6 +693,7 @@ fn App() -> Html {
                     wallet_initialized={*wallet_initialized}
                     wallet_error={(*wallet_error).clone()}
                     on_disconnect={on_disconnect_wallet.clone()}
+                    on_connect={on_connect_wallet.clone()}
                     api_url={(*api_url).clone()}
                     left_action={left_action}
                     is_farcaster_env={*is_farcaster_env}
@@ -840,6 +887,21 @@ fn App() -> Html {
                     }
                 </div>
             </div>
+            // Wallet List Modal
+            if *show_wallet_list {
+                <WalletList
+                    wallets={discovered_wallets.to_vec()}
+                    on_select_wallet={Callback::from({
+                        let on_select_wallet = on_select_wallet.clone();
+                        let on_close_wallet_list = on_close_wallet_list.clone();
+                        move |uuid: String| {
+                            on_close_wallet_list.emit(());
+                            on_select_wallet.emit(uuid);
+                        }
+                    })}
+                    on_close={on_close_wallet_list.clone()}
+                />
+            }
         </div>
     }
 }

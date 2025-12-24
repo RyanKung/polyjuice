@@ -11,6 +11,7 @@ pub struct HeaderProps {
     pub wallet_initialized: bool,
     pub wallet_error: Option<String>,
     pub on_disconnect: Callback<()>,
+    pub on_connect: Callback<()>,
     pub api_url: String,
     #[prop_or_default]
     pub left_action: Option<Html>,
@@ -305,12 +306,28 @@ pub fn Header(props: &HeaderProps) -> Html {
                                 }
                             }
                         } else {
-                            // Not connected - no connect button
-                            html! {}
+                            // Not connected - show connect button
+                            html! {
+                                <button
+                                    class="wallet-button"
+                                    onclick={props.on_connect.clone().reform(|_| ())}
+                                    style="background: rgba(102, 126, 234, 0.8); border: 1px solid rgba(102, 126, 234, 0.9); border-radius: 12px; color: #ffffff; font-size: 13px; font-weight: 600; padding: 8px 16px; cursor: pointer; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3), inset 0 1px 0 rgba(255,255,255,0.2); text-shadow: 0 1px 2px rgba(0,0,0,0.2); white-space: nowrap;"
+                                >
+                                    {"Connect"}
+                                </button>
+                            }
                         }
                     } else {
-                        // No account - no connect button
-                        html! {}
+                        // No account - show connect button
+                        html! {
+                            <button
+                                class="wallet-button"
+                                onclick={props.on_connect.clone().reform(|_| ())}
+                                style="background: rgba(102, 126, 234, 0.8); border: 1px solid rgba(102, 126, 234, 0.9); border-radius: 12px; color: #ffffff; font-size: 13px; font-weight: 600; padding: 8px 16px; cursor: pointer; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3), inset 0 1px 0 rgba(255,255,255,0.2); text-shadow: 0 1px 2px rgba(0,0,0,0.2); white-space: nowrap;"
+                            >
+                                {"Connect"}
+                            </button>
+                        }
                     }
                 }
             </div>
