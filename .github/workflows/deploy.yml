@@ -185,6 +185,15 @@ jobs:
         if: github.event_name == 'pull_request'
         run: trunk build --release
 
+      - name: Create 404.html for SPA routing
+        run: |
+          # Copy index.html to 404.html so GitHub Pages will handle SPA routes correctly
+          # When a user accesses a route like /profile/@jesse.base.eth directly,
+          # GitHub Pages will serve 404.html, which loads the same app code
+          # and the client-side routing will handle the path correctly
+          cp dist/index.html dist/404.html
+          echo "✅ Created 404.html for SPA routing support"
+
       - name: Setup Pages
         uses: actions/configure-pages@v3
         with:

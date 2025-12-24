@@ -255,11 +255,38 @@ pub fn Header(props: &HeaderProps) -> Html {
                                     </div>
                                 }
                             } else if *is_loading_profile {
-                                // Loading state
+                                // Loading state - show address with loading indicator
                                 html! {
-                                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px;">
-                                        <div style="width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007AFF; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                                        <span style="font-size: 14px; color: #666;">{"Loading..."}</span>
+                                    <div class="user-info" style="display: flex; align-items: center; gap: 12px;">
+                                        <div class="avatar-container" style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #007AFF; padding: 2px; display: flex; align-items: center; justify-content: center; background: white;">
+                                            <div style="width: 100%; height: 100%; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                                                {"👤"}
+                                            </div>
+                                        </div>
+                                        <div class="user-details" style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
+                                            {
+                                                if let Some(address) = &account.address {
+                                                    html! {
+                                                        <span style="font-size: 14px; font-weight: 500; color: #333; font-family: 'SF Mono', Monaco, monospace;">
+                                                            {format!("{}...{}", &address[..4.min(address.len())], &address[address.len().saturating_sub(4)..])}
+                                                        </span>
+                                                    }
+                                                } else {
+                                                    html! {}
+                                                }
+                                            }
+                                            <div style="display: flex; align-items: center; gap: 6px;">
+                                                <div style="width: 12px; height: 12px; border: 2px solid #f3f3f3; border-top: 2px solid #007AFF; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                                <span style="font-size: 12px; color: #666;">{"Loading profile..."}</span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            class="disconnect-btn"
+                                            style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: #666;"
+                                            onclick={props.on_disconnect.clone().reform(|_| ())}
+                                        >
+                                            {"✕"}
+                                        </button>
                                     </div>
                                 }
                             } else {
