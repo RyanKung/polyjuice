@@ -21,9 +21,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Specify environment to access environment secrets
-    environment:
-      name: github-pages
     steps:
       - name: Checkout
         uses: actions/checkout@v4
