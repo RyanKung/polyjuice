@@ -1,13 +1,36 @@
 {
-  "miniapp": {
+  "frame": {
+    "name": "polyjuice",
     "version": "1",
-    "name": "Polyjuice",
-    "iconUrl": "https://polyjuice.0xbase.ai/logo.png",
-    "homeUrl": "https://polyjuice.0xbase.ai",
-    "splashImageUrl": "https://polyjuice.0xbase.ai/logo.png",
+    "iconUrl": "https://miniapp.polyjuice.io/imgs/icon.png",
+    "homeUrl": "https://miniapp.polyjuice.io",
+    "imageUrl": "https://miniapp.polyjuice.io/imgs/preview.png",
+    "splashImageUrl": "https://miniapp.polyjuice.io/imgs/splash.png",
     "splashBackgroundColor": "#667eea",
-    "heroImageUrl": "https://polyjuice.0xbase.ai/logo.png",
-    "tagline": "Discover & Chat with Farcaster Users"
+    "webhookUrl": "https://api.polyjuice.io/api/webhook",
+    "subtitle": "Unlock Real Social Value",
+    "description": "Through RAG and LLM, capture the real social value of every user",
+    "primaryCategory": "social",
+    "tags": [
+      "ai",
+      "social",
+      "polyjuice",
+      "chat",
+      "bot"
+    ],
+    "screenshotUrls": [
+      "https://miniapp.polyjuice.io/imgs/screenshot.png"
+    ],
+    "heroImageUrl": "https://miniapp.polyjuice.io/imgs/hero.png",
+    "tagline": "Unlock Real Social Value",
+    "buttonTitle": "Open Polyjuice",
+    "ogDescription": "Discover and chat with Farcaster users using AI-powered RAG technology",
+    "ogImageUrl": "https://miniapp.polyjuice.io/logo.png"
+  },
+  "accountAssociation": {
+    "header": "eyJmaWQiOjE1NjI0OTgsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg5NDVkRWM4OWZGNERDMTdhMGFDZDE3MzYwQmIyNzNGODM4Yjc5ZGU3In0",
+    "payload": "eyJkb21haW4iOiJtaW5pYXBwLnBvbHlqdWljZS5pbyJ9",
+    "signature": "VroFNwnh2jcvH1O9+FB2+pButNYAiVvskOAasmrOPCleLcjZ7Q97vEFmOah/0Q707i0QKbUIvvQsc9nLqAy8KRw="
   }
 }
 
