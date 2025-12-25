@@ -18,8 +18,11 @@ pub struct MiniAppContext {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContextUser {
     pub fid: Option<i64>,
+    #[serde(rename = "username")]
     pub username: Option<String>,
+    #[serde(rename = "displayName")]
     pub display_name: Option<String>,
+    #[serde(rename = "pfpUrl")]
     pub pfp_url: Option<String>,
 }
 

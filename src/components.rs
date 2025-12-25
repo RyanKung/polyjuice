@@ -1,6 +1,7 @@
 use web_sys::InputEvent;
 use yew::prelude::*;
 
+use crate::icons;
 use crate::wallet::DiscoveredWallet;
 
 #[derive(Properties, Clone)]
@@ -184,7 +185,7 @@ pub struct FloatingChatButtonProps {
 pub fn FloatingChatButton(props: &FloatingChatButtonProps) -> Html {
     html! {
         <div class="floating-chat-button" onclick={props.on_switch_to_chat.clone().reform(|_| ())}>
-            {"💭"}
+            {icons::chat()}
         </div>
     }
 }
@@ -206,21 +207,21 @@ pub fn BottomTab(props: &BottomTabProps) -> Html {
                 class={if active_tab == "profile" { "tab-item active" } else { "tab-item" }}
                 onclick={props.on_tab_change.clone().reform(|_| "profile".to_string())}
             >
-                <span class="tab-icon">{"👤"}</span>
+                <span class="tab-icon">{icons::user()}</span>
                 <span class="tab-label">{"Profile"}</span>
             </button>
             <button
                 class={if active_tab == "search" { "tab-item active" } else { "tab-item" }}
                 onclick={props.on_tab_change.clone().reform(|_| "search".to_string())}
             >
-                <span class="tab-icon">{"🔍"}</span>
+                <span class="tab-icon">{icons::search()}</span>
                 <span class="tab-label">{"Search"}</span>
             </button>
             <button
                 class={if active_tab == "about" { "tab-item active" } else { "tab-item" }}
                 onclick={props.on_tab_change.clone().reform(|_| "about".to_string())}
             >
-                <span class="tab-icon">{"ℹ️"}</span>
+                <span class="tab-icon">{icons::info()}</span>
                 <span class="tab-label">{"About"}</span>
             </button>
         </div>

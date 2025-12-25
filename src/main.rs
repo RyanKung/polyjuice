@@ -6,13 +6,16 @@ mod api;
 mod chat;
 mod components;
 mod dashboard;
+mod embed;
 mod farcaster;
 mod handlers;
 mod headers;
+mod icons;
 mod models;
 mod pages;
 mod payment;
 mod services;
+mod share;
 mod views;
 mod wallet;
 
@@ -385,6 +388,12 @@ fn App() -> Html {
         };
 
         use_effect_with((), move |_| {
+            // Update embed meta tags based on current URL on initial load
+            let pathname = web_sys::window()
+                .and_then(|w| w.location().pathname().ok())
+                .unwrap_or_default();
+            embed::update_embed_meta_tags(&pathname, None, None, None);
+            
             // Check if there's a URL path to restore from on initial load
             if let Some((query, view)) = crate::services::get_url_path() {
                 // Handle annual-report URL separately
@@ -404,6 +413,12 @@ fn App() -> Html {
             let annual_report_fid_for_popstate = annual_report_fid_for_restore.clone();
             let show_annual_report_for_popstate = show_annual_report_for_restore.clone();
             crate::services::setup_popstate_listener(move |path| {
+                // Update embed meta tags when route changes
+                let pathname = web_sys::window()
+                    .and_then(|w| w.location().pathname().ok())
+                    .unwrap_or_default();
+                embed::update_embed_meta_tags(&pathname, None, None, None);
+                
                 if let Some((query, view)) = path {
                     // Handle annual-report URL separately
                     if view == "annual-report" {
@@ -538,11 +553,12 @@ fn App() -> Html {
         let show_endpoint = show_endpoint.clone();
         let endpoint_data = endpoint_data.clone();
         let is_endpoint_loading = is_endpoint_loading.clone();
-        Callback::from(move |_| {
+        let on_fetch_endpoints_clone = on_fetch_endpoints.clone();
+        Callback::from(move |_: yew::MouseEvent| {
             show_endpoint.set(true);
             // Fetch endpoints if not already loaded
             if endpoint_data.is_none() && !*is_endpoint_loading {
-                on_fetch_endpoints.emit(());
+                on_fetch_endpoints_clone.emit(());
             }
         })
     };
@@ -664,41 +680,66 @@ fn App() -> Html {
 
     // Determine left action button based on current page state
     let left_action = if *show_annual_report {
-        // Annual report page - show back button
+        // Annual report page - show share button
+        let current_url = web_sys::window()
+            .and_then(|w| w.location().href().ok())
+            .unwrap_or_default();
+        let share_text = "Check out my Farcaster Annual Report on Polyjuice!".to_string();
         Some(html! {
-            <button class="back-button" onclick={Callback::from({
-                let show_annual_report_clone = show_annual_report.clone();
-                let annual_report_fid_clone = annual_report_fid.clone();
-                let on_smart_back = on_smart_back.clone();
-                move |_| {
-                    // Close annual report and return to home page
-                    show_annual_report_clone.set(false);
-                    annual_report_fid_clone.set(None);
-                    // Update URL back to home
-                    crate::services::clear_url_path();
-                    on_smart_back.emit(());
-                }
-            })} style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: white;">
-                {"←"}
-            </button>
+            <share::ShareButton 
+                url={Some(current_url)}
+                text={Some(share_text)}
+                is_farcaster_env={*is_farcaster_env}
+            />
         })
     } else if (*search_query).is_some() {
-        // Results page - show back button
+        // Results page - show back button and share button together
+        let current_url = web_sys::window()
+            .and_then(|w| w.location().href().ok())
+            .unwrap_or_default();
         Some(html! {
+            <div style="display: flex; align-items: center; gap: 8px;">
             <button class="back-button" onclick={on_smart_back.clone().reform(|_| ())} style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: white;">
-                {"←"}
+                    {icons::back_arrow()}
             </button>
+                <share::ShareButton 
+                    url={Some(current_url)}
+                    is_farcaster_env={*is_farcaster_env}
+                />
+            </div>
         })
     } else if (*active_tab).as_str() == "search" {
-        // Search page - show link button
+        // Search page - show share button
         Some(html! {
-            <button class="link-button" onclick={on_show_endpoint.clone().reform(|_| ())} style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px 8px; color: white;">
-                {"🔗"}
-            </button>
+            <share::ShareButton 
+                is_farcaster_env={*is_farcaster_env}
+            />
+        })
+    } else if (*active_tab).as_str() == "profile" {
+        // Profile page - show share button
+        let current_url = web_sys::window()
+            .and_then(|w| w.location().href().ok())
+            .unwrap_or_default();
+        Some(html! {
+            <share::ShareButton 
+                url={Some(current_url)}
+                is_farcaster_env={*is_farcaster_env}
+            />
+        })
+    } else if (*active_tab).as_str() == "about" {
+        // About page - show share button
+        Some(html! {
+            <share::ShareButton 
+                is_farcaster_env={*is_farcaster_env}
+            />
         })
     } else {
-        // Other pages - no button
-        None
+        // Other pages - show share button as default
+        Some(html! {
+            <share::ShareButton 
+                is_farcaster_env={*is_farcaster_env}
+            />
+        })
     };
 
     html! {
@@ -723,7 +764,7 @@ fn App() -> Html {
                         <div class="endpoint-page">
                             <div class="back-to-search">
                                 <button class="back-button" onclick={on_back_from_endpoint}>
-                                    {"←"}
+                                    {icons::back_arrow()}
                                 </button>
                             </div>
                             <EndpointView
@@ -886,7 +927,21 @@ fn App() -> Html {
                                         }
                                     } else if (*active_tab).as_str() == "about" {
                                         html! {
-                                            <AboutPage />
+                                            <AboutPage
+                                                endpoint_data={(*endpoint_data).clone()}
+                                                is_loading={*is_endpoint_loading}
+                                                error={(*endpoint_error).clone()}
+                                                ping_results={(*ping_results).clone()}
+                                                selected_endpoint={(*selected_endpoint).clone()}
+                                                on_select_endpoint={on_select_endpoint.clone()}
+                                                custom_endpoints={(*custom_endpoints).clone()}
+                                                custom_url_input={(*custom_url_input).clone()}
+                                                on_custom_url_input_change={on_custom_url_input_change.clone()}
+                                                on_add_custom_endpoint={on_add_custom_endpoint.clone()}
+                                                custom_endpoint_error={(*custom_endpoint_error).clone()}
+                                                is_adding_endpoint={*is_adding_endpoint}
+                                                on_fetch_endpoints={on_fetch_endpoints.clone()}
+                                            />
                                         }
                                     } else {
                                         html! {

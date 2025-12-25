@@ -290,7 +290,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
 
     // Calculate total number of cards
     let total_cards = if annual_report.is_some() && profile.is_some() {
-        13 // Cover + 12 sections (Identity, Voice Frequency, Engagement, Engagement Quality, Activity Distribution, Top Interactive Users, Growth Trend, Style, Content Themes, Highlights, Personality Tag, CTA)
+        12 // Cover + 11 sections (Identity, Voice Frequency, Engagement, Engagement Quality, Activity Distribution, Top Interactive Users, Growth Trend, Style & Themes (merged), Highlights, Personality Tag, CTA)
     } else {
         0
     };
@@ -860,7 +860,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                         html! {}
                                     }}
 
-                                    // Section 4: Your Unique Style Card
+                                    // Section 4: Content Style & Themes Card (merged)
                         {if let Some(style) = annual_report.as_ref().map(|r| &r.content_style) {
                             let casts = casts_stats.as_ref().cloned().unwrap_or_else(|| CastsStatsResponse {
                                 total_casts: 0,
@@ -881,19 +881,6 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                         } else {
                             html! {}
                         }}
-
-                                    // Section 4.1: Content Themes Card
-                                    {if let Some(style) = annual_report.as_ref().map(|r| &r.content_style) {
-                                        html! {
-                                            <ReportCard>
-                                                <ContentThemeSection
-                                                    style={style.clone()}
-                                                />
-                                            </ReportCard>
-                                        }
-                                    } else {
-                                        html! {}
-                                    }}
 
                                     // Section 5: Highlights Card
                                     {if let Some(temporal) = annual_report.as_ref().map(|r| &r.temporal_activity) {

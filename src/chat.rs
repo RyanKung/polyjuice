@@ -1,6 +1,7 @@
 use web_sys::InputEvent;
 use yew::prelude::*;
 
+use crate::icons;
 use crate::models::*;
 
 // ============================================================================
@@ -47,7 +48,7 @@ pub fn ChatView(props: &ChatViewProps) -> Html {
                         <div class="chat-loading-content">
                             <div class="chat-loading-icon">
                                 <div class="chat-icon-pulse">
-                                    {"💬"}
+                                    {icons::chat()}
                                 </div>
                             </div>
                             <div class="chat-loading-text">
@@ -191,7 +192,7 @@ fn ChatInput(props: &ChatInputProps) -> Html {
                     onclick={props.on_send_message.clone().reform(|_| ())}
                     disabled={props.is_loading}
                 >
-                    {"➤"}
+                    {icons::send()}
                 </button>
             </div>
         </div>

@@ -106,43 +106,56 @@ pub struct IdentitySectionProps {
 
 #[function_component]
 pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
-    // Format first cast as "XXX Ago"
-    // cast.timestamp is a Farcaster timestamp, need to convert to Unix timestamp
-    let first_cast_ago = props
+    // Calculate zodiac sign and birth date from first cast
+    let (birth_date, zodiac_emoji, zodiac_name) = props
         .temporal
         .first_cast
         .as_ref()
         .map(|cast| {
             let unix_timestamp = farcaster_to_unix(cast.timestamp);
-            let now = js_sys::Date::now() / 1000.0; // Current time in seconds
-            let diff_seconds = now - (unix_timestamp as f64);
-            let diff_days = (diff_seconds / 86400.0) as i64;
-            let diff_months = diff_days / 30;
-            let diff_years = diff_days / 365;
-
-            if diff_years > 0 {
-                format!(
-                    "{} {} ago",
-                    diff_years,
-                    if diff_years == 1 { "year" } else { "years" }
-                )
-            } else if diff_months > 0 {
-                format!(
-                    "{} {} ago",
-                    diff_months,
-                    if diff_months == 1 { "month" } else { "months" }
-                )
-            } else if diff_days > 0 {
-                format!(
-                    "{} {} ago",
-                    diff_days,
-                    if diff_days == 1 { "day" } else { "days" }
-                )
-            } else {
-                "Today".to_string()
-            }
+            let date = js_sys::Date::new(&js_sys::Number::from(unix_timestamp as f64 * 1000.0));
+            let month = date.get_month() as u32; // 0-11
+            let day = date.get_date() as u32; // 1-31
+            let year = date.get_full_year() as i32;
+            
+            // Format birth date
+            let month_names = ["January", "February", "March", "April", "May", "June",
+                              "July", "August", "September", "October", "November", "December"];
+            let month_name = month_names.get(month as usize).unwrap_or(&"Unknown");
+            let birth_date_str = format!("{} {}, {}", month_name, day, year);
+            
+            // Calculate zodiac sign based on month and day
+            let (zodiac_emoji, zodiac_name) = match (month + 1, day) {
+                (1, d) if d >= 20 => ("♒", "Aquarius"),
+                (1, _) => ("♑", "Capricorn"),
+                (2, d) if d >= 19 => ("♓", "Pisces"),
+                (2, _) => ("♒", "Aquarius"),
+                (3, d) if d >= 21 => ("♈", "Aries"),
+                (3, _) => ("♓", "Pisces"),
+                (4, d) if d >= 20 => ("♉", "Taurus"),
+                (4, _) => ("♈", "Aries"),
+                (5, d) if d >= 21 => ("♊", "Gemini"),
+                (5, _) => ("♉", "Taurus"),
+                (6, d) if d >= 21 => ("♋", "Cancer"),
+                (6, _) => ("♊", "Gemini"),
+                (7, d) if d >= 23 => ("♌", "Leo"),
+                (7, _) => ("♋", "Cancer"),
+                (8, d) if d >= 23 => ("♍", "Virgo"),
+                (8, _) => ("♌", "Leo"),
+                (9, d) if d >= 23 => ("♎", "Libra"),
+                (9, _) => ("♍", "Virgo"),
+                (10, d) if d >= 23 => ("♏", "Scorpio"),
+                (10, _) => ("♎", "Libra"),
+                (11, d) if d >= 22 => ("♐", "Sagittarius"),
+                (11, _) => ("♏", "Scorpio"),
+                (12, d) if d >= 22 => ("♑", "Capricorn"),
+                (12, _) => ("♐", "Sagittarius"),
+                _ => ("", "Unknown"),
+            };
+            
+            (birth_date_str, zodiac_emoji.to_string(), zodiac_name.to_string())
         })
-        .unwrap_or_else(|| "N/A".to_string());
+        .unwrap_or_else(|| ("N/A".to_string(), "".to_string(), "Unknown".to_string()));
 
     let follower_change =
         props.followers.current_followers as i64 - props.followers.followers_at_start as i64;
@@ -184,7 +197,7 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
                 margin: 0 0 32px 0;
                 color: white;
                 text-align: center;
-            ">{"Your Farcaster Identity"}</h2>
+            ">{"Your Farcaster Zodiac"}</h2>
             <div style="
                 display: flex;
                 flex-direction: column;
@@ -200,9 +213,12 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
                     border-radius: 16px;
                     padding: 24px;
                     border: 1px solid rgba(255, 255, 255, 0.2);
+                    text-align: center;
                 ">
-                    <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">{"First Cast"}</div>
-                    <div style="font-size: 24px; font-weight: 600; color: white;">{first_cast_ago}</div>
+                    <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 12px;">{"Birth Date"}</div>
+                    <div style="font-size: 24px; font-weight: 600; color: white; margin-bottom: 16px;">{birth_date.clone()}</div>
+                    <div style="font-size: 48px; margin-bottom: 8px;">{zodiac_emoji.clone()}</div>
+                    <div style="font-size: 18px; font-weight: 500; color: rgba(255, 255, 255, 0.9);">{zodiac_name.clone()}</div>
                 </div>
                 <div style="
                     background: rgba(255, 255, 255, 0.1);
@@ -258,8 +274,8 @@ pub fn VoiceFrequencySection(props: &VoiceFrequencySectionProps) -> Html {
         .map(|nc| nc.avg_casts_per_user)
         .unwrap_or(0.0);
 
-    // Format most active month as "February" with zodiac sign
-    let (most_active_month, zodiac_sign) = props
+    // Format most active month as "February" (without zodiac sign)
+    let most_active_month = props
         .temporal
         .monthly_distribution
         .iter()
@@ -284,28 +300,12 @@ pub fn VoiceFrequencySection(props: &VoiceFrequencySectionProps) -> Html {
                     12 => "December",
                     _ => "Unknown",
                 };
-                // Zodiac signs based on month
-                let zodiac = match month_num {
-                    1 => "♑",  // Capricorn
-                    2 => "♒",  // Aquarius
-                    3 => "♓",  // Pisces
-                    4 => "♈",  // Aries
-                    5 => "♉",  // Taurus
-                    6 => "♊",  // Gemini
-                    7 => "♋",  // Cancer
-                    8 => "♌",  // Leo
-                    9 => "♍",  // Virgo
-                    10 => "♎", // Libra
-                    11 => "♏", // Scorpio
-                    12 => "♐", // Sagittarius
-                    _ => "",
-                };
-                (month_name.to_string(), zodiac.to_string())
+                month_name.to_string()
             } else {
-                ("N/A".to_string(), "".to_string())
+                "N/A".to_string()
             }
         })
-        .unwrap_or_else(|| ("N/A".to_string(), "".to_string()));
+        .unwrap_or_else(|| "N/A".to_string());
 
     let most_active_hour = props
         .temporal
@@ -394,13 +394,6 @@ pub fn VoiceFrequencySection(props: &VoiceFrequencySectionProps) -> Html {
                         <div style="font-size: 12px; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">{"Most Active Month"}</div>
                         <div style="font-size: 20px; font-weight: 600; color: white;">
                             {most_active_month.clone()}
-                            {if !zodiac_sign.is_empty() {
-                                html! {
-                                    <span style="margin-left: 8px; font-size: 24px;">{zodiac_sign.clone()}</span>
-                                }
-                            } else {
-                                html! {}
-                            }}
                         </div>
                 </div>
                     <div style="
@@ -1504,7 +1497,7 @@ pub fn StyleSection(props: &StyleSectionProps) -> Html {
                 margin: 0 0 32px 0;
                 color: white;
                 text-align: center;
-            ">{"Content Style"}</h2>
+            ">{"Content Style & Themes"}</h2>
             <div style="
                 display: flex;
                 flex-direction: column;
@@ -1544,7 +1537,22 @@ pub fn StyleSection(props: &StyleSectionProps) -> Html {
                     padding: 24px;
                     border: 1px solid rgba(255, 255, 255, 0.2);
                 ">
-                    <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 12px;">{"Most Used Words"}</div>
+                    <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 12px;">{"Content Themes"}</div>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px;">
+                        {for top_words.iter().take(10).map(|word| {
+                            html! {
+                                <span style="
+                                    background: rgba(255, 255, 255, 0.15);
+                                    padding: 8px 16px;
+                                    border-radius: 20px;
+                                    font-size: 16px;
+                                    font-weight: 500;
+                                    color: white;
+                                ">{format!("{} ({})", word.word, word.count)}</span>
+                            }
+                        })}
+                    </div>
+                    <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 12px;">{"Word Cloud"}</div>
                     <div style="
                         display: flex;
                         gap: 8px 12px;

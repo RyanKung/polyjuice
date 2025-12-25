@@ -2,6 +2,7 @@ use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 use crate::farcaster;
+use crate::icons;
 use crate::models::ProfileData;
 use crate::wallet::WalletAccount;
 
@@ -25,6 +26,7 @@ pub struct HeaderProps {
 pub fn Header(props: &HeaderProps) -> Html {
     let user_profile = use_state(|| None::<ProfileData>);
     let is_loading_profile = use_state(|| false);
+    let avatar_error = use_state(|| false);
 
     // Fetch user profile when FID is available
     {
@@ -116,21 +118,12 @@ pub fn Header(props: &HeaderProps) -> Html {
 
     html! {
         <header class="global-header" style="position: sticky; top: 0; z-index: 1000; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255, 255, 255, 0.2); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; min-height: 60px; box-sizing: border-box;">
-            <div class="header-left" style="display: flex; align-items: center; gap: 12px;">
-                {
-                    if let Some(action) = &props.left_action {
-                        action.clone()
-                    } else {
-                        html! {}
-                    }
-                }
-            </div>
-            <div class="header-right" style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+            <div class="header-left" style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
                 {
                     // Show error message if there's an error
                     if let Some(error) = &props.wallet_error {
                         html! {
-                            <div style="font-size: 12px; color: #ff3b30; margin-bottom: 4px; max-width: 300px; text-align: right;">
+                            <div style="font-size: 12px; color: #ff3b30; margin-bottom: 4px; max-width: 300px; text-align: left;">
                                 {error}
                             </div>
                         }
@@ -148,19 +141,33 @@ pub fn Header(props: &HeaderProps) -> Html {
                                         // Avatar with circular border
                                         <div class="avatar-container" style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #007AFF; padding: 2px; display: flex; align-items: center; justify-content: center; background: white;">
                                             {
-                                                if let Some(pfp_url) = &user.pfp_url {
-                                                    html! {
-                                                        <img
-                                                            src={pfp_url.clone()}
-                                                            alt="Avatar"
-                                                            style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"
-                                                        />
-                                                    }
-                                                } else {
-                                                    html! {
-                                                        <div style="width: 100%; height: 100%; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-                                                            {"👤"}
-                                                        </div>
+                                                {
+                                                    let avatar_error_state = avatar_error.clone();
+                                                    if let Some(pfp_url) = &user.pfp_url {
+                                                        if !pfp_url.is_empty() && !*avatar_error {
+                                                            html! {
+                                                                <img
+                                                                    src={pfp_url.clone()}
+                                                                    alt="Avatar"
+                                                                    style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"
+                                                                    onerror={Callback::from(move |_| {
+                                                                        avatar_error_state.set(true);
+                                                                    })}
+                                                                />
+                                                            }
+                                                        } else {
+                                                            html! {
+                                                                <div style="width: 100%; height: 100%; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                                                                    {icons::user()}
+                                                                </div>
+                                                            }
+                                                        }
+                                                    } else {
+                                                        html! {
+                                                            <div style="width: 100%; height: 100%; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                                                                {icons::user()}
+                                                            </div>
+                                                        }
                                                     }
                                                 }
                                             }
@@ -249,7 +256,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: #666;"
                                             onclick={props.on_disconnect.clone().reform(|_| ())}
                                         >
-                                            {"✕"}
+                                            {icons::close()}
                                         </button>
                                     </div>
                                 }
@@ -284,7 +291,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: #666;"
                                             onclick={props.on_disconnect.clone().reform(|_| ())}
                                         >
-                                            {"✕"}
+                                            {icons::close()}
                                         </button>
                                     </div>
                                 }
@@ -326,7 +333,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: #666;"
                                             onclick={props.on_disconnect.clone().reform(|_| ())}
                                         >
-                                            {"✕"}
+                                            {icons::close()}
                                         </button>
                                     </div>
                                 }
@@ -354,6 +361,15 @@ pub fn Header(props: &HeaderProps) -> Html {
                                 {"Connect"}
                             </button>
                         }
+                    }
+                }
+            </div>
+            <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
+                {
+                    if let Some(action) = &props.left_action {
+                        action.clone()
+                    } else {
+                        html! {}
                     }
                 }
             </div>
