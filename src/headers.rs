@@ -26,7 +26,6 @@ pub struct HeaderProps {
 pub fn Header(props: &HeaderProps) -> Html {
     let user_profile = use_state(|| None::<ProfileData>);
     let is_loading_profile = use_state(|| false);
-    let avatar_error = use_state(|| false);
 
     // Fetch user profile when FID is available
     {
@@ -123,7 +122,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                     // Show error message if there's an error
                     if let Some(error) = &props.wallet_error {
                         html! {
-                            <div style="font-size: 12px; color: #ff3b30; margin-bottom: 4px; max-width: 300px; text-align: left;">
+                            <div style="font-size: 12px; color: white; margin-bottom: 4px; max-width: 300px; text-align: left;">
                                 {error}
                             </div>
                         }
@@ -141,33 +140,19 @@ pub fn Header(props: &HeaderProps) -> Html {
                                         // Avatar with circular border
                                         <div class="avatar-container" style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #007AFF; padding: 2px; display: flex; align-items: center; justify-content: center; background: white;">
                                             {
-                                                {
-                                                    let avatar_error_state = avatar_error.clone();
-                                                    if let Some(pfp_url) = &user.pfp_url {
-                                                        if !pfp_url.is_empty() && !*avatar_error {
-                                                            html! {
-                                                                <img
-                                                                    src={pfp_url.clone()}
-                                                                    alt="Avatar"
-                                                                    style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"
-                                                                    onerror={Callback::from(move |_| {
-                                                                        avatar_error_state.set(true);
-                                                                    })}
-                                                                />
-                                                            }
-                                                        } else {
-                                                            html! {
-                                                                <div style="width: 100%; height: 100%; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-                                                                    {icons::user()}
-                                                                </div>
-                                                            }
-                                                        }
-                                                    } else {
-                                                        html! {
-                                                            <div style="width: 100%; height: 100%; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-                                                                {icons::user()}
-                                                            </div>
-                                                        }
+                                                if let Some(pfp_url) = &user.pfp_url {
+                                                    html! {
+                                                        <img
+                                                            src={pfp_url.clone()}
+                                                            alt="Avatar"
+                                                            style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"
+                                                        />
+                                                    }
+                                                } else {
+                                                    html! {
+                                                        <div style="width: 100%; height: 100%; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                                                            {"👤"}
+                                                        </div>
                                                     }
                                                 }
                                             }
@@ -177,7 +162,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             {
                                                 if let Some(username) = &user.username {
                                                     html! {
-                                                        <span style="font-size: 14px; font-weight: 500; color: #333;">
+                                                        <span style="font-size: 14px; font-weight: 500; color: white;">
                                                             {format!("@{}", username)}
                                                         </span>
                                                     }
@@ -188,7 +173,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             {
                                                 if let Some(fid) = user.fid {
                                                     html! {
-                                                        <span style="font-size: 12px; color: #666;">
+                                                        <span style="font-size: 12px; color: white;">
                                                             {format!("FID: {}", fid)}
                                                         </span>
                                                     }
@@ -238,7 +223,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             {
                                                 if let Some(username) = &profile.username {
                                                     html! {
-                                                        <span style="font-size: 14px; font-weight: 500; color: #333;">
+                                                        <span style="font-size: 14px; font-weight: 500; color: white;">
                                                             {format!("@{}", username)}
                                                         </span>
                                                     }
@@ -246,14 +231,14 @@ pub fn Header(props: &HeaderProps) -> Html {
                                                     html! {}
                                                 }
                                             }
-                                            <span style="font-size: 12px; color: #666;">
+                                            <span style="font-size: 12px; color: white;">
                                                 {format!("FID: {}", profile.fid)}
                                             </span>
                                         </div>
                                         // Disconnect button
                                         <button
                                             class="disconnect-btn"
-                                            style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: #666;"
+                                            style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: white;"
                                             onclick={props.on_disconnect.clone().reform(|_| ())}
                                         >
                                             {icons::close()}
@@ -273,7 +258,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             {
                                                 if let Some(address) = &account.address {
                                                     html! {
-                                                        <span style="font-size: 14px; font-weight: 500; color: #333; font-family: 'SF Mono', Monaco, monospace;">
+                                                        <span style="font-size: 14px; font-weight: 500; color: white; font-family: 'SF Mono', Monaco, monospace;">
                                                             {format!("{}...{}", &address[..4.min(address.len())], &address[address.len().saturating_sub(4)..])}
                                                         </span>
                                                     }
@@ -283,12 +268,12 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             }
                                             <div style="display: flex; align-items: center; gap: 6px;">
                                                 <div style="width: 12px; height: 12px; border: 2px solid #f3f3f3; border-top: 2px solid #007AFF; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                                                <span style="font-size: 12px; color: #666;">{"Loading profile..."}</span>
+                                                <span style="font-size: 12px; color: white;">{"Loading profile..."}</span>
                                             </div>
                                         </div>
                                         <button
                                             class="disconnect-btn"
-                                            style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: #666;"
+                                            style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: white;"
                                             onclick={props.on_disconnect.clone().reform(|_| ())}
                                         >
                                             {icons::close()}
@@ -308,7 +293,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             {
                                                 if let Some(address) = &account.address {
                                                     html! {
-                                                        <span style="font-size: 14px; font-weight: 500; color: #333; font-family: 'SF Mono', Monaco, monospace;">
+                                                        <span style="font-size: 14px; font-weight: 500; color: white; font-family: 'SF Mono', Monaco, monospace;">
                                                             {format!("{}...{}", &address[..4.min(address.len())], &address[address.len().saturating_sub(4)..])}
                                                         </span>
                                                     }
@@ -319,7 +304,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             {
                                                 if let Some(fid) = account.fid {
                                                     html! {
-                                                        <span style="font-size: 12px; color: #666;">
+                                                        <span style="font-size: 12px; color: white;">
                                                             {format!("FID: {}", fid)}
                                                         </span>
                                                     }
@@ -330,7 +315,7 @@ pub fn Header(props: &HeaderProps) -> Html {
                                         </div>
                                         <button
                                             class="disconnect-btn"
-                                            style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: #666;"
+                                            style="background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; color: white;"
                                             onclick={props.on_disconnect.clone().reform(|_| ())}
                                         >
                                             {icons::close()}

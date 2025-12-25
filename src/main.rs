@@ -6,7 +6,6 @@ mod api;
 mod chat;
 mod components;
 mod dashboard;
-mod embed;
 mod farcaster;
 mod handlers;
 mod headers;
@@ -388,12 +387,6 @@ fn App() -> Html {
         };
 
         use_effect_with((), move |_| {
-            // Update embed meta tags based on current URL on initial load
-            let pathname = web_sys::window()
-                .and_then(|w| w.location().pathname().ok())
-                .unwrap_or_default();
-            embed::update_embed_meta_tags(&pathname, None, None, None);
-            
             // Check if there's a URL path to restore from on initial load
             if let Some((query, view)) = crate::services::get_url_path() {
                 // Handle annual-report URL separately
@@ -413,12 +406,6 @@ fn App() -> Html {
             let annual_report_fid_for_popstate = annual_report_fid_for_restore.clone();
             let show_annual_report_for_popstate = show_annual_report_for_restore.clone();
             crate::services::setup_popstate_listener(move |path| {
-                // Update embed meta tags when route changes
-                let pathname = web_sys::window()
-                    .and_then(|w| w.location().pathname().ok())
-                    .unwrap_or_default();
-                embed::update_embed_meta_tags(&pathname, None, None, None);
-                
                 if let Some((query, view)) = path {
                     // Handle annual-report URL separately
                     if view == "annual-report" {
@@ -699,9 +686,9 @@ fn App() -> Html {
             .unwrap_or_default();
         Some(html! {
             <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="back-button" onclick={on_smart_back.clone().reform(|_| ())} style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: white;">
+                <button class="back-button" onclick={on_smart_back.clone().reform(|_| ())} style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: white;">
                     {icons::back_arrow()}
-            </button>
+                </button>
                 <share::ShareButton 
                     url={Some(current_url)}
                     is_farcaster_env={*is_farcaster_env}

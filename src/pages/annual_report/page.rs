@@ -290,7 +290,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
 
     // Calculate total number of cards
     let total_cards = if annual_report.is_some() && profile.is_some() {
-        12 // Cover + 11 sections (Identity, Voice Frequency, Engagement, Engagement Quality, Activity Distribution, Top Interactive Users, Growth Trend, Style & Themes (merged), Highlights, Personality Tag, CTA)
+        7 // Cover + 6 sections (Identity, Follower Growth, Top Interactive Users, Style, Personality Tag)
     } else {
         0
     };
@@ -766,63 +766,34 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                                     html! {}
                                                 }}
 
-                                                // Section 2: Your Voice Frequency Card
-                        {if let Some(temporal) = annual_report.as_ref().map(|r| &r.temporal_activity) {
-                            let casts = casts_stats.as_ref().cloned().unwrap_or_else(|| CastsStatsResponse {
-                                total_casts: 0,
-                                date_distribution: Vec::new(),
-                                date_range: None,
-                                language_distribution: std::collections::HashMap::new(),
-                                top_nouns: Vec::new(),
-                                top_verbs: Vec::new(),
-                            });
-                            let comparison = annual_report.as_ref().and_then(|r| r.network_comparison.as_ref());
-                            html! {
-                                <ReportCard>
-                                    <VoiceFrequencySection
-                                        temporal={temporal.clone()}
-                                        casts_stats={casts}
-                                        network_comparison={comparison.cloned()}
-                                    />
-                                </ReportCard>
-                            }
-                        } else {
-                            html! {}
-                        }}
+                                                // Section 2: Follower Growth Card
+                                                {if let (Some(followers), Some(temporal), Some(engagement), Some(p)) = (
+                                                    annual_report.as_ref().map(|r| &r.follower_growth),
+                                                    annual_report.as_ref().map(|r| &r.temporal_activity),
+                                                    annual_report.as_ref().map(|r| &r.engagement),
+                                                    &*profile,
+                                                ) {
+                                                    html! {
+                                                        <ReportCard>
+                                                            <FollowerGrowthSection
+                                                                followers={followers.clone()}
+                                                                temporal={temporal.clone()}
+                                                                engagement={engagement.clone()}
+                                                                profile={p.clone()}
+                                                            />
+                                                        </ReportCard>
+                                                    }
+                                                } else {
+                                                    html! {}
+                                                }}
 
-                                    // Section 3: Your Engagement Impact Card
-                                    {if let Some(engagement) = annual_report.as_ref().map(|r| &r.engagement) {
-                                        html! {
-                                            <ReportCard>
-                                                <EngagementSection
-                                                    engagement={engagement.clone()}
-                                                    engagement_2024={(*engagement_2024).clone()}
-                                                />
-                                            </ReportCard>
-                                        }
-                                    } else {
-                                        html! {}
-                                    }}
-
-                                    // Section 3.5: Activity Distribution Card
-                                    {if let Some(temporal) = annual_report.as_ref().map(|r| &r.temporal_activity) {
-                                        html! {
-                                            <ReportCard>
-                                                <ActivityDistributionSection
-                                                    temporal={temporal.clone()}
-                                                />
-                                            </ReportCard>
-                                        }
-                                    } else {
-                                        html! {}
-                                    }}
-
-                                    // Section 3.6: Top Interactive Users Card
+                                    // Section 3: Top Interactive Users Card (renumbered from Section 3.6)
                                     {if let Some(engagement) = annual_report.as_ref().map(|r| &r.engagement) {
                                         html! {
                                             <ReportCard>
                                                 <TopInteractiveUsersSection
                                                     engagement={engagement.clone()}
+                                                    current_user_fid={current_user_fid}
                                                 />
                                             </ReportCard>
                                         }
@@ -830,70 +801,34 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                         html! {}
                                     }}
 
-                                    // Section 3.7: Engagement Quality Card
-                                    {if let (Some(engagement), Some(temporal)) = (
-                            annual_report.as_ref().map(|r| &r.engagement),
-                                        annual_report.as_ref().map(|r| &r.temporal_activity),
-                                    ) {
-                                        html! {
-                                            <ReportCard>
-                                                <EngagementQualitySection
-                                                    engagement={engagement.clone()}
-                                                    temporal={temporal.clone()}
-                                                />
-                                            </ReportCard>
-                                        }
-                                    } else {
-                                        html! {}
-                                    }}
-
-                                    // Section 3.8: Growth Trend Card
-                                    {if let Some(followers) = annual_report.as_ref().map(|r| &r.follower_growth) {
-                                        html! {
-                                            <ReportCard>
-                                                <GrowthTrendSection
-                                                    followers={followers.clone()}
-                                                />
-                                            </ReportCard>
-                                        }
-                                    } else {
-                                        html! {}
-                                    }}
-
-                                    // Section 4: Content Style & Themes Card (merged)
+                                    // Section 4: Your Unique Style Card (renumbered from Section 6)
                         {if let Some(style) = annual_report.as_ref().map(|r| &r.content_style) {
-                            let casts = casts_stats.as_ref().cloned().unwrap_or_else(|| CastsStatsResponse {
-                                total_casts: 0,
-                                date_distribution: Vec::new(),
-                                date_range: None,
-                                language_distribution: std::collections::HashMap::new(),
-                                top_nouns: Vec::new(),
-                                top_verbs: Vec::new(),
-                            });
-                            html! {
-                                <ReportCard>
-                                    <StyleSection
-                                        style={style.clone()}
-                                        casts_stats={casts}
-                                    />
-                                </ReportCard>
+                            if let Some(profile_data) = profile.as_ref() {
+                                let casts = casts_stats.as_ref().cloned().unwrap_or_else(|| CastsStatsResponse {
+                                    total_casts: 0,
+                                    date_distribution: Vec::new(),
+                                    date_range: None,
+                                    language_distribution: std::collections::HashMap::new(),
+                                    top_nouns: Vec::new(),
+                                    top_verbs: Vec::new(),
+                                });
+                                html! {
+                                    <ReportCard>
+                                        <StyleSection
+                                            style={style.clone()}
+                                            casts_stats={casts}
+                                            profile={profile_data.clone()}
+                                        />
+                                    </ReportCard>
+                                }
+                            } else {
+                                html! {}
                             }
                         } else {
                             html! {}
                         }}
 
-                                    // Section 5: Highlights Card
-                                    {if let Some(temporal) = annual_report.as_ref().map(|r| &r.temporal_activity) {
-                                        html! {
-                                            <ReportCard>
-                                                <HighlightsSection temporal={temporal.clone()} />
-                                            </ReportCard>
-                                        }
-                                    } else {
-                                        html! {}
-                                    }}
-
-                                    // Section 6: Personality Tag Card (Second to Last)
+                                    // Section 5: Personality Tag Card (Second to Last)
                                     {if let (Some(temporal), Some(engagement), Some(style), Some(followers)) = (
                             annual_report.as_ref().map(|r| &r.temporal_activity),
                             annual_report.as_ref().map(|r| &r.engagement),
@@ -916,6 +851,12 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                                     content_style={style.clone()}
                                                     follower_growth={followers.clone()}
                                                     casts_stats={casts}
+                                                    profile={(*profile).clone()}
+                                                    annual_report={(*annual_report).clone()}
+                                                    is_farcaster_env={is_farcaster_env}
+                                                    share_url={share_url.clone()}
+                                                    is_own_report={is_own_report}
+                                                    current_user_fid={current_user_fid}
                                                 />
                                             </ReportCard>
                                         }
@@ -923,17 +864,6 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                         html! {}
                                     }}
 
-                                                // Section 7: 2025 Call to Action Card (Last Page)
-                                                <ReportCard with_padding_top={false}>
-                                                    <CallToActionSection
-                                                        profile={(*profile).clone()}
-                                                        annual_report={(*annual_report).clone()}
-                                                        is_farcaster_env={is_farcaster_env}
-                                                        share_url={share_url.clone()}
-                                                        is_own_report={is_own_report}
-                                                        current_user_fid={current_user_fid}
-                                                    />
-                                                </ReportCard>
                                             </>
                                         }
                                     } else {
