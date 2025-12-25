@@ -1,0 +1,30 @@
+name = "polyjuice-worker"
+main = "worker/src/lib.rs"
+compatibility_date = "2024-01-01"
+
+# Routes configuration
+# Uncomment and configure based on your domain setup
+# routes = [
+#   { pattern = "miniapp.polyjuice.io/*", zone_name = "polyjuice.io" }
+# ]
+
+# Environment variables
+# These can be overridden by secrets set via: wrangler secret put <NAME>
+[vars]
+# Your production URL where the miniapp is hosted
+BASE_URL = "https://miniapp.polyjuice.io"
+
+# SOURCE_URL: Optional. If set, use this as the source URL for fetching content.
+# If not set, will use GitHub Pages format: https://{GITHUB_USERNAME}.github.io
+# Example: SOURCE_URL = "https://your-custom-domain.com"
+# SOURCE_URL = "https://your-custom-domain.com"
+
+# GitHub username (used if SOURCE_URL is not set)
+# This will be used to construct: https://{GITHUB_USERNAME}.github.io
+GITHUB_USERNAME = "your-username"  # Replace with your GitHub username
+
+# For production, it's recommended to use secrets instead of vars:
+# wrangler secret put BASE_URL
+# wrangler secret put SOURCE_URL  # Optional: for custom source URL
+# wrangler secret put GITHUB_USERNAME
+

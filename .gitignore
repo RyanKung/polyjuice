@@ -57,3 +57,13 @@ js/farcaster-bundle.js
 # Keep only the source entry files
 !js/walletconnect-entry.js
 !js/farcaster-entry.js
+
+# Cloudflare Worker build artifacts
+worker/pkg/
+worker/.wrangler/
+worker/package.json
+worker/package-lock.json
+
+# Wrangler config files (use wrangler.example.toml instead)
+wrangler.toml
+worker/wrangler.toml

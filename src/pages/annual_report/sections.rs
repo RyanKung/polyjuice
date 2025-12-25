@@ -1328,7 +1328,7 @@ const TAROT_CARDS: &[(&str, &str, &str)] = &[
     ),
     (
         "The World",
-        "21-theworld.jpg",
+        "21-world.jpg",
         "You have built a significant presence in the community",
     ),
 ];
@@ -1819,21 +1819,37 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 40px;
+            justify-content: flex-start;
+            padding: 100px 40px 40px 40px;
             box-sizing: border-box;
+            overflow-y: auto;
         ">
             <div style="
                 text-align: center;
                 width: 100%;
                 max-width: 600px;
             ">
+                <h2 style="
+                    font-size: 36px;
+                    font-weight: 700;
+                    color: white;
+                    margin: 0 0 16px 0;
+                    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+                ">{matched_tag.name.clone()}</h2>
+
+                <p style="
+                    font-size: 18px;
+                    color: rgba(255, 255, 255, 0.9);
+                    margin: 0 0 32px 0;
+                    line-height: 1.6;
+                ">{matched_tag.description.clone()}</p>
+
                 <div
                     class="tarot-card"
                     onclick={on_card_click.clone()}
                     style="
-                        width: 280px;
-                        height: 400px;
+                        width: 200px;
+                        height: 280px;
                         margin: 0 auto 32px;
                         perspective: 1000px;
                         cursor: pointer;
@@ -1936,29 +1952,14 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                     </div>
                 </div>
 
-                <h2 style="
-                    font-size: 36px;
-                    font-weight: 700;
-                    color: white;
-                    margin: 0 0 16px 0;
-                    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-                ">{matched_tag.name.clone()}</h2>
-
-                <p style="
-                    font-size: 18px;
-                    color: rgba(255, 255, 255, 0.9);
-                    margin: 0 0 40px 0;
-                    line-height: 1.6;
-                ">{matched_tag.description.clone()}</p>
-
                 // Share buttons
                 <div style="
                     display: flex;
                     flex-direction: column;
-                    gap: 16px;
+                    gap: 12px;
                     align-items: center;
                     width: 100%;
-                    max-width: 400px;
+                    max-width: 300px;
                     margin: 0 auto;
                 ">
                     {if !is_own_report {
@@ -1979,9 +1980,9 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                     background: rgba(0, 122, 255, 0.8);
                                     color: white;
                                     border: none;
-                                    border-radius: 12px;
-                                    padding: 16px 32px;
-                                    font-size: 18px;
+                                    border-radius: 10px;
+                                    padding: 12px 24px;
+                                    font-size: 16px;
                                     font-weight: 600;
                                     cursor: pointer;
                                     transition: all 0.3s ease;
@@ -2003,9 +2004,9 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                     background: rgba(0, 122, 255, 0.8);
                                     color: white;
                                     border: none;
-                                    border-radius: 12px;
-                                    padding: 16px 32px;
-                                    font-size: 18px;
+                                    border-radius: 10px;
+                                    padding: 12px 24px;
+                                    font-size: 16px;
                                     font-weight: 600;
                                     cursor: pointer;
                                     transition: all 0.3s ease;
@@ -2031,9 +2032,9 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                         background: rgba(29, 161, 242, 0.8);
                                         color: white;
                                         border: none;
-                                        border-radius: 12px;
-                                        padding: 16px 32px;
-                                        font-size: 18px;
+                                        border-radius: 10px;
+                                        padding: 12px 24px;
+                                        font-size: 16px;
                                         font-weight: 600;
                                         cursor: pointer;
                                         transition: all 0.3s ease;
@@ -2052,9 +2053,9 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                         background: rgba(255, 255, 255, 0.1);
                                         color: white;
                                         border: 1px solid rgba(255, 255, 255, 0.2);
-                                        border-radius: 12px;
-                                        padding: 16px 32px;
-                                        font-size: 18px;
+                                        border-radius: 10px;
+                                        padding: 12px 24px;
+                                        font-size: 16px;
                                         font-weight: 600;
                                         cursor: pointer;
                                         transition: all 0.3s ease;

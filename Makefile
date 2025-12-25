@@ -82,10 +82,42 @@ check:
 	@echo "Checking code..."
 	cargo check
 
+# Worker commands
+.PHONY: worker-build
+worker-build:
+	@echo "Building Cloudflare Worker..."
+	cd worker && cargo build --target wasm32-unknown-unknown --release
+	@echo "✅ Worker build complete"
+
+.PHONY: worker-deploy
+worker-deploy: worker-build
+	@echo "Deploying Cloudflare Worker..."
+	@echo "Make sure you have configured wrangler.toml and logged in with 'wrangler login'"
+	cd worker && wrangler deploy
+	@echo "✅ Worker deployed successfully"
+
+.PHONY: worker-dev
+worker-dev:
+	@echo "Starting Cloudflare Worker in development mode..."
+	@echo "Make sure you have configured wrangler.toml"
+	cd worker && wrangler dev
+
+.PHONY: worker-secrets
+worker-secrets:
+	@echo "Setting Cloudflare Worker secrets..."
+	@echo "You will be prompted to enter values for each secret"
+	cd worker && \
+		echo "Setting BASE_URL..." && wrangler secret put BASE_URL && \
+		echo "Setting GITHUB_USERNAME..." && wrangler secret put GITHUB_USERNAME && \
+		echo "Setting SOURCE_URL (optional, press Enter to skip)..." && wrangler secret put SOURCE_URL || true
+	@echo "✅ Secrets configured"
+
 # Help
 .PHONY: help
 help:
 	@echo "Available commands:"
+	@echo ""
+	@echo "Frontend commands:"
 	@echo "  make serve      - Start dev server with watch mode (http://127.0.0.1:8080)"
 	@echo "  make build      - Build WebAssembly application"
 	@echo "  make build-prod - Build for production"
@@ -93,7 +125,12 @@ help:
 	@echo "  make deploy     - Deploy to GitHub Pages"
 	@echo "  make check      - Check code without building"
 	@echo "  make clean      - Clean build artifacts"
-	@echo "  make help       - Show this help message"
+	@echo ""
+	@echo "Worker commands:"
+	@echo "  make worker-build   - Build Cloudflare Worker"
+	@echo "  make worker-deploy  - Deploy Cloudflare Worker"
+	@echo "  make worker-dev     - Start Worker in development mode"
+	@echo "  make worker-secrets - Set Worker secrets interactively"
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  SNAPRAG_API_URL - API server URL (can be set in .env file)"
@@ -104,5 +141,6 @@ help:
 	@echo "  3. Run 'make serve' to load configuration"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make serve      # Start dev server with auto-reload (.env will be loaded)"
-	@echo "  make deploy     # Deploy to production"
+	@echo "  make serve         # Start dev server with auto-reload (.env will be loaded)"
+	@echo "  make deploy      # Deploy frontend to production"
+	@echo "  make worker-deploy # Deploy Cloudflare Worker"
