@@ -1,5 +1,5 @@
 {
-  "frame": {
+  "miniapp": {
     "name": "polyjuice",
     "version": "1",
     "iconUrl": "https://miniapp.polyjuice.io/imgs/icon.png",
@@ -24,6 +24,7 @@
     "heroImageUrl": "https://miniapp.polyjuice.io/imgs/hero.png",
     "tagline": "Unlock Real Social Value",
     "buttonTitle": "Open Polyjuice",
+    "ogTitle": "Polyjuice - Social Discovery",
     "ogDescription": "Discover and chat with Farcaster users using AI-powered RAG technology",
     "ogImageUrl": "https://miniapp.polyjuice.io/logo.png"
   },
