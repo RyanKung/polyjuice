@@ -4,7 +4,8 @@ use yew::prelude::*;
 use crate::dashboard::Dashboard;
 use crate::farcaster;
 use crate::models::ProfileData;
-use crate::services::{create_profile_endpoint, make_request_with_payment};
+use crate::services::create_profile_endpoint;
+use crate::services::make_request_with_payment;
 use crate::wallet::WalletAccount;
 
 #[derive(Properties, PartialEq, Clone)]
@@ -140,8 +141,11 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                                     }
                                     Err(e) => {
                                         web_sys::console::warn_1(
-                                            &format!("⚠️ Failed to fetch profile by address: {}", e)
-                                                .into(),
+                                            &format!(
+                                                "⚠️ Failed to fetch profile by address: {}",
+                                                e
+                                            )
+                                            .into(),
                                         );
                                         is_loading_wallet_profile_clone.set(false);
                                     }
@@ -173,9 +177,11 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
                 }
             } else {
                 // Not in Farcaster environment, allow fallback
-                (user.fid.or_else(|| {
-                    props.wallet_account.as_ref().and_then(|acc| acc.fid)
-                }), None)
+                (
+                    user.fid
+                        .or_else(|| props.wallet_account.as_ref().and_then(|acc| acc.fid)),
+                    None,
+                )
             }
         } else {
             (None, None)
@@ -318,4 +324,3 @@ pub fn ProfilePage(props: &ProfilePageProps) -> Html {
         </div>
     }
 }
-

@@ -42,12 +42,12 @@ pub async fn perform_search(
 
     // Scroll to top immediately when search starts
     if let Some(window) = web_sys::window() {
-        let _ = window.scroll_to_with_x_and_y(0.0, 0.0);
+        window.scroll_to_with_x_and_y(0.0, 0.0);
         if let Some(document) = window.document() {
             if let Ok(Some(main_content)) = document.query_selector(".main-content") {
                 use wasm_bindgen::JsCast;
                 if let Ok(main_element) = main_content.dyn_into::<web_sys::HtmlElement>() {
-                    let _ = main_element.scroll_to_with_x_and_y(0.0, 0.0);
+                    main_element.scroll_to_with_x_and_y(0.0, 0.0);
                 }
             }
         }
@@ -490,6 +490,7 @@ pub fn create_view_switch_handler(
 }
 
 /// Create smart back button handler
+#[allow(clippy::too_many_arguments)]
 pub fn create_smart_back_handler(
     current_view: UseStateHandle<String>,
     search_query: UseStateHandle<Option<String>>,

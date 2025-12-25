@@ -833,176 +833,27 @@ pub fn create_annual_report_endpoint(fid: i64, year: i32) -> EndpointInfo {
     }
 }
 
-/// Create engagement endpoint info
-pub fn create_engagement_endpoint(fid: i64, start_timestamp: Option<i64>, end_timestamp: Option<i64>) -> EndpointInfo {
-    let mut path = format!("/api/users/{}/engagement", fid);
-    let mut query_parts = Vec::new();
-    
-    if let Some(start) = start_timestamp {
-        query_parts.push(format!("start_timestamp={}", start));
-    }
-    if let Some(end) = end_timestamp {
-        query_parts.push(format!("end_timestamp={}", end));
-    }
-    
-    if !query_parts.is_empty() {
-        path.push_str("?");
-        path.push_str(&query_parts.join("&"));
-    }
-    
-    EndpointInfo {
-        path,
-        method: "GET".to_string(),
-        name: "Get Engagement".to_string(),
-        description: "Get user engagement metrics".to_string(),
-        tier: "Premium".to_string(),
-        requires_payment: true,
-        default_body: None,
-    }
-}
-
-/// Create temporal activity endpoint info
-pub fn create_temporal_activity_endpoint(fid: i64, start_timestamp: Option<i64>, end_timestamp: Option<i64>) -> EndpointInfo {
-    let mut path = format!("/api/users/{}/activity/temporal", fid);
-    let mut query_parts = Vec::new();
-    
-    if let Some(start) = start_timestamp {
-        query_parts.push(format!("start_timestamp={}", start));
-    }
-    if let Some(end) = end_timestamp {
-        query_parts.push(format!("end_timestamp={}", end));
-    }
-    
-    if !query_parts.is_empty() {
-        path.push_str("?");
-        path.push_str(&query_parts.join("&"));
-    }
-    
-    EndpointInfo {
-        path,
-        method: "GET".to_string(),
-        name: "Get Temporal Activity".to_string(),
-        description: "Get temporal activity analysis".to_string(),
-        tier: "Premium".to_string(),
-        requires_payment: true,
-        default_body: None,
-    }
-}
-
-/// Create content style endpoint info
-pub fn create_content_style_endpoint(fid: i64, start_timestamp: Option<i64>, end_timestamp: Option<i64>) -> EndpointInfo {
-    let mut path = format!("/api/users/{}/content/style", fid);
-    let mut query_parts = Vec::new();
-    
-    if let Some(start) = start_timestamp {
-        query_parts.push(format!("start_timestamp={}", start));
-    }
-    if let Some(end) = end_timestamp {
-        query_parts.push(format!("end_timestamp={}", end));
-    }
-    
-    if !query_parts.is_empty() {
-        path.push_str("?");
-        path.push_str(&query_parts.join("&"));
-    }
-    
-    EndpointInfo {
-        path,
-        method: "GET".to_string(),
-        name: "Get Content Style".to_string(),
-        description: "Get content style analysis".to_string(),
-        tier: "Premium".to_string(),
-        requires_payment: true,
-        default_body: None,
-    }
-}
-
-/// Create follower growth endpoint info
-pub fn create_follower_growth_endpoint(fid: i64, start_timestamp: Option<i64>, end_timestamp: Option<i64>) -> EndpointInfo {
-    let mut path = format!("/api/users/{}/followers/growth", fid);
-    let mut query_parts = Vec::new();
-    
-    if let Some(start) = start_timestamp {
-        query_parts.push(format!("start_timestamp={}", start));
-    }
-    if let Some(end) = end_timestamp {
-        query_parts.push(format!("end_timestamp={}", end));
-    }
-    
-    if !query_parts.is_empty() {
-        path.push_str("?");
-        path.push_str(&query_parts.join("&"));
-    }
-    
-    EndpointInfo {
-        path,
-        method: "GET".to_string(),
-        name: "Get Follower Growth".to_string(),
-        description: "Get follower growth metrics".to_string(),
-        tier: "Premium".to_string(),
-        requires_payment: true,
-        default_body: None,
-    }
-}
-
-/// Create domains endpoint info
-pub fn create_domains_endpoint(fid: i64) -> EndpointInfo {
-    EndpointInfo {
-        path: format!("/api/users/{}/domains", fid),
-        method: "GET".to_string(),
-        name: "Get Domains".to_string(),
-        description: "Get domain and username status".to_string(),
-        tier: "Premium".to_string(),
-        requires_payment: true,
-        default_body: None,
-    }
-}
-
-/// Create network averages endpoint info
-pub fn create_network_averages_endpoint(start_timestamp: Option<i64>, end_timestamp: Option<i64>) -> EndpointInfo {
-    let mut path = "/api/stats/network/averages".to_string();
-    let mut query_parts = Vec::new();
-    
-    if let Some(start) = start_timestamp {
-        query_parts.push(format!("start_timestamp={}", start));
-    }
-    if let Some(end) = end_timestamp {
-        query_parts.push(format!("end_timestamp={}", end));
-    }
-    
-    if !query_parts.is_empty() {
-        path.push_str("?");
-        path.push_str(&query_parts.join("&"));
-    }
-    
-    EndpointInfo {
-        path,
-        method: "GET".to_string(),
-        name: "Get Network Averages".to_string(),
-        description: "Get network-wide statistics".to_string(),
-        tier: "Basic".to_string(),
-        requires_payment: false,
-        default_body: None,
-    }
-}
-
 /// Create casts stats endpoint info
-pub fn create_casts_stats_endpoint(fid: i64, start_timestamp: Option<i64>, end_timestamp: Option<i64>) -> EndpointInfo {
+pub fn create_casts_stats_endpoint(
+    fid: i64,
+    start_timestamp: Option<i64>,
+    end_timestamp: Option<i64>,
+) -> EndpointInfo {
     let mut path = format!("/api/casts/stats/{}", fid);
     let mut query_parts = Vec::new();
-    
+
     if let Some(start) = start_timestamp {
         query_parts.push(format!("start_timestamp={}", start));
     }
     if let Some(end) = end_timestamp {
         query_parts.push(format!("end_timestamp={}", end));
     }
-    
+
     if !query_parts.is_empty() {
-        path.push_str("?");
+        path.push('?');
         path.push_str(&query_parts.join("&"));
     }
-    
+
     EndpointInfo {
         path,
         method: "GET".to_string(),
@@ -1020,14 +871,5 @@ pub fn get_2025_timestamps() -> (i64, i64) {
     let start = 1735689600;
     // 2025-12-31 23:59:59 UTC
     let end = 1767225600;
-    (start, end)
-}
-
-/// Get 2024 year timestamps (start and end) for comparison
-pub fn get_2024_timestamps() -> (i64, i64) {
-    // 2024-01-01 00:00:00 UTC
-    let start = 1704067200;
-    // 2024-12-31 23:59:59 UTC
-    let end = 1735689600;
     (start, end)
 }

@@ -4,7 +4,7 @@ use std::fs;
 fn main() {
     // Priority: Environment variables > .env file
     // This allows GitHub Actions to pass secrets via environment variables
-    
+
     // Check for SNAPRAG_API_URL
     if let Ok(value) = env::var("SNAPRAG_API_URL") {
         println!("cargo:rustc-env=SNAPRAG_API_URL={}", value);

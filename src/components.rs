@@ -174,7 +174,6 @@ pub fn ErrorMessage(props: &ErrorMessageProps) -> Html {
     }
 }
 
-
 #[derive(Properties, PartialEq, Clone)]
 pub struct FloatingChatButtonProps {
     pub on_switch_to_chat: Callback<()>,
@@ -189,7 +188,6 @@ pub fn FloatingChatButton(props: &FloatingChatButtonProps) -> Html {
         </div>
     }
 }
-
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct BottomTabProps {

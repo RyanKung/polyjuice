@@ -1,9 +1,10 @@
-pub mod utils;
 pub mod components;
-pub mod sections;
 pub mod page;
+pub mod sections;
+pub mod utils;
 
 use yew::prelude::*;
+
 use crate::wallet::WalletAccount;
 
 #[derive(Properties, PartialEq, Clone)]
@@ -18,4 +19,3 @@ pub struct AnnualReportPageProps {
 
 pub use components::*;
 pub use page::AnnualReportPage;
-

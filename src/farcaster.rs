@@ -273,9 +273,7 @@ pub fn validate_farcaster_user(user: &ContextUser) -> Result<(), String> {
     if user.fid.is_none() {
         let error_msg = format!(
             "Farcaster user missing FID: user={:?}, username={:?}, display_name={:?}",
-            user.fid,
-            user.username,
-            user.display_name
+            user.fid, user.username, user.display_name
         );
         web_sys::console::error_1(&error_msg.clone().into());
         return Err(format!(

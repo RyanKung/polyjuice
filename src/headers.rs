@@ -56,17 +56,17 @@ pub fn Header(props: &HeaderProps) -> Html {
                             let api_url_clone = api_url.clone();
                             let user_profile_clone = user_profile.clone();
                             let is_loading_profile_clone = is_loading_profile.clone();
-                                let address_clone = address.clone();
+                            let address_clone = address.clone();
                             let current_fid = account.fid;
 
-                                spawn_local(async move {
-                                    match crate::wallet::get_profile_for_address(
-                                        &api_url_clone,
-                                        &address_clone,
-                                    )
-                                    .await
-                                    {
-                                        Ok(profile) => {
+                            spawn_local(async move {
+                                match crate::wallet::get_profile_for_address(
+                                    &api_url_clone,
+                                    &address_clone,
+                                )
+                                .await
+                                {
+                                    Ok(profile) => {
                                         if let Some(profile) = profile {
                                             // Only set profile if it matches current FID (if available)
                                             // or if we don't have FID yet (profile might have FID)
@@ -88,16 +88,15 @@ pub fn Header(props: &HeaderProps) -> Html {
                                             );
                                         }
                                         is_loading_profile_clone.set(false);
-                                        }
-                                        Err(e) => {
-                                            web_sys::console::log_1(
-                                                &format!("⚠️ Failed to fetch profile: {}", e)
-                                                    .into(),
-                                            );
-                                            is_loading_profile_clone.set(false);
-                                        }
                                     }
-                                });
+                                    Err(e) => {
+                                        web_sys::console::log_1(
+                                            &format!("⚠️ Failed to fetch profile: {}", e).into(),
+                                        );
+                                        is_loading_profile_clone.set(false);
+                                    }
+                                }
+                            });
                         }
                     } else {
                         // No address, clear profile

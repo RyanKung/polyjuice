@@ -83,7 +83,7 @@ fn sign_request(
     let signature = mac.finalize().into_bytes();
 
     // Base64 encode
-    Ok(general_purpose::STANDARD.encode(&signature))
+    Ok(general_purpose::STANDARD.encode(signature))
 }
 
 /// Add authentication headers to a request if token and secret are configured

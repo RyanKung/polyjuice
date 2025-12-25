@@ -32,7 +32,7 @@ fn App() -> Html {
     let wallet_initialized = use_state(|| false);
     let wallet_error = use_state(|| None::<String>);
     let show_wallet_list = use_state(|| false);
-    let discovered_wallets = use_state(|| Vec::<wallet::DiscoveredWallet>::new());
+    let discovered_wallets = use_state(Vec::<wallet::DiscoveredWallet>::new);
 
     // Track if we're in Farcaster Mini App environment
     let is_farcaster_env = use_state(|| false);
@@ -139,7 +139,8 @@ fn App() -> Html {
                                 }
                                 Err(e) => {
                                     web_sys::console::error_1(
-                                        &format!("❌ Failed to get Farcaster context: {}", e).into(),
+                                        &format!("❌ Failed to get Farcaster context: {}", e)
+                                            .into(),
                                     );
                                 }
                             }
@@ -307,7 +308,7 @@ fn App() -> Html {
     // Clone annual_report_fid and show_annual_report early so they can be used both in use_effect_with and later
     let annual_report_fid_for_effect = annual_report_fid.clone();
     let show_annual_report_for_effect = show_annual_report.clone();
-    
+
     {
         let search_input = search_input.clone();
         let search_query_state = search_query.clone();
@@ -393,7 +394,7 @@ fn App() -> Html {
                         show_annual_report_for_restore.set(true);
                     }
                 } else {
-                restore_from_path(query, view);
+                    restore_from_path(query, view);
                 }
             }
 
@@ -411,7 +412,7 @@ fn App() -> Html {
                             show_annual_report_for_popstate.set(true);
                         }
                     } else {
-                    restore_from_path(query, view);
+                        restore_from_path(query, view);
                     }
                 } else {
                     // Returned to home page - clear all state
@@ -798,7 +799,7 @@ fn App() -> Html {
                                             let share_url = web_sys::window()
                                                 .and_then(|w| w.location().origin().ok())
                                                 .map(|origin| format!("{}/annual-report/{}", origin, fid));
-                                            
+
                                             // Get current user FID from farcaster context or wallet account
                                             let current_user_fid = if *is_farcaster_env {
                                                 (*farcaster_context).as_ref()
@@ -808,7 +809,7 @@ fn App() -> Html {
                                                 (*wallet_account).as_ref()
                                                     .and_then(|acc| acc.fid)
                                             };
-                                            
+
                                             html! {
                                                 <div class="annual-report-container">
                                                     <AnnualReportPage

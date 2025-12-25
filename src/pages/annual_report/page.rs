@@ -4,18 +4,19 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys;
 use yew::prelude::*;
 
-use crate::models::{
-    AnnualReportResponse, CastsStatsResponse, EngagementResponse,
-    ProfileWithRegistration,
-};
-use crate::services::{
-    create_annual_report_endpoint, create_casts_stats_endpoint, create_profile_endpoint,
-    get_2025_timestamps, make_request_with_payment,
-};
-
-use super::utils::{convert_annual_report_response};
-use super::{AnnualReportPageProps, ReportCard};
 use super::sections::*;
+use super::utils::convert_annual_report_response;
+use super::AnnualReportPageProps;
+use super::ReportCard;
+use crate::models::AnnualReportResponse;
+use crate::models::CastsStatsResponse;
+use crate::models::EngagementResponse;
+use crate::models::ProfileWithRegistration;
+use crate::services::create_annual_report_endpoint;
+use crate::services::create_casts_stats_endpoint;
+use crate::services::create_profile_endpoint;
+use crate::services::get_2025_timestamps;
+use crate::services::make_request_with_payment;
 
 /// Annual Report page component
 #[function_component]
@@ -31,7 +32,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
     let is_farcaster_env = props.is_farcaster_env;
     let share_url = props.share_url.clone();
     let current_user_fid = props.current_user_fid;
-    
+
     // Check if viewing own report
     // Only consider it as own report if current_user_fid is Some and matches the fid
     let is_own_report = if let Some(user_fid) = current_user_fid {
@@ -39,7 +40,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
     } else {
         false // If no current user FID, treat as viewing someone else's report
     };
-    
+
     // When viewing own report, show intro screen first, then content after clicking "lets begin"
     // When viewing someone else's report, skip intro screen and show personality tag page directly, then content after clicking button
     let show_intro = use_state(|| is_own_report); // Only show intro for own report
@@ -79,17 +80,27 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
             let current_page = current_page_for_loading.clone();
 
             // Start loading data in background (don't show loading UI yet)
-            web_sys::console::log_1(&"🚀 Starting annual report data loading in background...".into());
+            web_sys::console::log_1(
+                &"🚀 Starting annual report data loading in background...".into(),
+            );
             is_loading.set(true); // Mark as loading
 
             spawn_local(async move {
                 // Load annual report using unified endpoint
                 loading_status.set("Loading annual report...".to_string());
-                web_sys::console::log_1(&"🚀 Loading annual report from unified endpoint...".into());
-                
+                web_sys::console::log_1(
+                    &"🚀 Loading annual report from unified endpoint...".into(),
+                );
+
                 let annual_report_endpoint = create_annual_report_endpoint(fid, 2025);
-                web_sys::console::log_1(&format!("🌐 Requesting annual report from: {}", annual_report_endpoint.path).into());
-                
+                web_sys::console::log_1(
+                    &format!(
+                        "🌐 Requesting annual report from: {}",
+                        annual_report_endpoint.path
+                    )
+                    .into(),
+                );
+
                 match make_request_with_payment::<serde_json::Value>(
                     &api_url_clone,
                     &annual_report_endpoint,
@@ -101,11 +112,19 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                 .await
                 {
                     Ok(json) => {
-                        web_sys::console::log_1(&"✅ Received response from annual report API".into());
                         web_sys::console::log_1(
-                            &format!("📦 Response structure: {}", 
-                                if json.get("data").is_some() { "has 'data' field" } else { "no 'data' field" }
-                            ).into(),
+                            &"✅ Received response from annual report API".into(),
+                        );
+                        web_sys::console::log_1(
+                            &format!(
+                                "📦 Response structure: {}",
+                                if json.get("data").is_some() {
+                                    "has 'data' field"
+                                } else {
+                                    "no 'data' field"
+                                }
+                            )
+                            .into(),
                         );
                         // Extract the data field first
                         let api_data = if let Some(data) = json.get("data") {
@@ -118,74 +137,91 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                         match convert_annual_report_response(api_data) {
                             Ok(report) => {
                                 // Successfully loaded from unified endpoint
-                                web_sys::console::log_1(&"✅ Successfully parsed annual report".into());
                                 web_sys::console::log_1(
-                                    &format!("📊 Annual report data: FID={}, Year={}, Engagement={}", 
-                                        report.fid, 
-                                        report.year,
-                                        report.engagement.total_engagement
-                                    ).into(),
+                                    &"✅ Successfully parsed annual report".into(),
+                                );
+                                web_sys::console::log_1(
+                                    &format!(
+                                        "📊 Annual report data: FID={}, Year={}, Engagement={}",
+                                        report.fid, report.year, report.engagement.total_engagement
+                                    )
+                                    .into(),
                                 );
                                 annual_report.set(Some(report));
-                
+
                                 // Load profile for display purposes
                                 loading_status.set("Loading profile...".to_string());
-                                let profile_endpoint = create_profile_endpoint(&fid.to_string(), true);
+                                let profile_endpoint =
+                                    create_profile_endpoint(&fid.to_string(), true);
                                 if let Ok(p) = make_request_with_payment::<ProfileWithRegistration>(
-                    &api_url_clone,
+                                    &api_url_clone,
                                     &profile_endpoint,
-                    None,
-                    wallet_account_clone.as_ref(),
-                    None,
-                    None,
-                )
-                .await
+                                    None,
+                                    wallet_account_clone.as_ref(),
+                                    None,
+                                    None,
+                                )
+                                .await
                                 {
                                     profile.set(Some(p));
                                 }
 
-                // Load casts stats for additional data
-                loading_status.set("Loading cast statistics...".to_string());
+                                // Load casts stats for additional data
+                                loading_status.set("Loading cast statistics...".to_string());
                                 let (start_2025, end_2025) = get_2025_timestamps();
-                let casts_endpoint = create_casts_stats_endpoint(fid, Some(start_2025), Some(end_2025));
-                                if let Ok(json_data) = make_request_with_payment::<serde_json::Value>(
-                    &api_url_clone,
-                    &casts_endpoint,
-                    None,
-                    wallet_account_clone.as_ref(),
-                    None,
-                    None,
-                )
-                .await
-                {
+                                let casts_endpoint = create_casts_stats_endpoint(
+                                    fid,
+                                    Some(start_2025),
+                                    Some(end_2025),
+                                );
+                                if let Ok(json_data) =
+                                    make_request_with_payment::<serde_json::Value>(
+                                        &api_url_clone,
+                                        &casts_endpoint,
+                                        None,
+                                        wallet_account_clone.as_ref(),
+                                        None,
+                                        None,
+                                    )
+                                    .await
+                                {
                                     if let Some(outer_data) = json_data.get("data") {
-                            let actual_data = outer_data.get("data").unwrap_or(outer_data);
-                                        if let Ok(stats) = serde_json::from_value::<CastsStatsResponse>(actual_data.clone()) {
-                                casts_stats.set(Some(stats));
+                                        let actual_data =
+                                            outer_data.get("data").unwrap_or(outer_data);
+                                        if let Ok(stats) =
+                                            serde_json::from_value::<CastsStatsResponse>(
+                                                actual_data.clone(),
+                                            )
+                                        {
+                                            casts_stats.set(Some(stats));
                                         }
                                     }
                                 }
-                                
+
                                 web_sys::console::log_1(&"✅ All data loading completed".into());
                                 is_loading.set(false);
                                 data_loading_complete.set(true); // Mark data loading as complete
                                 loading_status.set("Complete!".to_string());
-                                
+
                                 // Setup scroll listener after data is loaded
                                 let scroll_container_ref_clone = scroll_container_ref.clone();
                                 let current_page_clone = current_page.clone();
                                 let window = web_sys::window().unwrap();
                                 let timeout_closure = Closure::<dyn FnMut()>::new(move || {
                                     let scroll_handler = {
-                                        let scroll_container_ref = scroll_container_ref_clone.clone();
+                                        let scroll_container_ref =
+                                            scroll_container_ref_clone.clone();
                                         let current_page = current_page_clone.clone();
                                         Closure::<dyn FnMut(_)>::new(move |_e: web_sys::Event| {
-                                            if let Some(element) = scroll_container_ref.cast::<web_sys::HtmlElement>() {
+                                            if let Some(element) =
+                                                scroll_container_ref.cast::<web_sys::HtmlElement>()
+                                            {
                                                 let scroll_left = element.scroll_left();
                                                 let client_width = element.client_width();
                                                 let card_width = client_width as f64;
                                                 let page = if card_width > 0.0 {
-                                                    (scroll_left as f64 / card_width).round() as usize
+                                                    (scroll_left as f64 / card_width).round()
+                                                        as usize
                                                 } else {
                                                     0
                                                 };
@@ -193,30 +229,48 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                             }
                                         })
                                     };
-                                    
-                                    if let Some(element) = scroll_container_ref_clone.cast::<web_sys::HtmlElement>() {
-                                        if let Err(e) = element.add_event_listener_with_callback("scroll", scroll_handler.as_ref().unchecked_ref()) {
-                                            web_sys::console::error_1(&format!("Failed to add scroll listener: {:?}", e).into());
-                        } else {
+
+                                    if let Some(element) =
+                                        scroll_container_ref_clone.cast::<web_sys::HtmlElement>()
+                                    {
+                                        if let Err(e) = element.add_event_listener_with_callback(
+                                            "scroll",
+                                            scroll_handler.as_ref().unchecked_ref(),
+                                        ) {
+                                            web_sys::console::error_1(
+                                                &format!("Failed to add scroll listener: {:?}", e)
+                                                    .into(),
+                                            );
+                                        } else {
                                             // Store handler to prevent it from being dropped
                                             scroll_handler.forget();
                                         }
                                     }
                                 });
-                                
-                                let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-                                    timeout_closure.as_ref().unchecked_ref(),
-                                    200
-                                );
+
+                                let _ = window
+                                    .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                        timeout_closure.as_ref().unchecked_ref(),
+                                        200,
+                                    );
                                 timeout_closure.forget();
                             }
                             Err(parse_err) => {
-                           let error_msg = format!("❌ Failed to parse annual report: {}", parse_err);
-                           web_sys::console::error_1(&error_msg.clone().into());
-                           web_sys::console::error_1(&format!("📦 Raw API response: {}", serde_json::to_string(&api_data_for_error).unwrap_or_else(|_| "Failed to serialize".to_string())).into());
-                           is_loading.set(false);
-                           data_loading_complete.set(true); // Mark as complete even on error
-                           loading_status.set(format!("Failed to parse annual report: {}", parse_err));
+                                let error_msg =
+                                    format!("❌ Failed to parse annual report: {}", parse_err);
+                                web_sys::console::error_1(&error_msg.clone().into());
+                                web_sys::console::error_1(
+                                    &format!(
+                                        "📦 Raw API response: {}",
+                                        serde_json::to_string(&api_data_for_error)
+                                            .unwrap_or_else(|_| "Failed to serialize".to_string())
+                                    )
+                                    .into(),
+                                );
+                                is_loading.set(false);
+                                data_loading_complete.set(true); // Mark as complete even on error
+                                loading_status
+                                    .set(format!("Failed to parse annual report: {}", parse_err));
                             }
                         }
                     }
@@ -233,7 +287,6 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
             || ()
         });
     }
-
 
     // Calculate total number of cards
     let total_cards = if annual_report.is_some() && profile.is_some() {
@@ -283,7 +336,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                 if is_own_report && !*show_content && !*has_clicked_begin {
                     <>
                         // Fixed background image at bottom
-                        <img 
+                        <img
                             src="/imgs/report-bg-0.png"
                             alt=""
                             style="
@@ -496,7 +549,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 top_nouns: Vec::new(),
                                 top_verbs: Vec::new(),
                             });
-                            
+
                             // Calculate personality tag image (reuse helper functions from sections module)
                             use super::sections::{calculate_personality_tag, get_image_url};
                             let (_tag_name, image_path) = calculate_personality_tag(
@@ -507,18 +560,17 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 &casts,
                             );
                             let image_url = get_image_url(&image_path);
-                            
+
                             // Get username for button text (this is the owner of the report being viewed)
                             let username = profile.as_ref()
-                                .and_then(|p| p.username.as_ref())
-                                .map(|u| u.clone())
+                                .and_then(|p| p.username.as_ref()).cloned()
                                 .unwrap_or_else(|| format!("FID {}", fid));
-                            
+
                             let show_content_clone = show_content.clone();
                             html! {
                                 <>
                                     // Fixed background image at bottom (similar to intro screen)
-                                    <img 
+                                    <img
                                         src="/imgs/report-bg-0.png"
                                         alt=""
                                         style="
@@ -553,7 +605,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                             text-align: center;
                                             padding: 40px;
                                         ">
-                                            <img 
+                                            <img
                                                 src={image_url.clone()}
                                                 alt="Personality Tag"
                                                 style="
@@ -610,7 +662,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                         html! {
                             <>
                                 // Fixed background image at bottom
-                                <img 
+                                <img
                                     src="/imgs/report-bg.png"
                                     alt=""
                                     style="
@@ -626,7 +678,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                     "
                                 />
                                 // Horizontal scrolling container
-                                <div 
+                                <div
                                     ref={scroll_container_ref.clone()}
                                     class="annual-report-scroll-container"
                                     style="
@@ -669,7 +721,9 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                         e.prevent_default();
                                     })}
                                     onwheel={Callback::from({
-                                        let scroll_container_ref = scroll_container_ref.clone();
+                                        // scroll_container_ref is captured but not used in the closure
+                                        // It's kept for potential future use
+                                        let _scroll_container_ref = scroll_container_ref.clone();
                                         move |e: web_sys::WheelEvent| {
                                             // Only allow horizontal scrolling with wheel
                                             if e.delta_y().abs() > e.delta_x().abs() {
@@ -965,4 +1019,3 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
         </div>
     }
 }
-

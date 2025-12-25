@@ -1,16 +1,18 @@
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::{spawn_local, JsFuture};
+use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen_futures::JsFuture;
 use yew::prelude::*;
 
-use crate::farcaster;
-use crate::models::{
-    AnnualReportResponse, CastsStatsResponse, ContentStyleResponse,
-    EngagementResponse, FollowerGrowthResponse,
-    ProfileWithRegistration, TemporalActivityResponse,
-};
-
 use super::utils::farcaster_to_unix;
+use crate::farcaster;
+use crate::models::AnnualReportResponse;
+use crate::models::CastsStatsResponse;
+use crate::models::ContentStyleResponse;
+use crate::models::EngagementResponse;
+use crate::models::FollowerGrowthResponse;
+use crate::models::ProfileWithRegistration;
+use crate::models::TemporalActivityResponse;
 
 // Cover Page Component
 #[derive(Properties, PartialEq, Clone)]
@@ -36,9 +38,9 @@ pub fn AnnualReportCover(props: &AnnualReportCoverProps) -> Html {
                 max-width: 600px;
             ">
                 if let Some(pfp_url) = &props.profile.pfp_url {
-                    <img 
-                        src={pfp_url.clone()} 
-                        alt="Profile" 
+                    <img
+                        src={pfp_url.clone()}
+                        alt="Profile"
                         style="
                             width: 100px;
                             height: 100px;
@@ -117,20 +119,33 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
             let diff_days = (diff_seconds / 86400.0) as i64;
             let diff_months = diff_days / 30;
             let diff_years = diff_days / 365;
-            
+
             if diff_years > 0 {
-                format!("{} {} ago", diff_years, if diff_years == 1 { "year" } else { "years" })
+                format!(
+                    "{} {} ago",
+                    diff_years,
+                    if diff_years == 1 { "year" } else { "years" }
+                )
             } else if diff_months > 0 {
-                format!("{} {} ago", diff_months, if diff_months == 1 { "month" } else { "months" })
+                format!(
+                    "{} {} ago",
+                    diff_months,
+                    if diff_months == 1 { "month" } else { "months" }
+                )
             } else if diff_days > 0 {
-                format!("{} {} ago", diff_days, if diff_days == 1 { "day" } else { "days" })
+                format!(
+                    "{} {} ago",
+                    diff_days,
+                    if diff_days == 1 { "day" } else { "days" }
+                )
             } else {
                 "Today".to_string()
             }
         })
         .unwrap_or_else(|| "N/A".to_string());
 
-    let follower_change = props.followers.current_followers as i64 - props.followers.followers_at_start as i64;
+    let follower_change =
+        props.followers.current_followers as i64 - props.followers.followers_at_start as i64;
 
     html! {
         <div class="report-card-content" style="
@@ -271,15 +286,15 @@ pub fn VoiceFrequencySection(props: &VoiceFrequencySectionProps) -> Html {
                 };
                 // Zodiac signs based on month
                 let zodiac = match month_num {
-                    1 => "♑", // Capricorn
-                    2 => "♒", // Aquarius
-                    3 => "♓", // Pisces
-                    4 => "♈", // Aries
-                    5 => "♉", // Taurus
-                    6 => "♊", // Gemini
-                    7 => "♋", // Cancer
-                    8 => "♌", // Leo
-                    9 => "♍", // Virgo
+                    1 => "♑",  // Capricorn
+                    2 => "♒",  // Aquarius
+                    3 => "♓",  // Pisces
+                    4 => "♈",  // Aries
+                    5 => "♉",  // Taurus
+                    6 => "♊",  // Gemini
+                    7 => "♋",  // Cancer
+                    8 => "♌",  // Leo
+                    9 => "♍",  // Virgo
                     10 => "♎", // Libra
                     11 => "♏", // Scorpio
                     12 => "♐", // Sagittarius
@@ -303,14 +318,6 @@ pub fn VoiceFrequencySection(props: &VoiceFrequencySectionProps) -> Html {
         .monthly_distribution
         .iter()
         .map(|m| m.count)
-        .max()
-        .unwrap_or(1);
-
-    let max_hourly_count = props
-        .temporal
-        .hourly_distribution
-        .iter()
-        .map(|h| h.count)
         .max()
         .unwrap_or(1);
 
@@ -530,7 +537,7 @@ pub fn ActivityDistributionSection(props: &ActivityDistributionSectionProps) -> 
                                 height: 200px;
                             ">
                             {for props.temporal.monthly_distribution.iter().map(|month| {
-                                    let height_percent = (month.count as f32 / max_monthly_count as f32 * 100.0) as f32;
+                                    let height_percent = month.count as f32 / max_monthly_count as f32 * 100.0;
                                 html! {
                                         <div style="
                                             flex: 1;
@@ -575,7 +582,7 @@ pub fn ActivityDistributionSection(props: &ActivityDistributionSectionProps) -> 
                 // Hourly Distribution Chart
                 {if !props.temporal.hourly_distribution.is_empty() {
                     // Rainbow colors for bars
-                    let rainbow_colors = vec![
+                    let rainbow_colors = [
                         "rgba(255, 0, 0, 0.8)",      // Red
                         "rgba(255, 127, 0, 0.8)",   // Orange
                         "rgba(255, 255, 0, 0.8)",   // Yellow
@@ -584,7 +591,7 @@ pub fn ActivityDistributionSection(props: &ActivityDistributionSectionProps) -> 
                         "rgba(75, 0, 130, 0.8)",    // Indigo
                         "rgba(148, 0, 211, 0.8)",   // Violet
                     ];
-                    
+
                                 html! {
                         <div style="
                             background: rgba(255, 255, 255, 0.1);
@@ -607,7 +614,7 @@ pub fn ActivityDistributionSection(props: &ActivityDistributionSectionProps) -> 
                                 height: 150px;
                             ">
                             {for props.temporal.hourly_distribution.iter().enumerate().map(|(idx, hour)| {
-                                    let height_percent = (hour.count as f32 / max_hourly_count as f32 * 100.0) as f32;
+                                    let height_percent = hour.count as f32 / max_hourly_count as f32 * 100.0;
                                     let color = rainbow_colors[idx % rainbow_colors.len()];
                                 html! {
                                         <div style="
@@ -721,29 +728,28 @@ pub fn TopInteractiveUsersSection(props: &TopInteractiveUsersSectionProps) -> Ht
                                         } else {
                                             min_size
                                         };
-                                        
+
                                         // Generate random offsets for positioning
                                         // Use FID as seed for consistent positioning
                                         let seed = reactor.fid as u64;
                                         let offset_x = ((seed * 7) % 100) as i32 - 50; // -50 to 50
                                         let offset_y = ((seed * 13) % 100) as i32 - 50; // -50 to 50
-                                        
+
                                         (reactor, size, offset_x, offset_y)
                                     })
                                     .collect();
-                                
+
                                 reactors_with_sizes.sort_by(|a, b| b.0.interaction_count.cmp(&a.0.interaction_count));
-                                
+
                                 html! {
                                     <>
                                         {for reactors_with_sizes.iter().enumerate().map(|(idx, (reactor, size, offset_x, offset_y))| {
                                             let bubble_size = format!("{}px", *size as i32);
                                             let avatar_url = reactor.pfp_url.as_ref().cloned();
                                             let username = reactor.username.as_ref()
-                                                .or(reactor.display_name.as_ref())
-                                                .map(|n| n.clone())
+                                                .or(reactor.display_name.as_ref()).cloned()
                                                 .unwrap_or_else(|| format!("FID {}", reactor.fid));
-                                            
+
                                             html! {
                                                 <div style={format!("
                                                     position: relative;
@@ -777,7 +783,7 @@ pub fn TopInteractiveUsersSection(props: &TopInteractiveUsersSectionProps) -> Ht
                                                     ">
                                                         {if let Some(url) = avatar_url {
                                                             html! {
-                                                                <img 
+                                                                <img
                                                                     src={url}
                                                                     alt=""
                                                                     style="
@@ -1002,7 +1008,10 @@ pub struct EngagementQualitySectionProps {
 
 #[function_component]
 pub fn EngagementQualitySection(props: &EngagementQualitySectionProps) -> Html {
-    let total_casts = props.temporal.total_casts_in_year.unwrap_or(props.temporal.total_casts);
+    let total_casts = props
+        .temporal
+        .total_casts_in_year
+        .unwrap_or(props.temporal.total_casts);
     let avg_engagement_per_cast = if total_casts > 0 {
         props.engagement.total_engagement as f32 / total_casts as f32
     } else {
@@ -1134,24 +1143,28 @@ pub struct GrowthTrendSectionProps {
 #[function_component]
 pub fn GrowthTrendSection(props: &GrowthTrendSectionProps) -> Html {
     let growth_rate = if props.followers.followers_at_start > 0 {
-        ((props.followers.current_followers as f32 - props.followers.followers_at_start as f32) 
-            / props.followers.followers_at_start as f32) * 100.0
+        ((props.followers.current_followers as f32 - props.followers.followers_at_start as f32)
+            / props.followers.followers_at_start as f32)
+            * 100.0
     } else {
         0.0
     };
-    
+
     // Find month with highest growth
-    let max_growth_month = props.followers.monthly_snapshots
+    let max_growth_month = props
+        .followers
+        .monthly_snapshots
         .iter()
         .zip(props.followers.monthly_snapshots.iter().skip(1))
         .map(|(prev, curr)| {
             let growth = curr.followers as i32 - prev.followers as i32;
             (curr.month.clone(), growth)
         })
-        .max_by_key(|(_, growth)| *growth)
-        .map(|(month, growth)| (month, growth));
+        .max_by_key(|(_, growth)| *growth);
 
-    let max_followers = props.followers.monthly_snapshots
+    let max_followers = props
+        .followers
+        .monthly_snapshots
         .iter()
         .map(|s| s.followers)
         .max()
@@ -1261,9 +1274,9 @@ pub fn GrowthTrendSection(props: &GrowthTrendSectionProps) -> Html {
                             month_str.to_string()
                         }
                     };
-                    
+
                     // Rainbow colors for bars
-                    let rainbow_colors = vec![
+                    let rainbow_colors = [
                         "rgba(255, 0, 0, 0.8)",      // Red
                         "rgba(255, 127, 0, 0.8)",   // Orange
                         "rgba(255, 255, 0, 0.8)",   // Yellow
@@ -1272,7 +1285,7 @@ pub fn GrowthTrendSection(props: &GrowthTrendSectionProps) -> Html {
                         "rgba(75, 0, 130, 0.8)",    // Indigo
                         "rgba(148, 0, 211, 0.8)",   // Violet
                     ];
-                    
+
                     html! {
                         <div style="
                             background: rgba(255, 255, 255, 0.1);
@@ -1297,7 +1310,7 @@ pub fn GrowthTrendSection(props: &GrowthTrendSectionProps) -> Html {
                                 min-width: fit-content;
                             ">
                                 {for props.followers.monthly_snapshots.iter().enumerate().map(|(idx, snapshot)| {
-                                    let height_percent = (snapshot.followers as f32 / max_followers as f32 * 100.0) as f32;
+                                    let height_percent = snapshot.followers as f32 / max_followers as f32 * 100.0;
                                     let color = rainbow_colors[idx % rainbow_colors.len()];
                                     let month_label = extract_month(&snapshot.month);
                                     html! {
@@ -1356,7 +1369,7 @@ pub struct ContentThemeSectionProps {
 pub fn ContentThemeSection(props: &ContentThemeSectionProps) -> Html {
     // Analyze top words to identify themes
     let top_words = props.style.top_words.iter().take(10).collect::<Vec<_>>();
-    
+
     html! {
         <div class="report-card-content" style="
             width: 100%;
@@ -1450,7 +1463,7 @@ pub fn StyleSection(props: &StyleSectionProps) -> Html {
     let top_emojis = props.style.top_emojis.iter().take(3).collect::<Vec<_>>();
     // Use top_words from content_style, not from casts_stats
     let top_words = props.style.top_words.clone();
-    
+
     // Find max count for font size calculation
     let max_count = top_words.iter().map(|w| w.count).max().unwrap_or(1);
 
@@ -1544,9 +1557,9 @@ pub fn StyleSection(props: &StyleSectionProps) -> Html {
                             // Calculate font size based on count (word cloud effect)
                             let size_ratio = word.count as f32 / max_count as f32;
                             let font_size = (12.0 + size_ratio * 24.0).clamp(12.0, 36.0);
-                            
+
                             // Rainbow colors - randomly assign based on index
-                            let rainbow_colors = vec![
+                            let rainbow_colors = [
                                 "#FF0000",      // Red
                                 "#FF7F00",      // Orange
                                 "#FFFF00",      // Yellow
@@ -1558,7 +1571,7 @@ pub fn StyleSection(props: &StyleSectionProps) -> Html {
                             // Use index to cycle through colors, but add some randomness
                             let color_idx = (idx + (word.word.len() % rainbow_colors.len())) % rainbow_colors.len();
                             let color = rainbow_colors[color_idx];
-                            
+
                             html! {
                                 <span style={format!("
                                     font-size: {}px;
@@ -1723,23 +1736,29 @@ pub struct CallToActionSectionProps {
 // Helper function to copy text to clipboard (async version for modern Clipboard API)
 async fn copy_to_clipboard_async(text: &str) -> bool {
     let window = web_sys::window().unwrap();
-    
+
     // Try modern Clipboard API first using js_sys::Reflect
     if let Ok(navigator_val) = js_sys::Reflect::get(&window, &"navigator".into()) {
         if !navigator_val.is_null() && !navigator_val.is_undefined() {
             if let Ok(clipboard_val) = js_sys::Reflect::get(&navigator_val, &"clipboard".into()) {
                 if !clipboard_val.is_null() && !clipboard_val.is_undefined() {
-                    if let Ok(write_text_fn) = js_sys::Reflect::get(&clipboard_val, &"writeText".into()) {
+                    if let Ok(write_text_fn) =
+                        js_sys::Reflect::get(&clipboard_val, &"writeText".into())
+                    {
                         if let Some(write_fn) = write_text_fn.dyn_ref::<js_sys::Function>() {
                             if let Ok(promise_val) = write_fn.call1(&clipboard_val, &text.into()) {
-                            if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
-                                match JsFuture::from(promise).await {
+                                if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
+                                    match JsFuture::from(promise).await {
                                         Ok(_) => {
-                                            web_sys::console::log_1(&"✅ Text copied using Clipboard API".into());
+                                            web_sys::console::log_1(
+                                                &"✅ Text copied using Clipboard API".into(),
+                                            );
                                             return true;
                                         }
                                         Err(e) => {
-                                            web_sys::console::warn_1(&format!("⚠️ Clipboard API failed: {:?}", e).into());
+                                            web_sys::console::warn_1(
+                                                &format!("⚠️ Clipboard API failed: {:?}", e).into(),
+                                            );
                                         }
                                     }
                                 }
@@ -1750,32 +1769,32 @@ async fn copy_to_clipboard_async(text: &str) -> bool {
             }
         }
     }
-    
+
     // Fallback: use document.execCommand
     let document = window.document().unwrap();
     let textarea = document.create_element("textarea").unwrap();
     let textarea_js: &wasm_bindgen::JsValue = textarea.as_ref();
-    
+
     if js_sys::Reflect::set(textarea_js, &"value".into(), &text.into()).is_err() {
         return false;
     }
-    
+
     let style = match js_sys::Reflect::get(textarea_js, &"style".into()) {
         Ok(s) => s,
         Err(_) => return false,
     };
-    
+
     js_sys::Reflect::set(&style, &"position".into(), &"fixed".into()).ok();
     js_sys::Reflect::set(&style, &"left".into(), &"-9999px".into()).ok();
-    
+
     if document.body().unwrap().append_child(&textarea).is_err() {
         return false;
     }
-    
+
     js_sys::Reflect::get(textarea_js, &"select".into())
         .and_then(|f| js_sys::Function::from(f).call0(textarea_js))
         .ok();
-    
+
     let success = js_sys::Reflect::get(&document, &"execCommand".into())
         .and_then(|f| {
             js_sys::Function::from(f)
@@ -1783,7 +1802,7 @@ async fn copy_to_clipboard_async(text: &str) -> bool {
                 .map(|_| true)
         })
         .unwrap_or(false);
-    
+
     document.body().unwrap().remove_child(&textarea).ok();
     success
 }
@@ -1800,7 +1819,7 @@ pub(crate) fn calculate_personality_tag(
     let total_casts = temporal.total_casts.max(casts_stats.total_casts);
 
     let mut tags: Vec<(String, String, f32)> = Vec::new();
-    
+
     // 1. Night Philosopher
     let late_night_activity: usize = temporal
         .hourly_distribution
@@ -1813,8 +1832,12 @@ pub(crate) fn calculate_personality_tag(
     } else {
         0.0
     };
-    tags.push(("Night Philosopher".to_string(), "/imgs/Philosopher.png".to_string(), late_night_ratio * 100.0));
-    
+    tags.push((
+        "Night Philosopher".to_string(),
+        "/imgs/Philosopher.png".to_string(),
+        late_night_ratio * 100.0,
+    ));
+
     // 2. Meme Merchant
     let total_emoji_count: usize = content_style.top_emojis.iter().map(|e| e.count).sum();
     let emoji_ratio = if total_casts > 0 {
@@ -1823,40 +1846,60 @@ pub(crate) fn calculate_personality_tag(
         0.0
     };
     let emoji_diversity_score = (content_style.top_emojis.len() as f32 / 10.0).min(1.0) * 30.0;
-    tags.push(("Meme Merchant".to_string(), "/imgs/meme.png".to_string(), emoji_ratio * 70.0 + emoji_diversity_score));
-    
+    tags.push((
+        "Meme Merchant".to_string(),
+        "/imgs/meme.png".to_string(),
+        emoji_ratio * 70.0 + emoji_diversity_score,
+    ));
+
     // 3. Alpha Curator
     let recast_ratio = if total_casts > 0 {
         (engagement.recasts_received as f32 / total_casts as f32).min(1.0)
     } else {
         0.0
     };
-    tags.push(("Alpha Curator".to_string(), "/imgs/alpha.png".to_string(), recast_ratio * 100.0));
-    
+    tags.push((
+        "Alpha Curator".to_string(),
+        "/imgs/alpha.png".to_string(),
+        recast_ratio * 100.0,
+    ));
+
     // 4. Social Butterfly
     let interaction_rate = if total_casts > 0 {
-        ((engagement.reactions_received + engagement.replies_received) as f32 / total_casts as f32).min(10.0)
+        ((engagement.reactions_received + engagement.replies_received) as f32 / total_casts as f32)
+            .min(10.0)
     } else {
         0.0
     };
-    tags.push(("Social Butterfly".to_string(), "/imgs/meme.png".to_string(), (interaction_rate / 10.0) * 100.0));
-    
+    tags.push((
+        "Social Butterfly".to_string(),
+        "/imgs/meme.png".to_string(),
+        (interaction_rate / 10.0) * 100.0,
+    ));
+
     // 5. Rising Star
     let growth_rate = if follower_growth.followers_at_start > 0 {
-        (follower_growth.net_growth as f32 / follower_growth.followers_at_start.max(1) as f32).min(5.0)
+        (follower_growth.net_growth as f32 / follower_growth.followers_at_start.max(1) as f32)
+            .min(5.0)
     } else if follower_growth.net_growth > 0 {
         1.0
     } else {
         0.0
     };
     let absolute_growth_score = (follower_growth.net_growth as f32 / 200.0).min(1.0) * 50.0;
-    tags.push(("Rising Star".to_string(), "/imgs/newstar.png".to_string(), (growth_rate / 5.0) * 50.0 + absolute_growth_score));
-    
+    tags.push((
+        "Rising Star".to_string(),
+        "/imgs/newstar.png".to_string(),
+        (growth_rate / 5.0) * 50.0 + absolute_growth_score,
+    ));
+
     // Find the tag with highest score
-    let matched = tags.iter().max_by(|a, b| {
-        a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal)
-    }).cloned().unwrap_or_else(|| ("Active User".to_string(), "/imgs/meme.png".to_string(), 0.0));
-    
+    let matched = tags
+        .iter()
+        .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal))
+        .cloned()
+        .unwrap_or_else(|| ("Active User".to_string(), "/imgs/meme.png".to_string(), 0.0));
+
     (matched.0, matched.1) // Return (name, image_path)
 }
 
@@ -1865,51 +1908,63 @@ pub(crate) fn get_image_url(image_path: &str) -> String {
     if image_path.starts_with("http://") || image_path.starts_with("https://") {
         return image_path.to_string();
     }
-    
+
     // Get current origin
     if let Some(window) = web_sys::window() {
         if let Ok(origin) = window.location().origin() {
             return format!("{}{}", origin, image_path);
         }
     }
-    
+
     // Fallback to relative path
     image_path.to_string()
 }
 
 // Helper function to build share text
-fn build_share_text(profile: &Option<ProfileWithRegistration>, report: &Option<AnnualReportResponse>) -> String {
-            let mut text = String::from("🎉 Farcaster 2025 Annual Report\n\n");
+fn build_share_text(
+    profile: &Option<ProfileWithRegistration>,
+    report: &Option<AnnualReportResponse>,
+) -> String {
+    let mut text = String::from("🎉 Farcaster 2025 Annual Report\n\n");
 
     if let Some(p) = profile {
-                if let Some(username) = &p.username {
-                    text.push_str(&format!("@{}'s 2025 Annual Report\n\n", username));
-                }
-            }
+        if let Some(username) = &p.username {
+            text.push_str(&format!("@{}'s 2025 Annual Report\n\n", username));
+        }
+    }
 
     if let Some(r) = report {
-                text.push_str(&format!("📊 Published {} Casts this year\n", r.engagement.total_engagement));
-                text.push_str(&format!("❤️ Received {} likes\n", r.engagement.reactions_received));
-                text.push_str(&format!("🔁 Received {} recasts\n", r.engagement.recasts_received));
-                
-                if let Some(most_active) = &r.temporal_activity.most_active_month {
-                    text.push_str(&format!("📅 Most active month: {}\n", most_active));
-                }
+        text.push_str(&format!(
+            "📊 Published {} Casts this year\n",
+            r.engagement.total_engagement
+        ));
+        text.push_str(&format!(
+            "❤️ Received {} likes\n",
+            r.engagement.reactions_received
+        ));
+        text.push_str(&format!(
+            "🔁 Received {} recasts\n",
+            r.engagement.recasts_received
+        ));
 
-                if !r.content_style.top_emojis.is_empty() {
-                    let top_emoji = &r.content_style.top_emojis[0];
-                    text.push_str(&format!("😊 Most used emoji: {}\n", top_emoji.emoji));
-                }
-            }
+        if let Some(most_active) = &r.temporal_activity.most_active_month {
+            text.push_str(&format!("📅 Most active month: {}\n", most_active));
+        }
 
-            text.push_str("\n#MyFarcaster2025\n");
-            text.push_str("The story of Web3 is written by you.");
+        if !r.content_style.top_emojis.is_empty() {
+            let top_emoji = &r.content_style.top_emojis[0];
+            text.push_str(&format!("😊 Most used emoji: {}\n", top_emoji.emoji));
+        }
+    }
+
+    text.push_str("\n#MyFarcaster2025\n");
+    text.push_str("The story of Web3 is written by you.");
     text
 }
 
 #[function_component]
 pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
-    let share_text = use_state(|| String::new());
+    let share_text = use_state(String::new);
     let is_sharing = use_state(|| false);
     let share_status = use_state(|| None::<String>); // Success/error message
     let is_farcaster_env = props.is_farcaster_env;
@@ -1919,7 +1974,7 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
 
     // Share text for display and copying
     let share_text_content = build_share_text(&props.profile, &props.annual_report);
-    
+
     // Calculate personality tag and get image URL
     let personality_tag_image_url = if let Some(report) = &props.annual_report {
         // Create a minimal CastsStatsResponse for the calculation
@@ -1932,7 +1987,7 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
             top_nouns: Vec::new(),
             top_verbs: Vec::new(),
         };
-        
+
         let (_tag_name, image_path) = calculate_personality_tag(
             &report.temporal_activity,
             &report.engagement,
@@ -1969,7 +2024,9 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
                     }
                     Err(e) => {
                         share_status_clone.set(Some(format!("Failed to open share: {}", e)));
-                        web_sys::console::error_1(&format!("❌ Failed to compose cast: {}", e).into());
+                        web_sys::console::error_1(
+                            &format!("❌ Failed to compose cast: {}", e).into(),
+                        );
                     }
                 }
                 is_sharing_clone.set(false);
@@ -1989,16 +2046,16 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
             } else {
                 text.clone()
             };
-            
+
             // Add image URL to the share text if available
             if let Some(img_url) = &image_url {
                 share_text_for_twitter.push_str(&format!(" {}", img_url));
             }
-            
+
             // URL encode the text
             let encoded_text = js_sys::encode_uri_component(&share_text_for_twitter);
             let twitter_url = format!("https://twitter.com/intent/tweet?text={}", encoded_text);
-            
+
             if let Some(window) = web_sys::window() {
                 // Open in new window/tab
                 if let Ok(Some(_)) = window.open_with_url_and_target(&twitter_url, "_blank") {
@@ -2020,12 +2077,12 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
 
         Callback::from(move |_| {
             let mut text_with_image = text.clone();
-            
+
             // Add image URL to the copied text if available
             if let Some(img_url) = &image_url {
                 text_with_image.push_str(&format!("\n\nImage: {}", img_url));
             }
-            
+
             share_text.set(text_with_image.clone());
             share_status.set(None);
             is_sharing.set(true);
@@ -2071,7 +2128,7 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
                 margin: 0 0 32px 0;
                 text-align: center;
             ">{"The story of Web3 is written by you."}</p>
-            
+
             <div style="
                 display: flex;
                 flex-direction: column;
@@ -2198,7 +2255,7 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
                     }
                 }}
             </div>
-            
+
             // Status message
             {if let Some(status) = (*share_status).as_ref() {
                 html! {
@@ -2220,7 +2277,7 @@ pub fn CallToActionSection(props: &CallToActionSectionProps) -> Html {
             } else {
                 html! {}
             }}
-            
+
             // Show copied text in non-Farcaster environment
             {if !is_farcaster_env && !(*share_text).is_empty() {
                     html! {
@@ -2277,11 +2334,14 @@ struct PersonalityTag {
 
 #[function_component]
 pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
-    let total_casts = props.temporal.total_casts.max(props.casts_stats.total_casts);
-    
+    let total_casts = props
+        .temporal
+        .total_casts
+        .max(props.casts_stats.total_casts);
+
     // Calculate scores for each tag
     let mut tags = Vec::new();
-    
+
     // 1. Night Philosopher - Check late night activity (0-5 AM)
     let late_night_activity: usize = props
         .temporal
@@ -2301,7 +2361,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         image_path: "/imgs/Philosopher.png".to_string(),
         score: late_night_ratio * 100.0,
     });
-    
+
     // 2. Meme Merchant - Check emoji usage
     let total_emoji_count: usize = props.content_style.top_emojis.iter().map(|e| e.count).sum();
     let emoji_ratio = if total_casts > 0 {
@@ -2309,14 +2369,15 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
     } else {
         0.0
     };
-    let emoji_diversity_score = (props.content_style.top_emojis.len() as f32 / 10.0).min(1.0) * 30.0;
+    let emoji_diversity_score =
+        (props.content_style.top_emojis.len() as f32 / 10.0).min(1.0) * 30.0;
     tags.push(PersonalityTag {
         name: "Meme Merchant".to_string(),
         description: "High-frequency meme creator and sharer".to_string(),
         image_path: "/imgs/meme.png".to_string(),
         score: emoji_ratio * 70.0 + emoji_diversity_score,
     });
-    
+
     // 3. Alpha Curator - Check recast ratio
     let recast_ratio = if total_casts > 0 {
         (props.engagement.recasts_received as f32 / total_casts as f32).min(1.0)
@@ -2329,10 +2390,12 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         image_path: "/imgs/alpha.png".to_string(),
         score: recast_ratio * 100.0,
     });
-    
+
     // 4. Social Butterfly - Check interaction rate
     let interaction_rate = if total_casts > 0 {
-        ((props.engagement.reactions_received + props.engagement.replies_received) as f32 / total_casts as f32).min(10.0)
+        ((props.engagement.reactions_received + props.engagement.replies_received) as f32
+            / total_casts as f32)
+            .min(10.0)
     } else {
         0.0
     };
@@ -2342,10 +2405,12 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         image_path: "/imgs/meme.png".to_string(), // Using meme.png as fallback, can be updated later
         score: (interaction_rate / 10.0) * 100.0,
     });
-    
+
     // 5. Rising Star - Check follower growth
     let growth_rate = if props.follower_growth.followers_at_start > 0 {
-        (props.follower_growth.net_growth as f32 / props.follower_growth.followers_at_start.max(1) as f32).min(5.0)
+        (props.follower_growth.net_growth as f32
+            / props.follower_growth.followers_at_start.max(1) as f32)
+            .min(5.0)
     } else if props.follower_growth.net_growth > 0 {
         1.0 // New user with growth
     } else {
@@ -2358,22 +2423,28 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         image_path: "/imgs/newstar.png".to_string(),
         score: (growth_rate / 5.0) * 50.0 + absolute_growth_score,
     });
-    
+
     // Find the tag with highest score
-    let matched_tag = tags.iter().max_by(|a, b| {
-        a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal)
-    }).cloned().unwrap_or_else(|| PersonalityTag {
-        name: "Active User".to_string(),
-        description: "An active member of the Farcaster community".to_string(),
-        image_path: "/imgs/meme.png".to_string(),
-        score: 0.0,
-    });
+    let matched_tag = tags
+        .iter()
+        .max_by(|a, b| {
+            a.score
+                .partial_cmp(&b.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .cloned()
+        .unwrap_or_else(|| PersonalityTag {
+            name: "Active User".to_string(),
+            description: "An active member of the Farcaster community".to_string(),
+            image_path: "/imgs/meme.png".to_string(),
+            score: 0.0,
+        });
 
     // Setup 3D card rotation effect using JavaScript injection
     use_effect_with((), move |_| {
         let window = web_sys::window().unwrap();
         let document = window.document().unwrap();
-        
+
         // Check if script already exists
         if document.get_element_by_id("tarot-card-script").is_none() {
             let script = document.create_element("script").unwrap();
@@ -2475,7 +2546,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             "#));
             document.head().unwrap().append_child(&script).ok();
         }
-        
+
         // Initialize cards after a short delay to ensure DOM is ready
         let timeout_closure = Closure::<dyn FnMut()>::new(move || {
             // Use JavaScript eval to initialize cards
@@ -2549,12 +2620,12 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             "#;
             let _ = js_sys::eval(js_code);
         });
-        window.set_timeout_with_callback_and_timeout_and_arguments_0(
+        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
             timeout_closure.as_ref().unchecked_ref::<js_sys::Function>(),
-            200
+            200,
         );
         timeout_closure.forget();
-        
+
         || ()
     });
 
@@ -2574,7 +2645,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                 width: 100%;
                 max-width: 600px;
             ">
-                <div 
+                <div
                     class="tarot-card"
                     style="
                         width: 280px;
@@ -2584,7 +2655,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                         cursor: pointer;
                     "
                 >
-                    <div 
+                    <div
                         class="tarot-card-inner"
                         style="
                             position: relative;
@@ -2605,7 +2676,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                 transform: rotateY(0deg);
                             "
                         >
-                            <img 
+                            <img
                                 src={matched_tag.image_path.clone()}
                                 alt={matched_tag.name.clone()}
                                 style="
@@ -2651,7 +2722,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                 padding: 40px;
                                 box-sizing: border-box;
                             ">
-                                <img 
+                                <img
                                     src="/imgs/polyjuice.png"
                                     alt="Polyjuice"
                                     class="embossed-logo"
@@ -2668,7 +2739,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                         </div>
                     </div>
                 </div>
-                
+
                 <h2 style="
                     font-size: 36px;
                     font-weight: 700;
@@ -2676,7 +2747,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                     margin: 0 0 16px 0;
                     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
                 ">{matched_tag.name.clone()}</h2>
-                
+
                 <p style="
                     font-size: 18px;
                     color: rgba(255, 255, 255, 0.9);

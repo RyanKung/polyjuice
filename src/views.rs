@@ -29,7 +29,6 @@ const MBTI_DESCRIPTIONS: &[(&str, &str)] = &[
     ("ESFP", "Entertainer - Spontaneous, enthusiastic, and fun"),
 ];
 
-
 #[derive(Properties, PartialEq, Clone)]
 pub struct MbtiAnalysisProps {
     pub mbti: MbtiProfile,
@@ -463,7 +462,6 @@ pub fn SocialAnalysis(props: &SocialAnalysisProps) -> Html {
         </div>
     }
 }
-
 
 #[derive(Properties, PartialEq, Clone)]
 pub struct EndpointViewProps {

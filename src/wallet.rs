@@ -127,7 +127,6 @@ pub fn clear_wallet_from_storage() -> Result<(), String> {
     Ok(())
 }
 
-
 // Initialize wallet system - discover wallets via EIP-6963
 pub async fn initialize() -> Result<(), String> {
     web_sys::console::log_1(&"🔌 Initializing EIP-6963 wallet discovery...".into());
@@ -165,8 +164,7 @@ fn setup_eip6963_listener(window: &Window) -> Result<(), String> {
                             let window = &window_clone;
 
                             // Store in discovered wallets array
-                            if let Ok(wallets) =
-                                Reflect::get(&window, &"__discoveredWallets".into())
+                            if let Ok(wallets) = Reflect::get(window, &"__discoveredWallets".into())
                             {
                                 if let Some(wallets_arr) = wallets.dyn_ref::<Array>() {
                                     let wallet_obj = Object::new();
@@ -716,7 +714,7 @@ fn get_provider_name(provider: &JsValue, skip_rabby_check: bool) -> Option<Strin
     }
 
     // Try to check if provider has Rainbow-specific methods or properties
-    if let Ok(_) = Reflect::get(provider, &"request".into()) {
+    if Reflect::get(provider, &"request".into()).is_ok() {
         // Check if it's a valid EIP-1193 provider
         // Try to get the constructor name or other identifying info
         if let Ok(proto) = Reflect::get(provider, &"constructor".into()) {
@@ -870,9 +868,8 @@ async fn get_chain_id(provider: &JsValue) -> Result<u64, String> {
 
     // Parse hex string to u64
     if let Some(chain_id_str) = result.as_string() {
-        if chain_id_str.starts_with("0x") {
-            u64::from_str_radix(&chain_id_str[2..], 16)
-                .map_err(|e| format!("Failed to parse chainId: {}", e))
+        if let Some(hex_part) = chain_id_str.strip_prefix("0x") {
+            u64::from_str_radix(hex_part, 16).map_err(|e| format!("Failed to parse chainId: {}", e))
         } else {
             chain_id_str
                 .parse::<u64>()
@@ -1255,7 +1252,6 @@ fn setup_provider_events(window: &Window, provider: &JsValue) -> Result<(), Stri
     Ok(())
 }
 
-
 // Disconnect wallet
 pub async fn disconnect() -> Result<(), String> {
     let window = get_window()?;
@@ -1396,7 +1392,6 @@ pub async fn ping_endpoint_service(url: &str) -> Result<f64, String> {
     Ok(end_time - start_time)
 }
 
-
 // Get full profile data for an address (includes avatar, username, etc.)
 pub async fn get_profile_for_address(
     api_url: &str,
@@ -1463,22 +1458,22 @@ pub async fn get_profile_for_address(
                             data
                         };
 
-                            // Try to parse as ProfileData
+                        // Try to parse as ProfileData
                         match serde_json::from_value::<crate::models::ProfileData>(profile_data) {
-                                Ok(profile) => {
-                                    web_sys::console::log_1(
-                                        &format!(
-                                            "✅ Found profile: FID {}, username: {:?}",
-                                            profile.fid, profile.username
-                                        )
-                                        .into(),
-                                    );
-                                    return Ok(Some(profile));
-                                }
-                                Err(e) => {
-                                    web_sys::console::log_1(
-                                        &format!("⚠️ Failed to parse profile data: {}", e).into(),
-                                    );
+                            Ok(profile) => {
+                                web_sys::console::log_1(
+                                    &format!(
+                                        "✅ Found profile: FID {}, username: {:?}",
+                                        profile.fid, profile.username
+                                    )
+                                    .into(),
+                                );
+                                return Ok(Some(profile));
+                            }
+                            Err(e) => {
+                                web_sys::console::log_1(
+                                    &format!("⚠️ Failed to parse profile data: {}", e).into(),
+                                );
                             }
                         }
                     }

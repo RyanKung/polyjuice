@@ -111,8 +111,8 @@ pub async fn fetch_casts_stats(
     }
 
     // Parse as CastsStatsResponse
-    let response: crate::models::CastsStatsResponse = serde_json::from_value(data)
-        .map_err(|e| {
+    let response: crate::models::CastsStatsResponse =
+        serde_json::from_value(data).map_err(|e| {
             let error_msg = format!("Failed to parse CastsStatsResponse: {}", e);
             web_sys::console::warn_1(&error_msg.clone().into());
             error_msg
@@ -307,18 +307,19 @@ fn ActivityChart(props: &ActivityChartProps) -> Html {
     let days_in_months = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
     // Check if leap year
-    let is_leap_year = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    let is_leap_year =
+        year.is_multiple_of(4) && !year.is_multiple_of(100) || year.is_multiple_of(400);
 
     // Start from January 1
-    for month in 0..12 {
-        let mut days_in_month = days_in_months[month];
+    for (month_idx, &days_in_month_base) in days_in_months.iter().enumerate() {
+        let mut days_in_month = days_in_month_base;
         // Adjust for February in leap year
-        if month == 1 && is_leap_year {
+        if month_idx == 1 && is_leap_year {
             days_in_month = 29;
         }
 
         for day in 1..=days_in_month {
-            let date_str = format!("{:04}-{:02}-{:02}", year, month + 1, day);
+            let date_str = format!("{:04}-{:02}-{:02}", year, month_idx + 1, day);
 
             // Find matching stat
             let count = props
