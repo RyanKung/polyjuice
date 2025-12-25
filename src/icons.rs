@@ -17,7 +17,7 @@ pub fn Icon(props: &IconProps) -> Html {
     } else {
         format!("fas fa-{} {}", props.name, props.class)
     };
-    
+
     html! {
         <i class={class} style={props.style.clone()}></i>
     }
@@ -62,4 +62,3 @@ pub fn send() -> Html {
 pub fn close() -> Html {
     html! { <Icon name="times" /> }
 }
-

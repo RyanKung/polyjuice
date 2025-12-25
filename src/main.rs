@@ -536,20 +536,6 @@ fn App() -> Html {
         ping_results.clone(),
     );
 
-    let on_show_endpoint = {
-        let show_endpoint = show_endpoint.clone();
-        let endpoint_data = endpoint_data.clone();
-        let is_endpoint_loading = is_endpoint_loading.clone();
-        let on_fetch_endpoints_clone = on_fetch_endpoints.clone();
-        Callback::from(move |_: yew::MouseEvent| {
-            show_endpoint.set(true);
-            // Fetch endpoints if not already loaded
-            if endpoint_data.is_none() && !*is_endpoint_loading {
-                on_fetch_endpoints_clone.emit(());
-            }
-        })
-    };
-
     let on_back_from_endpoint = {
         let show_endpoint = show_endpoint.clone();
         Callback::from(move |_| {
@@ -673,7 +659,7 @@ fn App() -> Html {
             .unwrap_or_default();
         let share_text = "Check out my Farcaster Annual Report on Polyjuice!".to_string();
         Some(html! {
-            <share::ShareButton 
+            <share::ShareButton
                 url={Some(current_url)}
                 text={Some(share_text)}
                 is_farcaster_env={*is_farcaster_env}
@@ -689,7 +675,7 @@ fn App() -> Html {
                 <button class="back-button" onclick={on_smart_back.clone().reform(|_| ())} style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: white;">
                     {icons::back_arrow()}
                 </button>
-                <share::ShareButton 
+                <share::ShareButton
                     url={Some(current_url)}
                     is_farcaster_env={*is_farcaster_env}
                 />
@@ -698,7 +684,7 @@ fn App() -> Html {
     } else if (*active_tab).as_str() == "search" {
         // Search page - show share button
         Some(html! {
-            <share::ShareButton 
+            <share::ShareButton
                 is_farcaster_env={*is_farcaster_env}
             />
         })
@@ -708,7 +694,7 @@ fn App() -> Html {
             .and_then(|w| w.location().href().ok())
             .unwrap_or_default();
         Some(html! {
-            <share::ShareButton 
+            <share::ShareButton
                 url={Some(current_url)}
                 is_farcaster_env={*is_farcaster_env}
             />
@@ -716,14 +702,14 @@ fn App() -> Html {
     } else if (*active_tab).as_str() == "about" {
         // About page - show share button
         Some(html! {
-            <share::ShareButton 
+            <share::ShareButton
                 is_farcaster_env={*is_farcaster_env}
             />
         })
     } else {
         // Other pages - show share button as default
         Some(html! {
-            <share::ShareButton 
+            <share::ShareButton
                 is_farcaster_env={*is_farcaster_env}
             />
         })

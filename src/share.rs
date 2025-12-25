@@ -2,7 +2,6 @@ use js_sys;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
-use wasm_bindgen_futures::JsFuture;
 use yew::prelude::*;
 
 use crate::farcaster;
@@ -23,17 +22,18 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
     let show_share_menu = use_state(|| false);
     let menu_ref = use_node_ref();
     let button_ref = use_node_ref();
-    
+
     let url = props.url.clone().unwrap_or_else(|| {
         web_sys::window()
             .and_then(|w| w.location().href().ok())
             .unwrap_or_default()
     });
-    
-    let text = props.text.clone().unwrap_or_else(|| {
-        "Check out Polyjuice: Discover & Chat with Farcaster Users".to_string()
-    });
-    
+
+    let text = props
+        .text
+        .clone()
+        .unwrap_or_else(|| "Check out Polyjuice: Discover & Chat with Farcaster Users".to_string());
+
     // Close menu when clicking outside
     {
         let show_share_menu = show_share_menu.clone();
@@ -43,7 +43,7 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
             if !**is_open {
                 return;
             }
-            
+
             let closure = Closure::<dyn FnMut(web_sys::MouseEvent)>::new({
                 let show_share_menu = show_share_menu.clone();
                 let menu_ref = menu_ref.clone();
@@ -54,37 +54,42 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
                         let target_element = target.dyn_ref::<web_sys::Element>();
                         let menu_element = menu_ref.get();
                         let button_element = button_ref.get();
-                        
+
                         // Check if click is outside both menu and button
-                        let is_outside = if let (Some(target_el), Some(menu_el)) = (target_element, menu_element.as_ref()) {
+                        let is_outside = if let (Some(target_el), Some(menu_el)) =
+                            (target_element, menu_element.as_ref())
+                        {
                             !menu_el.contains(Some(target_el))
                         } else {
                             true
                         };
-                        
-                        let is_outside_button = if let (Some(target_el), Some(button_el)) = (target_element, button_element.as_ref()) {
+
+                        let is_outside_button = if let (Some(target_el), Some(button_el)) =
+                            (target_element, button_element.as_ref())
+                        {
                             !button_el.contains(Some(target_el))
                         } else {
                             true
                         };
-                        
+
                         if is_outside && is_outside_button {
                             show_share_menu.set(false);
                         }
                     }
                 }
             });
-            
-            let document = web_sys::window()
-                .and_then(|w| w.document())
-                .unwrap();
-            
-            if document.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).is_ok() {
+
+            let document = web_sys::window().and_then(|w| w.document()).unwrap();
+
+            if document
+                .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+                .is_ok()
+            {
                 closure.forget();
             }
         });
     }
-    
+
     let on_share_click = {
         let show_share_menu = show_share_menu.clone();
         Callback::from(move |e: yew::MouseEvent| {
@@ -92,7 +97,7 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
             show_share_menu.set(!*show_share_menu);
         })
     };
-    
+
     let on_farcaster_share = {
         let url = url.clone();
         let text = text.clone();
@@ -105,14 +110,16 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
                 // Include URL in the text
                 let text_with_url = format!("{}\n\n{}", text_clone, url_clone);
                 // Also pass URL as embed for rich preview
-                if let Err(e) = farcaster::compose_cast(&text_with_url, Some(vec![url_clone.clone()])).await {
+                if let Err(e) =
+                    farcaster::compose_cast(&text_with_url, Some(vec![url_clone.clone()])).await
+                {
                     web_sys::console::error_1(&format!("Failed to compose cast: {}", e).into());
                 }
                 show_share_menu_clone.set(false);
             });
         })
     };
-    
+
     let on_twitter_share = {
         let url = url.clone();
         let text = text.clone();
@@ -134,7 +141,7 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
             show_share_menu.set(false);
         })
     };
-    
+
     let on_copy_link = {
         let url = url.clone();
         let show_share_menu = show_share_menu.clone();
@@ -146,15 +153,29 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
                 // Try modern Clipboard API using js_sys::Reflect
                 if let Ok(navigator_val) = js_sys::Reflect::get(&window, &"navigator".into()) {
                     if !navigator_val.is_null() && !navigator_val.is_undefined() {
-                        if let Ok(clipboard_val) = js_sys::Reflect::get(&navigator_val, &"clipboard".into()) {
+                        if let Ok(clipboard_val) =
+                            js_sys::Reflect::get(&navigator_val, &"clipboard".into())
+                        {
                             if !clipboard_val.is_null() && !clipboard_val.is_undefined() {
-                                if let Ok(write_text_fn) = js_sys::Reflect::get(&clipboard_val, &"writeText".into()) {
-                                    if let Some(write_fn) = write_text_fn.dyn_ref::<js_sys::Function>() {
-                                        if let Ok(promise_val) = write_fn.call1(&clipboard_val, &url_clone.into()) {
-                                            if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
-                                                match wasm_bindgen_futures::JsFuture::from(promise).await {
+                                if let Ok(write_text_fn) =
+                                    js_sys::Reflect::get(&clipboard_val, &"writeText".into())
+                                {
+                                    if let Some(write_fn) =
+                                        write_text_fn.dyn_ref::<js_sys::Function>()
+                                    {
+                                        if let Ok(promise_val) =
+                                            write_fn.call1(&clipboard_val, &url_clone.into())
+                                        {
+                                            if let Ok(promise) =
+                                                promise_val.dyn_into::<js_sys::Promise>()
+                                            {
+                                                match wasm_bindgen_futures::JsFuture::from(promise)
+                                                    .await
+                                                {
                                                     Ok(_) => {
-                                                        web_sys::console::log_1(&"URL copied to clipboard".into());
+                                                        web_sys::console::log_1(
+                                                            &"URL copied to clipboard".into(),
+                                                        );
                                                     }
                                                     Err(_) => {}
                                                 }
@@ -170,12 +191,12 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
             });
         })
     };
-    
+
     html! {
         <div style="position: relative; display: inline-block;">
-            <button 
+            <button
                 ref={button_ref.clone()}
-                class="share-button" 
+                class="share-button"
                 onclick={on_share_click}
                 style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px 8px; color: white; display: flex; align-items: center; justify-content: center;"
             >
@@ -184,7 +205,7 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
             {
                 if *show_share_menu {
                     html! {
-                        <div 
+                        <div
                             ref={menu_ref.clone()}
                             onclick={Callback::from(|e: yew::MouseEvent| {
                                 e.stop_propagation();
@@ -288,85 +309,3 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
         </div>
     }
 }
-
-/// Simple share button (without menu) - for inline use
-#[derive(Properties, PartialEq, Clone)]
-pub struct SimpleShareButtonProps {
-    #[prop_or_default]
-    pub url: Option<String>,
-    #[prop_or_default]
-    pub text: Option<String>,
-    pub is_farcaster_env: bool,
-}
-
-#[function_component]
-pub fn SimpleShareButton(props: &SimpleShareButtonProps) -> Html {
-    let url = props.url.clone().unwrap_or_else(|| {
-        web_sys::window()
-            .and_then(|w| w.location().href().ok())
-            .unwrap_or_default()
-    });
-    
-    let text = props.text.clone().unwrap_or_else(|| {
-        "Check out Polyjuice: Discover & Chat with Farcaster Users".to_string()
-    });
-    
-    let on_click = {
-        let url = url.clone();
-        let text = text.clone();
-        let is_farcaster_env = props.is_farcaster_env;
-        Callback::from(move |_| {
-            if is_farcaster_env {
-                let url_clone = url.clone();
-                let text_clone = text.clone();
-                spawn_local(async move {
-                    // Include URL in the text
-                    let text_with_url = format!("{}\n\n{}", text_clone, url_clone);
-                    // Also pass URL as embed for rich preview
-                    if let Err(e) = farcaster::compose_cast(&text_with_url, Some(vec![url_clone.clone()])).await {
-                        web_sys::console::error_1(&format!("Failed to compose cast: {}", e).into());
-                    }
-                });
-            } else {
-                // Copy to clipboard
-                let url_clone = url.clone();
-                spawn_local(async move {
-                    let window = web_sys::window().unwrap();
-                    if let Ok(navigator_val) = js_sys::Reflect::get(&window, &"navigator".into()) {
-                        if !navigator_val.is_null() && !navigator_val.is_undefined() {
-                            if let Ok(clipboard_val) = js_sys::Reflect::get(&navigator_val, &"clipboard".into()) {
-                                if !clipboard_val.is_null() && !clipboard_val.is_undefined() {
-                                    if let Ok(write_text_fn) = js_sys::Reflect::get(&clipboard_val, &"writeText".into()) {
-                                        if let Some(write_fn) = write_text_fn.dyn_ref::<js_sys::Function>() {
-                                            if let Ok(promise_val) = write_fn.call1(&clipboard_val, &url_clone.into()) {
-                                                if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
-                                                    match wasm_bindgen_futures::JsFuture::from(promise).await {
-                                                        Ok(_) => {
-                                                            web_sys::console::log_1(&"URL copied to clipboard".into());
-                                                        }
-                                                        Err(_) => {}
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        })
-    };
-    
-    html! {
-        <button 
-            class="share-button" 
-            onclick={on_click}
-            style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px 8px; color: white; display: flex; align-items: center; justify-content: center;"
-        >
-            {icons::share()}
-        </button>
-    }
-}
-

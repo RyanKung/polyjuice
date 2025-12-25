@@ -552,12 +552,13 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
 
                             // Calculate personality tag image (reuse helper functions from sections module)
                             use super::sections::{calculate_personality_tag, get_image_url};
-                            let (_tag_name, image_path) = calculate_personality_tag(
+                            let (_tag_name, image_path, _description) = calculate_personality_tag(
                                 temporal,
                                 engagement,
                                 style,
                                 followers,
                                 &casts,
+                                fid,
                             );
                             let image_url = get_image_url(&image_path);
 
