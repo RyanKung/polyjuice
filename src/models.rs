@@ -413,9 +413,7 @@ pub struct EmojiFrequency {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FollowerGrowthResponse {
     pub current_followers: usize,
-    pub current_following: usize,
     pub followers_at_start: usize,
-    pub following_at_start: usize,
     pub net_growth: i64,
     pub monthly_snapshots: Vec<MonthlySnapshot>,
 }
@@ -424,7 +422,6 @@ pub struct FollowerGrowthResponse {
 pub struct MonthlySnapshot {
     pub month: String, // Format: YYYY-MM
     pub followers: usize,
-    pub following: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

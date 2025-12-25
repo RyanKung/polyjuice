@@ -1382,41 +1382,46 @@ pub(crate) fn get_image_url(image_path: &str) -> String {
 fn build_share_text(
     profile: &Option<ProfileWithRegistration>,
     report: &Option<AnnualReportResponse>,
+    tarot_card_name: Option<&str>,
+    share_url: Option<&str>,
 ) -> String {
-    let mut text = String::from("🎉 Farcaster 2025 Annual Report\n\n");
-
-    if let Some(p) = profile {
-        if let Some(username) = &p.username {
-            text.push_str(&format!("@{}'s 2025 Annual Report\n\n", username));
-        }
-    }
+    let mut text = String::from("My Annual Report: This year I ");
 
     if let Some(r) = report {
         text.push_str(&format!(
-            "📊 Published {} Casts this year\n",
+            "Published {} Casts this year, ",
             r.engagement.total_engagement
         ));
         text.push_str(&format!(
-            "❤️ Received {} likes\n",
+            "Received {} likes, ",
             r.engagement.reactions_received
         ));
         text.push_str(&format!(
-            "🔁 Received {} recasts\n",
+            "Received {} recasts, ",
             r.engagement.recasts_received
         ));
 
         if let Some(most_active) = &r.temporal_activity.most_active_month {
-            text.push_str(&format!("📅 Most active month: {}\n", most_active));
+            text.push_str(&format!("Most active month: {}, ", most_active));
         }
 
         if !r.content_style.top_emojis.is_empty() {
             let top_emoji = &r.content_style.top_emojis[0];
-            text.push_str(&format!("😊 Most used emoji: {}\n", top_emoji.emoji));
+            text.push_str(&format!("Most used emoji: {}", top_emoji.emoji));
         }
     }
 
-    text.push_str("\n#MyFarcaster2025\n");
-    text.push_str("The story of Web3 is written by you.");
+    text.push_str("\n\n");
+
+    if let Some(tarot_name) = tarot_card_name {
+        text.push_str(&format!("My Annual Tarot Card is {}\n\n", tarot_name));
+    }
+
+    if let Some(url) = share_url {
+        text.push_str(&format!("url: {}\n\n", url));
+    }
+
+    text.push_str("#MyFarcaster2025 #polyjuice");
     text
 }
 
@@ -1454,11 +1459,8 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
     let is_own_report = props.is_own_report;
     let current_user_fid = props.current_user_fid;
 
-    // Share text for display and copying
-    let share_text_content = build_share_text(&props.profile, &props.annual_report);
-
     // Calculate personality tag and get image URL
-    let personality_tag_image_url = if let Some(report) = &props.annual_report {
+    let (tarot_card_name, personality_tag_image_url) = if let Some(report) = &props.annual_report {
         let temp_casts_stats = crate::models::CastsStatsResponse {
             total_casts: report.temporal_activity.total_casts,
             date_distribution: Vec::new(),
@@ -1475,7 +1477,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             .map(|p| p.fid)
             .unwrap_or_else(|| report.fid);
 
-        let (_tag_name, image_path, _description) = calculate_personality_tag(
+        let (tag_name, image_path, _description) = calculate_personality_tag(
             &report.temporal_activity,
             &report.engagement,
             &report.content_style,
@@ -1483,10 +1485,18 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             &temp_casts_stats,
             fid,
         );
-        Some(get_image_url(&image_path))
+        (Some(tag_name), Some(get_image_url(&image_path)))
     } else {
-        None
+        (None, None)
     };
+
+    // Share text for display and copying
+    let share_text_content = build_share_text(
+        &props.profile,
+        &props.annual_report,
+        tarot_card_name.as_deref(),
+        share_url.as_deref(),
+    );
 
     // Handler for Farcaster share (composeCast)
     let on_farcaster_share = {
@@ -1494,6 +1504,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         let share_status = share_status.clone();
         let text_for_share = share_text_content.clone();
         let image_url = personality_tag_image_url.clone();
+        let url_for_share = share_url.clone();
 
         Callback::from(move |_| {
             is_sharing.set(true);
@@ -1502,10 +1513,19 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             let text_clone = text_for_share.clone();
             let share_status_clone = share_status.clone();
             let is_sharing_clone = is_sharing.clone();
-            let embeds = image_url.as_ref().map(|url| vec![url.clone()]);
+            
+            // Build embeds: include both image URL and share URL
+            let mut embeds = Vec::new();
+            if let Some(img_url) = &image_url {
+                embeds.push(img_url.clone());
+            }
+            if let Some(url_str) = &url_for_share {
+                embeds.push(url_str.clone());
+            }
+            let embeds_option = if embeds.is_empty() { None } else { Some(embeds) };
 
             spawn_local(async move {
-                match farcaster::compose_cast(&text_clone, embeds).await {
+                match farcaster::compose_cast(&text_clone, embeds_option).await {
                     Ok(_) => {
                         share_status_clone.set(Some("Share dialog opened!".to_string()));
                         web_sys::console::log_1(&"✅ Compose cast opened successfully".into());
@@ -1525,21 +1545,9 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
     // Handler for Twitter share
     let on_twitter_share = {
         let text = share_text_content.clone();
-        let url = share_url.clone();
-        let image_url = personality_tag_image_url.clone();
-
+        // Text already includes URL, so we can use it directly
         Callback::from(move |_| {
-            let mut share_text_for_twitter = if let Some(url_str) = &url {
-                format!("{} {}", text, url_str)
-            } else {
-                text.clone()
-            };
-
-            if let Some(img_url) = &image_url {
-                share_text_for_twitter.push_str(&format!(" {}", img_url));
-            }
-
-            let encoded_text = js_sys::encode_uri_component(&share_text_for_twitter);
+            let encoded_text = js_sys::encode_uri_component(&text);
             let twitter_url = format!("https://twitter.com/intent/tweet?text={}", encoded_text);
 
             if let Some(window) = web_sys::window() {
@@ -2201,3 +2209,4 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         </div>
     }
 }
+

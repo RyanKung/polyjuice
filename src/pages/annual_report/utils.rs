@@ -91,20 +91,10 @@ pub fn convert_annual_report_response(
         .and_then(|v| v.as_u64())
         .ok_or("Missing or invalid 'current_followers' in social_growth")?
         as usize;
-    let current_following = social_growth
-        .get("current_following")
-        .and_then(|v| v.as_u64())
-        .ok_or("Missing or invalid 'current_following' in social_growth")?
-        as usize;
     let followers_at_start = social_growth
         .get("followers_at_start")
         .and_then(|v| v.as_u64())
         .ok_or("Missing or invalid 'followers_at_start' in social_growth")?
-        as usize;
-    let following_at_start = social_growth
-        .get("following_at_start")
-        .and_then(|v| v.as_u64())
-        .ok_or("Missing or invalid 'following_at_start' in social_growth")?
         as usize;
     let net_growth = social_growth
         .get("net_growth")
@@ -117,9 +107,7 @@ pub fn convert_annual_report_response(
 
     let follower_growth = serde_json::json!({
         "current_followers": current_followers,
-        "current_following": current_following,
         "followers_at_start": followers_at_start,
-        "following_at_start": following_at_start,
         "net_growth": net_growth,
         "monthly_snapshots": monthly_snapshots
     });
