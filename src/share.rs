@@ -1,4 +1,5 @@
 use js_sys;
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_futures::JsFuture;
@@ -20,6 +21,8 @@ pub struct ShareButtonProps {
 #[function_component]
 pub fn ShareButton(props: &ShareButtonProps) -> Html {
     let show_share_menu = use_state(|| false);
+    let menu_ref = use_node_ref();
+    let button_ref = use_node_ref();
     
     let url = props.url.clone().unwrap_or_else(|| {
         web_sys::window()
@@ -31,9 +34,61 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
         "Check out Polyjuice: Discover & Chat with Farcaster Users".to_string()
     });
     
+    // Close menu when clicking outside
+    {
+        let show_share_menu = show_share_menu.clone();
+        let menu_ref = menu_ref.clone();
+        let button_ref = button_ref.clone();
+        use_effect_with(show_share_menu.clone(), move |is_open| {
+            if !**is_open {
+                return;
+            }
+            
+            let closure = Closure::<dyn FnMut(web_sys::MouseEvent)>::new({
+                let show_share_menu = show_share_menu.clone();
+                let menu_ref = menu_ref.clone();
+                let button_ref = button_ref.clone();
+                move |e: web_sys::MouseEvent| {
+                    let target = e.target();
+                    if let Some(target) = target {
+                        let target_element = target.dyn_ref::<web_sys::Element>();
+                        let menu_element = menu_ref.get();
+                        let button_element = button_ref.get();
+                        
+                        // Check if click is outside both menu and button
+                        let is_outside = if let (Some(target_el), Some(menu_el)) = (target_element, menu_element.as_ref()) {
+                            !menu_el.contains(Some(target_el))
+                        } else {
+                            true
+                        };
+                        
+                        let is_outside_button = if let (Some(target_el), Some(button_el)) = (target_element, button_element.as_ref()) {
+                            !button_el.contains(Some(target_el))
+                        } else {
+                            true
+                        };
+                        
+                        if is_outside && is_outside_button {
+                            show_share_menu.set(false);
+                        }
+                    }
+                }
+            });
+            
+            let document = web_sys::window()
+                .and_then(|w| w.document())
+                .unwrap();
+            
+            if document.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).is_ok() {
+                closure.forget();
+            }
+        });
+    }
+    
     let on_share_click = {
         let show_share_menu = show_share_menu.clone();
-        Callback::from(move |_| {
+        Callback::from(move |e: yew::MouseEvent| {
+            e.stop_propagation();
             show_share_menu.set(!*show_share_menu);
         })
     };
@@ -119,6 +174,7 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
     html! {
         <div style="position: relative; display: inline-block;">
             <button 
+                ref={button_ref.clone()}
                 class="share-button" 
                 onclick={on_share_click}
                 style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px 8px; color: white; display: flex; align-items: center; justify-content: center;"
@@ -128,21 +184,26 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
             {
                 if *show_share_menu {
                     html! {
-                        <div style="
-                            position: absolute;
-                            top: 100%;
-                            right: 0;
-                            margin-top: 8px;
-                            background: rgba(255, 255, 255, 0.95);
-                            backdrop-filter: blur(20px);
-                            -webkit-backdrop-filter: blur(20px);
-                            border-radius: 12px;
-                            padding: 8px;
-                            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-                            z-index: 1000;
-                            min-width: 180px;
-                            border: 1px solid rgba(255, 255, 255, 0.3);
-                        ">
+                        <div 
+                            ref={menu_ref.clone()}
+                            onclick={Callback::from(|e: yew::MouseEvent| {
+                                e.stop_propagation();
+                            })}
+                            style="
+                                position: absolute;
+                                top: 100%;
+                                right: 0;
+                                margin-top: 8px;
+                                background: rgba(255, 255, 255, 0.95);
+                                backdrop-filter: blur(20px);
+                                -webkit-backdrop-filter: blur(20px);
+                                border-radius: 12px;
+                                padding: 8px;
+                                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                                z-index: 1000;
+                                min-width: 180px;
+                                border: 1px solid rgba(255, 255, 255, 0.3);
+                            ">
                             {
                                 if props.is_farcaster_env {
                                     html! {
