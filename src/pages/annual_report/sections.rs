@@ -4,7 +4,6 @@ use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_futures::JsFuture;
 use yew::prelude::*;
 
-use super::utils::farcaster_to_unix;
 use crate::farcaster;
 use crate::models::AnnualReportResponse;
 use crate::models::CastsStatsResponse;
@@ -182,13 +181,14 @@ fn get_far_zodiac_sign(fid: i64) -> &'static str {
 #[function_component]
 pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
     // Get registration date and calculate zodiac signs
+    // Note: registered_at is already a Unix timestamp, not Farcaster timestamp
     let (birthday_date, zodiac_image_url, zodiac_info) = props
         .profile
         .registered_at
         .map(|timestamp| {
-            let unix_timestamp = farcaster_to_unix(timestamp);
+            // registered_at is already Unix timestamp, use directly
             let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
-                unix_timestamp as f64 * 1000.0,
+                timestamp as f64 * 1000.0,
             ));
             let month = date.get_month() as u32 + 1; // get_month returns 0-11
             let day = date.get_date() as u32;
@@ -211,14 +211,15 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
         });
 
     // Get first cast date
+    // Note: first_cast.timestamp is already a Unix timestamp, not Farcaster timestamp
     let first_cast_date = props
         .temporal
         .first_cast
         .as_ref()
         .map(|cast| {
-            let unix_timestamp = farcaster_to_unix(cast.timestamp);
+            // first_cast.timestamp is already Unix timestamp, use directly
             let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
-                unix_timestamp as f64 * 1000.0,
+                cast.timestamp as f64 * 1000.0,
             ));
             let month = date.get_month() as u32 + 1;
             let day = date.get_date() as u32;
@@ -372,7 +373,7 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
                     </div>
 
                     <div>
-                        {"Your first cast was on "}
+                        {"This year, your first cast was on "}
                         <span style="font-weight: 700; font-size: 18px; color: white;">{first_cast_date.clone()}</span>
                         {". That moment marked the beginning of your voice in this digital realm."}
                     </div>
@@ -1548,12 +1549,13 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             (profile.clone(), temporal.clone(), engagement.clone(), follower_growth.clone()),
             move |_| {
                 // Get zodiac image URL
+                // Note: registered_at is already a Unix timestamp, not Farcaster timestamp
                 let zodiac_url = profile.as_ref()
                     .and_then(|p| p.registered_at)
                     .map(|timestamp| {
-                        let unix_timestamp = farcaster_to_unix(timestamp);
+                        // registered_at is already Unix timestamp, use directly
                         let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
-                            unix_timestamp as f64 * 1000.0,
+                            timestamp as f64 * 1000.0,
                         ));
                         let month = date.get_month() as u32 + 1;
                         let day = date.get_date() as u32;

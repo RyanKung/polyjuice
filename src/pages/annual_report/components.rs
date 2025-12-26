@@ -39,10 +39,29 @@ pub fn ReportCard(props: &ReportCardProps) -> Html {
             border: none;
         ", padding_style)
     };
+    
+    // Add style tag to override child padding when not own report
+    let child_override_style = if !props.is_own_report {
+        html! {
+            <style>{r#"
+                .annual-report-card > * {
+                    padding: 0 !important;
+                }
+                .annual-report-card .report-card-content {
+                    padding: 0 !important;
+                }
+            "#}</style>
+        }
+    } else {
+        html! {}
+    };
 
     html! {
-        <div class="annual-report-card" style={card_style}>
-            {props.children.clone()}
-        </div>
+        <>
+            {child_override_style}
+            <div class="annual-report-card" style={card_style}>
+                {props.children.clone()}
+            </div>
+        </>
     }
 }

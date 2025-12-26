@@ -736,7 +736,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                     // Cover Page Card (only shown in scroll container after clicking button)
                                     {if let Some(p) = &*profile {
                                         html! {
-                                            <ReportCard>
+                                            <ReportCard is_own_report={is_own_report}>
                                                 <AnnualReportCover profile={p.clone()} />
                                             </ReportCard>
                                         }
