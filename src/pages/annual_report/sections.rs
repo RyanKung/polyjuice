@@ -3,8 +3,6 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_futures::JsFuture;
 use yew::prelude::*;
-use base64::engine::general_purpose;
-use base64::Engine as _;
 
 use super::utils::farcaster_to_unix;
 use crate::farcaster;
@@ -1363,7 +1361,8 @@ pub(crate) fn calculate_personality_tag(
     (name.to_string(), image_path, description.to_string())
 }
 
-// Helper function to encode image URLs and user stats as base64 for sharing
+// Helper function to encode image URLs and user stats as base64url for sharing
+// Uses short field names and compact JSON to minimize URL length
 pub(crate) fn encode_image_params_for_share(
     fid: i64,
     username: Option<&str>,
@@ -1375,27 +1374,31 @@ pub(crate) fn encode_image_params_for_share(
     total_followers: usize,
 ) -> String {
     use serde_json::json;
+    use base64::engine::general_purpose::STANDARD_NO_PAD;
+    use base64::Engine;
     
-    // Create a JSON object with all image URLs and stats
+    // Create a JSON object with short field names to minimize size
     let params = json!({
-        "fid": fid,
-        "username": username.unwrap_or(""),
-        "avatar": avatar_url.unwrap_or(""),
-        "zodiac": zodiac_url,
-        "social_type": social_type_url,
-        "total_casts": total_casts,
-        "total_reactions": total_reactions,
-        "total_followers": total_followers,
+        "f": fid,           // fid
+        "u": username.unwrap_or(""),  // username
+        "a": avatar_url.unwrap_or(""), // avatar
+        "z": zodiac_url,    // zodiac
+        "s": social_type_url, // social_type
+        "c": total_casts,    // total_casts
+        "r": total_reactions, // total_reactions
+        "w": total_followers, // total_followers (w = followers)
     });
     
-    // Serialize to JSON string
+    // Serialize to compact JSON (no whitespace)
     let json_str = serde_json::to_string(&params)
         .unwrap_or_else(|_| "{}".to_string());
     
-    // Encode to base64
-    let base64 = general_purpose::STANDARD.encode(json_str.as_bytes());
+    // Encode to base64url (URL-safe, no padding)
+    let base64url = STANDARD_NO_PAD.encode(json_str.as_bytes())
+        .replace('+', "-")
+        .replace('/', "_");
     
-    base64
+    base64url
 }
 
 // Helper function to convert relative image path to absolute URL

@@ -168,9 +168,21 @@ fn decode_image_params(params_base64: &str) -> Result<ImageParams, String> {
     use base64::engine::general_purpose;
     use base64::Engine;
     
-    // Decode base64
+    // Decode base64url (URL-safe base64) or standard base64
+    // Convert base64url to standard base64 format
+    let base64_str = params_base64.replace('-', "+").replace('_', "/");
+    
+    // Try decoding with padding, if fails try without padding
     let decoded_bytes = general_purpose::STANDARD
-        .decode(params_base64)
+        .decode(&base64_str)
+        .or_else(|_| {
+            // Try with padding
+            let mut padded = base64_str.clone();
+            while padded.len() % 4 != 0 {
+                padded.push('=');
+            }
+            general_purpose::STANDARD.decode(&padded)
+        })
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
     
     // Parse JSON
@@ -180,39 +192,48 @@ fn decode_image_params(params_base64: &str) -> Result<ImageParams, String> {
     let params: serde_json::Value = serde_json::from_str(&json_str)
         .map_err(|e| format!("Failed to parse JSON: {}", e))?;
     
-    let fid = params.get("fid")
+    // Support both short field names (new format) and long field names (old format for backward compatibility)
+    let fid = params.get("f")
+        .or_else(|| params.get("fid"))
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
     
-    let username = params.get("username")
+    let username = params.get("u")
+        .or_else(|| params.get("username"))
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
     
-    let avatar = params.get("avatar")
+    let avatar = params.get("a")
+        .or_else(|| params.get("avatar"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .filter(|s| !s.is_empty());
     
-    let zodiac = params.get("zodiac")
+    let zodiac = params.get("z")
+        .or_else(|| params.get("zodiac"))
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "Missing 'zodiac' in params".to_string())?
+        .ok_or_else(|| "Missing 'zodiac'/'z' in params".to_string())?
         .to_string();
     
-    let social_type = params.get("social_type")
+    let social_type = params.get("s")
+        .or_else(|| params.get("social_type"))
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "Missing 'social_type' in params".to_string())?
+        .ok_or_else(|| "Missing 'social_type'/'s' in params".to_string())?
         .to_string();
     
-    let total_casts = params.get("total_casts")
+    let total_casts = params.get("c")
+        .or_else(|| params.get("total_casts"))
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as usize;
     
-    let total_reactions = params.get("total_reactions")
+    let total_reactions = params.get("r")
+        .or_else(|| params.get("total_reactions"))
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as usize;
     
-    let total_followers = params.get("total_followers")
+    let total_followers = params.get("w")
+        .or_else(|| params.get("total_followers"))
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as usize;
     
