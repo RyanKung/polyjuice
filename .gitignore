@@ -67,3 +67,4 @@ worker/package-lock.json
 # Wrangler config files (use wrangler.example.toml instead)
 wrangler.toml
 worker/wrangler.toml
+test_text

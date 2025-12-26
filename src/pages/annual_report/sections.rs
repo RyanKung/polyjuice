@@ -3,6 +3,10 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_futures::JsFuture;
 use yew::prelude::*;
+use image::{Rgba, RgbaImage};
+use web_sys::{Request, RequestInit, RequestMode, Response};
+use base64::engine::general_purpose;
+use base64::Engine as _;
 
 use super::utils::farcaster_to_unix;
 use crate::farcaster;
@@ -1361,6 +1365,41 @@ pub(crate) fn calculate_personality_tag(
     (name.to_string(), image_path, description.to_string())
 }
 
+// Helper function to encode image URLs and user stats as base64 for sharing
+pub(crate) fn encode_image_params_for_share(
+    fid: i64,
+    username: Option<&str>,
+    avatar_url: Option<&str>,
+    zodiac_url: &str,
+    social_type_url: &str,
+    total_casts: usize,
+    total_reactions: usize,
+    total_followers: usize,
+) -> String {
+    use serde_json::json;
+    
+    // Create a JSON object with all image URLs and stats
+    let params = json!({
+        "fid": fid,
+        "username": username.unwrap_or(""),
+        "avatar": avatar_url.unwrap_or(""),
+        "zodiac": zodiac_url,
+        "social_type": social_type_url,
+        "total_casts": total_casts,
+        "total_reactions": total_reactions,
+        "total_followers": total_followers,
+    });
+    
+    // Serialize to JSON string
+    let json_str = serde_json::to_string(&params)
+        .unwrap_or_else(|_| "{}".to_string());
+    
+    // Encode to base64
+    let base64 = general_purpose::STANDARD.encode(json_str.as_bytes());
+    
+    base64
+}
+
 // Helper function to convert relative image path to absolute URL
 pub(crate) fn get_image_url(image_path: &str) -> String {
     if image_path.starts_with("http://") || image_path.starts_with("https://") {
@@ -1378,9 +1417,524 @@ pub(crate) fn get_image_url(image_path: &str) -> String {
     image_path.to_string()
 }
 
+// Fetch image data from URL and return as Vec<u8>
+async fn fetch_image_data(url: &str) -> Result<Vec<u8>, String> {
+    let window = web_sys::window().ok_or("No window object")?;
+    let opts = RequestInit::new();
+    opts.set_method("GET");
+    opts.set_mode(RequestMode::Cors);
+
+    let request = Request::new_with_str_and_init(url, &opts)
+        .map_err(|e| format!("Failed to create request: {:?}", e))?;
+
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Fetch failed: {:?}", e))?;
+
+    let resp: Response = resp_value
+        .dyn_into()
+        .map_err(|_| "Response is not a Response object")?;
+
+    if resp.status() != 200 {
+        return Err(format!("Failed to fetch image: status {}", resp.status()));
+    }
+
+    // Get array buffer from response
+    let array_buffer_promise = resp
+        .array_buffer()
+        .map_err(|e| format!("Failed to get array buffer: {:?}", e))?;
+    let array_buffer_value = JsFuture::from(array_buffer_promise)
+        .await
+        .map_err(|e| format!("Failed to await array buffer: {:?}", e))?;
+    let array_buffer: js_sys::ArrayBuffer = array_buffer_value
+        .dyn_into()
+        .map_err(|_| "ArrayBuffer conversion failed")?;
+
+    // Convert to Vec<u8>
+    let uint8_array = js_sys::Uint8Array::new(&array_buffer);
+    let mut bytes = vec![0u8; uint8_array.length() as usize];
+    uint8_array.copy_to(&mut bytes);
+
+    Ok(bytes)
+}
+
+/// Generate composite tarot card image with badges and avatar
+/// 
+/// This is a public function that takes FID and badge URLs to generate a composite tarot card image.
+/// 
+/// # Arguments
+/// * `fid` - Farcaster ID used to determine which tarot card to use
+/// * `zodiac_url` - URL of the zodiac badge image
+/// * `social_type_url` - URL of the social type badge image  
+/// * `avatar_url` - Optional URL of the user avatar image
+/// 
+/// # Returns
+/// * `Ok(String)` - Base64 encoded PNG data URL of the composite image
+/// * `Err(String)` - Error message if image generation fails
+pub async fn generate_tarot_card_image(
+    fid: i64,
+    zodiac_url: &str,
+    social_type_url: &str,
+    avatar_url: Option<&str>,
+) -> Result<String, String> {
+    // Calculate tarot card based on FID
+    // We need dummy data for calculate_personality_tag, but only FID is actually used
+    // Use the same approach as in PersonalityTagSection component
+    let dummy_temporal = crate::models::TemporalActivityResponse {
+        total_casts: 0,
+        total_casts_in_year: None,
+        hourly_distribution: Vec::new(),
+        monthly_distribution: Vec::new(),
+        most_active_hour: None,
+        most_active_month: None,
+        first_cast: None,
+        last_cast: None,
+    };
+    let dummy_engagement = crate::models::EngagementResponse {
+        reactions_received: 0,
+        recasts_received: 0,
+        replies_received: 0,
+        total_engagement: 0,
+        most_popular_cast: None,
+        top_reactors: Vec::new(),
+    };
+    let dummy_content_style = crate::models::ContentStyleResponse {
+        top_emojis: Vec::new(),
+        top_words: Vec::new(),
+        avg_cast_length: 0.0,
+        total_characters: 0,
+        frames_used: 0,
+        frames_created: 0,
+        channels_created: 0,
+    };
+    let dummy_follower_growth = crate::models::FollowerGrowthResponse {
+        current_followers: 0,
+        followers_at_start: 0,
+        net_growth: 0,
+        monthly_snapshots: Vec::new(),
+    };
+    let dummy_casts_stats = crate::models::CastsStatsResponse {
+        total_casts: 0,
+        date_distribution: Vec::new(),
+        date_range: None,
+        language_distribution: std::collections::HashMap::new(),
+        top_nouns: Vec::new(),
+        top_verbs: Vec::new(),
+    };
+    
+    let (_tag_name, image_path, _description) = calculate_personality_tag(
+        &dummy_temporal,
+        &dummy_engagement,
+        &dummy_content_style,
+        &dummy_follower_growth,
+        &dummy_casts_stats,
+        fid,
+    );
+    
+    let tarot_url = get_image_url(&image_path);
+    
+    // Call the internal composite function
+    composite_tarot_with_badges(
+        &tarot_url,
+        zodiac_url,
+        social_type_url,
+        avatar_url,
+    ).await
+}
+
+// Composite images: overlay zodiac, social type, and avatar badges on tarot card
+// Returns base64 encoded PNG data URL
+async fn composite_tarot_with_badges(
+    tarot_url: &str,
+    zodiac_url: &str,
+    social_type_url: &str,
+    avatar_url: Option<&str>,
+) -> Result<String, String> {
+    web_sys::console::log_1(&format!("📥 Fetching tarot image from: {}", tarot_url).into());
+    // Fetch all images
+    let tarot_data = fetch_image_data(tarot_url).await
+        .map_err(|e| format!("Failed to fetch tarot image: {}", e))?;
+    web_sys::console::log_1(&format!("✅ Fetched tarot image: {} bytes", tarot_data.len()).into());
+    
+    web_sys::console::log_1(&format!("📥 Fetching zodiac image from: {}", zodiac_url).into());
+    let zodiac_data = fetch_image_data(zodiac_url).await
+        .map_err(|e| format!("Failed to fetch zodiac image: {}", e))?;
+    web_sys::console::log_1(&format!("✅ Fetched zodiac image: {} bytes", zodiac_data.len()).into());
+    
+    web_sys::console::log_1(&format!("📥 Fetching social type image from: {}", social_type_url).into());
+    let social_type_data = fetch_image_data(social_type_url).await
+        .map_err(|e| format!("Failed to fetch social type image: {}", e))?;
+    web_sys::console::log_1(&format!("✅ Fetched social type image: {} bytes", social_type_data.len()).into());
+    
+    let avatar_data = if let Some(url) = avatar_url {
+        web_sys::console::log_1(&format!("📥 Fetching avatar image from: {}", url).into());
+        match fetch_image_data(url).await {
+            Ok(data) => {
+                web_sys::console::log_1(&format!("✅ Fetched avatar image: {} bytes", data.len()).into());
+                Some(data)
+            }
+            Err(e) => {
+                web_sys::console::warn_1(&format!("⚠️ Failed to fetch avatar image: {}, continuing without it", e).into());
+                None
+            }
+        }
+    } else {
+        web_sys::console::log_1(&"ℹ️ No avatar URL provided, skipping avatar".into());
+        None
+    };
+
+    // Load images
+    web_sys::console::log_1(&"🖼️ Loading images from memory...".into());
+    let tarot_img = image::load_from_memory(&tarot_data)
+        .map_err(|e| format!("Failed to load tarot image: {:?}", e))?
+        .to_rgba8();
+    web_sys::console::log_1(&format!("✅ Loaded tarot image: {}x{}", tarot_img.width(), tarot_img.height()).into());
+    
+    let zodiac_img = image::load_from_memory(&zodiac_data)
+        .map_err(|e| format!("Failed to load zodiac image: {:?}", e))?
+        .to_rgba8();
+    web_sys::console::log_1(&format!("✅ Loaded zodiac image: {}x{}", zodiac_img.width(), zodiac_img.height()).into());
+    
+    let social_type_img = image::load_from_memory(&social_type_data)
+        .map_err(|e| format!("Failed to load social type image: {:?}", e))?
+        .to_rgba8();
+    web_sys::console::log_1(&format!("✅ Loaded social type image: {}x{}", social_type_img.width(), social_type_img.height()).into());
+
+    let avatar_img = if let Some(data) = avatar_data {
+        image::load_from_memory(&data)
+            .map_err(|e| format!("Failed to load avatar image: {:?}", e))?
+            .to_rgba8()
+            .into()
+    } else {
+        None
+    };
+
+    // Get tarot card dimensions
+    let tarot_width = tarot_img.width();
+    let tarot_height = tarot_img.height();
+    web_sys::console::log_1(&format!("📐 Tarot card dimensions: {}x{}", tarot_width, tarot_height).into());
+
+    // Badge size is fixed at 50px, avatar is larger (70px)
+    let badge_size = 50u32;
+    let avatar_size = 70u32; // Avatar is larger than badges
+    web_sys::console::log_1(&format!("📏 Badge size: {}px, Avatar size: {}px", badge_size, avatar_size).into());
+    
+    // Resize badges to badge_size and make them circular with border
+    let zodiac_resized = resize_with_circular_border(
+        &zodiac_img,
+        badge_size,
+    );
+    let social_type_resized = resize_with_circular_border(
+        &social_type_img,
+        badge_size,
+    );
+    let avatar_resized = if let Some(ref avatar) = avatar_img {
+        Some(resize_with_circular_border_cropped(
+            avatar,
+            avatar_size,
+        ))
+    } else {
+        None
+    };
+
+    // Calculate top section height = avatar diameter (including border)
+    // Avatar has 2px border on each side, so actual size is avatar_size + 4
+    let avatar_actual_size = avatar_size + 4;
+    // Top section height should match avatar diameter exactly (including border)
+    // This ensures the border aligns with the top and bottom edges of the circular avatar
+    let top_section_height = avatar_actual_size;
+    web_sys::console::log_1(&format!("📐 Top section height: {}px (avatar diameter with border: {}px)", top_section_height, avatar_actual_size).into());
+    
+    // Create canvas with extra height for the top border (outside the card)
+    let canvas_height = tarot_height + top_section_height;
+    let mut canvas = RgbaImage::new(tarot_width, canvas_height);
+    
+    // Fill canvas with transparent
+    for pixel in canvas.pixels_mut() {
+        *pixel = Rgba([0, 0, 0, 0]);
+    }
+    
+    // Draw low-saturation blue border at top (outside the card, height = avatar diameter)
+    // Fill the entire top section with low-saturation blue (#7A9CC6 - soft blue-gray)
+    for y in 0..top_section_height {
+        for x in 0..tarot_width {
+            canvas.put_pixel(x, y, Rgba([122, 156, 198, 255])); // Low-saturation blue #7A9CC6
+        }
+    }
+    web_sys::console::log_1(&format!("✅ Low-saturation blue border drawn at top (height: {}px, same as avatar diameter)", top_section_height).into());
+    
+    // Copy tarot card image below the border
+    for y in 0..tarot_height {
+        for x in 0..tarot_width {
+            let pixel = tarot_img.get_pixel(x, y);
+            canvas.put_pixel(x, y + top_section_height, *pixel);
+        }
+    }
+    web_sys::console::log_1(&"✅ Tarot card image placed below border".into());
+    
+    // Calculate positions for badges and avatar in top section (outside the card)
+    // Note: badges have 2px border on each side, so actual size is badge_size + 4
+    // Avatar has 2px border on each side, so actual size is avatar_size + 4
+    let badge_actual_size = badge_size + 4;
+    let avatar_actual_size = avatar_size + 4;
+    
+    // Avatar should be positioned so its top edge aligns with top border (y=0)
+    // and bottom edge aligns with bottom border (y=top_section_height)
+    // Since avatar_actual_size = top_section_height, avatar should start at y=0
+    let avatar_y = 0u32;
+    
+    // Badges should be vertically centered in the top section
+    let center_y = (top_section_height / 2) as i32;
+    let badge_center_y = center_y - (badge_actual_size as i32 / 2);
+    
+    web_sys::console::log_1(&format!("📍 Avatar position: y={} (top edge at border top, bottom edge at border bottom)", avatar_y).into());
+    
+    // Horizontal spacing: left badge, center avatar, right badge
+    let padding = 20u32; // Padding from edges
+    let left_badge_x = padding;
+    let right_badge_x = tarot_width.saturating_sub(badge_actual_size + padding);
+    let avatar_x = (tarot_width as i32 / 2) - (avatar_actual_size as i32 / 2);
+    
+    web_sys::console::log_1(&format!("📍 Positioning: left_badge=({}, {}), avatar=({}, {}), right_badge=({}, {})", 
+        left_badge_x, badge_center_y, avatar_x, avatar_y, right_badge_x, badge_center_y).into());
+    
+    // Top-left: zodiac badge (in top section, outside card)
+    if badge_center_y >= 0 {
+        web_sys::console::log_1(&format!("📍 Overlaying zodiac badge at ({}, {})", left_badge_x, badge_center_y as u32).into());
+        overlay_image(&mut canvas, &zodiac_resized, left_badge_x, badge_center_y as u32);
+    }
+    
+    // Top-center: avatar (larger, in top section, outside card)
+    // Avatar top edge aligns with border top (y=0), bottom edge aligns with border bottom
+    if let Some(ref avatar) = avatar_resized {
+        if avatar_x >= 0 {
+            web_sys::console::log_1(&format!("📍 Overlaying avatar at ({}, {}) - top edge at border top", avatar_x as u32, avatar_y).into());
+            overlay_image(&mut canvas, avatar, avatar_x as u32, avatar_y);
+        }
+    } else {
+        web_sys::console::log_1(&"⚠️ No avatar to overlay".into());
+    }
+    
+    // Top-right: social type badge (in top section, outside card)
+    if badge_center_y >= 0 {
+        web_sys::console::log_1(&format!("📍 Overlaying social type badge at ({}, {})", right_badge_x, badge_center_y as u32).into());
+        overlay_image(&mut canvas, &social_type_resized, right_badge_x, badge_center_y as u32);
+    }
+    
+    web_sys::console::log_1(&"✅ All badges and avatar overlaid in top section (outside card)".into());
+
+    // Encode to PNG and return as base64 data URL
+    web_sys::console::log_1(&"💾 Encoding composite image to PNG...".into());
+    
+    // Resize image to target file size (~200KB)
+    // Note: canvas now includes top section, so height is tarot_height + top_section_height
+    let canvas_width = tarot_width;
+    let canvas_height_with_border = canvas_height;
+    
+    // PNG compression ratio for typical images: ~3-5x
+    // Target: ~200KB = 200,000 bytes compressed
+    // Raw data needed: ~600KB-1MB = ~150K-250K pixels (RGBA8 = 4 bytes/pixel)
+    // For 687x1024 aspect ratio: target ~550x820 pixels = ~450K pixels = ~1.8MB raw ≈ ~200KB compressed
+    let target_max_dimension = 900u32; // Higher resolution for better quality while keeping ~200KB
+    let (final_width, final_height, final_canvas) = if canvas_width > target_max_dimension || canvas_height_with_border > target_max_dimension {
+        let scale = (target_max_dimension as f32 / canvas_width.max(canvas_height_with_border) as f32).min(1.0);
+        let new_width = (canvas_width as f32 * scale) as u32;
+        let new_height = (canvas_height_with_border as f32 * scale) as u32;
+        web_sys::console::log_1(&format!("📐 Resizing composite from {}x{} to {}x{} for target file size (~200KB)", canvas_width, canvas_height_with_border, new_width, new_height).into());
+        let resized = image::imageops::resize(
+            &canvas,
+            new_width,
+            new_height,
+            image::imageops::FilterType::Lanczos3,
+        );
+        (new_width, new_height, image::DynamicImage::ImageRgba8(resized))
+    } else {
+        web_sys::console::log_1(&format!("📐 Keeping original size {}x{}", canvas_width, canvas_height_with_border).into());
+        (canvas_width, canvas_height_with_border, image::DynamicImage::ImageRgba8(canvas))
+    };
+    
+    let mut png_bytes = Vec::new();
+    {
+        let mut cursor = std::io::Cursor::new(&mut png_bytes);
+        final_canvas
+            .write_to(&mut cursor, image::ImageOutputFormat::Png)
+            .map_err(|e| format!("Failed to encode PNG: {:?}", e))?;
+    }
+    let file_size_kb = png_bytes.len() as f32 / 1024.0;
+    web_sys::console::log_1(&format!("✅ Encoded PNG: {} bytes ({:.1}KB)", png_bytes.len(), file_size_kb).into());
+    
+    // If file is too large (>250KB), resize further to target ~200KB
+    if png_bytes.len() > 250_000 {
+        web_sys::console::log_1(&format!("⚠️ File size {:.1}KB exceeds target, resizing further...", file_size_kb).into());
+        let scale = (200_000.0 / png_bytes.len() as f32).sqrt(); // Square root to account for 2D scaling
+        let new_width = ((final_width as f32 * scale) as u32).max(400);
+        let new_height = ((final_height as f32 * scale) as u32).max(600);
+        web_sys::console::log_1(&format!("📐 Resizing to {}x{} to reduce file size", new_width, new_height).into());
+        let resized = image::imageops::resize(
+            &final_canvas.to_rgba8(),
+            new_width,
+            new_height,
+            image::imageops::FilterType::Lanczos3,
+        );
+        png_bytes.clear();
+        {
+            let mut cursor = std::io::Cursor::new(&mut png_bytes);
+            image::DynamicImage::ImageRgba8(resized)
+                .write_to(&mut cursor, image::ImageOutputFormat::Png)
+                .map_err(|e| format!("Failed to encode PNG: {:?}", e))?;
+        }
+        let new_file_size_kb = png_bytes.len() as f32 / 1024.0;
+        web_sys::console::log_1(&format!("✅ Re-encoded PNG: {} bytes ({:.1}KB)", png_bytes.len(), new_file_size_kb).into());
+    }
+
+    let base64 = general_purpose::STANDARD.encode(&png_bytes);
+    let data_url = format!("data:image/png;base64,{}", base64);
+    web_sys::console::log_1(&format!("✅ Generated data URL: {} characters", data_url.len()).into());
+    
+    // Check if data URL is too long (browsers typically have limits around 2MB for data URLs)
+    if data_url.len() > 2_000_000 {
+        web_sys::console::warn_1(&format!("⚠️ Data URL is very large ({} chars), may cause display issues", data_url.len()).into());
+    }
+    
+    Ok(data_url)
+}
+
+// Resize image and add circular purple border (2px)
+fn resize_with_circular_border(img: &RgbaImage, size: u32) -> RgbaImage {
+    // Resize image
+    let resized = image::imageops::resize(
+        img,
+        size,
+        size,
+        image::imageops::FilterType::Lanczos3,
+    );
+    
+    // Create canvas with border (size + 4px for 2px border on each side)
+    let canvas_size = size + 4;
+    let mut canvas = RgbaImage::new(canvas_size, canvas_size);
+    
+    // Fill with transparent
+    for pixel in canvas.pixels_mut() {
+        *pixel = Rgba([0, 0, 0, 0]);
+    }
+    
+    // Draw circular mask and copy resized image
+    let center = (canvas_size as f32 / 2.0, canvas_size as f32 / 2.0);
+    let radius = (size as f32 / 2.0) as f32;
+    let border_radius = radius + 2.0;
+    
+    for y in 0..canvas_size {
+        for x in 0..canvas_size {
+            let dx = x as f32 - center.0;
+            let dy = y as f32 - center.1;
+            let dist = (dx * dx + dy * dy).sqrt();
+            
+            if dist <= radius {
+                // Inside circle - copy from resized image
+                let src_x = ((x as f32 - 2.0).max(0.0).min(size as f32 - 1.0)) as u32;
+                let src_y = ((y as f32 - 2.0).max(0.0).min(size as f32 - 1.0)) as u32;
+                canvas.put_pixel(x, y, *resized.get_pixel(src_x, src_y));
+            } else if dist <= border_radius {
+                // Border area - draw low-saturation blue border
+                canvas.put_pixel(x, y, Rgba([122, 156, 198, 255])); // Low-saturation blue #7A9CC6
+            }
+        }
+    }
+    
+    canvas
+}
+
+// Resize image, crop to circle, and add circular purple border (2px) - for avatars
+fn resize_with_circular_border_cropped(img: &RgbaImage, size: u32) -> RgbaImage {
+    // Resize image to square first
+    let resized = image::imageops::resize(
+        img,
+        size,
+        size,
+        image::imageops::FilterType::Lanczos3,
+    );
+    
+    // Create canvas with border (size + 4px for 2px border on each side)
+    let canvas_size = size + 4;
+    let mut canvas = RgbaImage::new(canvas_size, canvas_size);
+    
+    // Fill with transparent
+    for pixel in canvas.pixels_mut() {
+        *pixel = Rgba([0, 0, 0, 0]);
+    }
+    
+    // Draw circular mask and copy resized image (circular crop)
+    let center = (canvas_size as f32 / 2.0, canvas_size as f32 / 2.0);
+    let radius = (size as f32 / 2.0) as f32;
+    let border_radius = radius + 2.0;
+    
+    for y in 0..canvas_size {
+        for x in 0..canvas_size {
+            let dx = x as f32 - center.0;
+            let dy = y as f32 - center.1;
+            let dist = (dx * dx + dy * dy).sqrt();
+            
+            if dist <= radius {
+                // Inside circle - copy from resized image (with circular crop)
+                let src_x = ((x as f32 - 2.0).max(0.0).min(size as f32 - 1.0)) as u32;
+                let src_y = ((y as f32 - 2.0).max(0.0).min(size as f32 - 1.0)) as u32;
+                
+                // Check if source pixel is inside circle (circular crop)
+                let src_center = (size as f32 / 2.0, size as f32 / 2.0);
+                let src_dx = src_x as f32 - src_center.0;
+                let src_dy = src_y as f32 - src_center.1;
+                let src_dist = (src_dx * src_dx + src_dy * src_dy).sqrt();
+                
+                if src_dist <= radius {
+                    canvas.put_pixel(x, y, *resized.get_pixel(src_x, src_y));
+                }
+            } else if dist <= border_radius {
+                // Border area - draw low-saturation blue border
+                canvas.put_pixel(x, y, Rgba([122, 156, 198, 255])); // Low-saturation blue #7A9CC6
+            }
+        }
+    }
+    
+    canvas
+}
+
+// Overlay one image onto another at specified position with alpha blending
+fn overlay_image(canvas: &mut RgbaImage, overlay: &RgbaImage, x: u32, y: u32) {
+    for (ox, oy, pixel) in overlay.enumerate_pixels() {
+        let canvas_x = x + ox;
+        let canvas_y = y + oy;
+
+        if canvas_x < canvas.width() && canvas_y < canvas.height() {
+            let canvas_pixel = canvas.get_pixel_mut(canvas_x, canvas_y);
+            *canvas_pixel = blend_pixels(*canvas_pixel, *pixel);
+        }
+    }
+}
+
+// Alpha blend two pixels
+fn blend_pixels(bottom: Rgba<u8>, top: Rgba<u8>) -> Rgba<u8> {
+    let alpha_top = top[3] as f32 / 255.0;
+    let alpha_bottom = bottom[3] as f32 / 255.0;
+    let alpha_out = alpha_top + alpha_bottom * (1.0 - alpha_top);
+
+    if alpha_out == 0.0 {
+        return bottom;
+    }
+
+    let r = ((top[0] as f32 * alpha_top + bottom[0] as f32 * alpha_bottom * (1.0 - alpha_top))
+        / alpha_out) as u8;
+    let g = ((top[1] as f32 * alpha_top + bottom[1] as f32 * alpha_bottom * (1.0 - alpha_top))
+        / alpha_out) as u8;
+    let b = ((top[2] as f32 * alpha_top + bottom[2] as f32 * alpha_bottom * (1.0 - alpha_top))
+        / alpha_out) as u8;
+    let a = (alpha_out * 255.0) as u8;
+
+    Rgba([r, g, b, a])
+}
+
 // Helper function to build share text
 fn build_share_text(
-    profile: &Option<ProfileWithRegistration>,
+    _profile: &Option<ProfileWithRegistration>,
     report: &Option<AnnualReportResponse>,
     tarot_card_name: Option<&str>,
     share_url: Option<&str>,
@@ -1455,9 +2009,26 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
     let is_sharing = use_state(|| false);
     let share_status = use_state(|| None::<String>);
     let is_farcaster_env = props.is_farcaster_env;
-    let share_url = props.share_url.clone();
+    let base_share_url = props.share_url.clone();
     let is_own_report = props.is_own_report;
     let current_user_fid = props.current_user_fid;
+    
+    // State for composite tarot card image
+    let composite_image_url = use_state(|| None::<String>);
+    
+    // State for share URL with encoded params
+    let share_url_with_params = use_state(|| base_share_url.clone());
+    
+    // Force re-render when composite image is ready
+    {
+        let composite_image_url = composite_image_url.clone();
+        use_effect_with(composite_image_url.clone(), move |_| {
+            if composite_image_url.as_ref().is_some() {
+                web_sys::console::log_1(&"🔄 Composite image URL changed, forcing re-render...".into());
+            }
+            || ()
+        });
+    }
 
     // Calculate personality tag and get image URL
     let (tarot_card_name, personality_tag_image_url) = if let Some(report) = &props.annual_report {
@@ -1489,13 +2060,144 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
     } else {
         (None, None)
     };
+    
+    // Composite tarot card with badges when all data is available
+    {
+        let tarot_url = personality_tag_image_url.clone();
+        let composite_image_url = composite_image_url.clone();
+        let profile = props.profile.clone();
+        let temporal = props.temporal.clone();
+        let engagement = props.engagement.clone();
+        let followers = props.followers.clone();
+        let share_url_with_params_for_effect = share_url_with_params.clone();
+        let base_share_url_for_effect = base_share_url.clone();
+        
+        use_effect_with(
+            (tarot_url.clone(), profile.clone(), temporal.clone(), engagement.clone(), followers.clone()),
+            move |_| {
+                web_sys::console::log_1(&"🎨 Starting image composition...".into());
+                if let Some(tarot_url) = tarot_url.clone() {
+                    web_sys::console::log_1(&format!("📸 Tarot URL: {}", tarot_url).into());
+                    
+                    // Get zodiac image URL
+                    let zodiac_url = profile.as_ref()
+                        .and_then(|p| p.registered_at)
+                        .map(|timestamp| {
+                            let unix_timestamp = farcaster_to_unix(timestamp);
+                            let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
+                                unix_timestamp as f64 * 1000.0,
+                            ));
+                            let month = date.get_month() as u32 + 1;
+                            let day = date.get_date() as u32;
+                            let zodiac = get_zodiac_sign(month, day);
+                            let zodiac_lower = zodiac.to_lowercase();
+                            get_image_url(&format!("/imgs/zodiac/{}.png", zodiac_lower))
+                        })
+                        .unwrap_or_else(|| get_image_url("/imgs/zodiac/capricorn.png"));
+                    web_sys::console::log_1(&format!("♈ Zodiac URL: {}", zodiac_url).into());
+                    
+                    // Get social type image URL
+                    let total_casts = engagement.total_engagement;
+                    let social_type_url = if total_casts >= 200 {
+                        get_image_url("/imgs/social_type/social.png")
+                    } else {
+                        get_image_url("/imgs/social_type/slient.png")
+                    };
+                    web_sys::console::log_1(&format!("👥 Social type URL: {}", social_type_url).into());
+                    
+                    // Get avatar URL
+                    let avatar_url = profile.as_ref()
+                        .and_then(|p| p.pfp_url.as_ref())
+                        .map(|url| url.clone());
+                    if let Some(ref url) = avatar_url {
+                        web_sys::console::log_1(&format!("🖼️ Avatar URL: {}", url).into());
+                    } else {
+                        web_sys::console::log_1(&"🖼️ No avatar URL".into());
+                    }
+                    
+                    // Encode image URLs and stats as base64 params and update share URL
+                    {
+                        let share_url_with_params_inner = share_url_with_params_for_effect.clone();
+                        let base_share_url_inner = base_share_url_for_effect.clone();
+                        let avatar_url_for_params = avatar_url.clone();
+                        let zodiac_url_for_params = zodiac_url.clone();
+                        let social_type_url_for_params = social_type_url.clone();
+                        
+                        // Get user info and stats
+                        let fid = profile.as_ref().map(|p| p.fid).unwrap_or(0);
+                        let username = profile.as_ref().and_then(|p| p.username.as_deref());
+                        let total_casts = temporal.as_ref().map(|t| t.total_casts).unwrap_or(0);
+                        let total_reactions = engagement.as_ref().map(|e| e.reactions_received).unwrap_or(0);
+                        let total_followers = followers.current_followers;
+                        
+                        let params_base64 = encode_image_params_for_share(
+                            fid,
+                            username,
+                            avatar_url_for_params.as_deref(),
+                            &zodiac_url_for_params,
+                            &social_type_url_for_params,
+                            total_casts,
+                            total_reactions,
+                            total_followers,
+                        );
+                        web_sys::console::log_1(&format!("📦 Encoded params (first 50 chars): {}...", &params_base64[..params_base64.len().min(50)]).into());
+                        
+                        // Append params to share URL
+                        if let Some(base_url) = base_share_url_inner {
+                            let url_with_params = format!("{}?params={}", base_url, params_base64);
+                            web_sys::console::log_1(&format!("🔗 Share URL with params: {}", url_with_params).into());
+                            share_url_with_params_inner.set(Some(url_with_params));
+                        }
+                    }
+                    
+                    // Composite images - defer to avoid blocking UI
+                    // Use a small delay to let the browser render and handle interactions
+                    let composite_url = composite_image_url.clone();
+                    let tarot_url_clone = tarot_url.clone();
+                    let zodiac_url_clone = zodiac_url.clone();
+                    let social_type_url_clone = social_type_url.clone();
+                    
+                    spawn_local(async move {
+                        // Small delay to yield to browser for rendering
+                        use gloo_timers::future::TimeoutFuture;
+                        TimeoutFuture::new(10).await; // 10ms delay to let browser render
+                        
+                        web_sys::console::log_1(&"🚀 Starting async image composition...".into());
+                        match composite_tarot_with_badges(
+                            &tarot_url_clone,
+                            &zodiac_url_clone,
+                            &social_type_url_clone,
+                            avatar_url.as_deref(),
+                        ).await {
+                            Ok(data_url) => {
+                                web_sys::console::log_1(&format!("✅ Image composition successful! Data URL length: {}", data_url.len()).into());
+                                web_sys::console::log_1(&format!("🔄 Setting composite image URL (first 100 chars): {}...", &data_url[..data_url.len().min(100)]).into());
+                                composite_url.set(Some(data_url));
+                                web_sys::console::log_1(&"✅ Composite image URL set, triggering re-render...".into());
+                            }
+                            Err(e) => {
+                                web_sys::console::error_1(
+                                    &format!("❌ Failed to composite images: {}", e).into()
+                                );
+                                // Fallback to original tarot image
+                                composite_url.set(None);
+                            }
+                        }
+                    });
+                } else {
+                    web_sys::console::warn_1(&"⚠️ No tarot URL available for composition".into());
+                }
+            },
+        );
+    }
 
-    // Share text for display and copying
+    // Share text for display and copying (use URL with params)
+    let share_url_for_text = share_url_with_params.as_ref().as_ref().as_ref().map(|s| s.as_str());
     let share_text_content = build_share_text(
         &props.profile,
         &props.annual_report,
         tarot_card_name.as_deref(),
-        share_url.as_deref(),
+        share_url_for_text,
     );
 
     // Handler for Farcaster share (composeCast)
@@ -1504,7 +2206,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         let share_status = share_status.clone();
         let text_for_share = share_text_content.clone();
         let image_url = personality_tag_image_url.clone();
-        let url_for_share = share_url.clone();
+        let url_for_share = share_url_with_params.clone();
 
         Callback::from(move |_| {
             is_sharing.set(true);
@@ -1519,7 +2221,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             if let Some(img_url) = &image_url {
                 embeds.push(img_url.clone());
             }
-            if let Some(url_str) = &url_for_share {
+            if let Some(url_str) = url_for_share.as_ref() {
                 embeds.push(url_str.clone());
             }
             let embeds_option = if embeds.is_empty() { None } else { Some(embeds) };
@@ -1823,7 +2525,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
     html! {
         <div class="report-card-content" style="
             width: 100%;
-            height: 100%;
+            height: calc(100% - 60px);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -1835,30 +2537,30 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             <div style="
                 text-align: center;
                 width: 100%;
-                max-width: 600px;
+                max-width: 800px;
             ">
                 <h2 style="
-                    font-size: 36px;
+                    font-size: 32px;
                     font-weight: 700;
                     color: white;
-                    margin: 0 0 16px 0;
+                    margin: 0 0 8px 0;
                     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
                 ">{matched_tag.name.clone()}</h2>
 
                 <p style="
-                    font-size: 18px;
+                    font-size: 16px;
                     color: rgba(255, 255, 255, 0.9);
-                    margin: 0 0 32px 0;
-                    line-height: 1.6;
+                    margin: 0 0 16px 0;
+                    line-height: 1.5;
                 ">{matched_tag.description.clone()}</p>
 
                 <div
                     class="tarot-card"
                     onclick={on_card_click.clone()}
                     style="
-                        width: 200px;
-                        height: 280px;
-                        margin: 0 auto 32px;
+                        width: 320px;
+                        height: 448px;
+                        margin: 0 auto 16px;
                         perspective: 1000px;
                         cursor: pointer;
                     "
@@ -1883,20 +2585,54 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                 backface-visibility: hidden;
                                 -webkit-backface-visibility: hidden;
                                 transform: rotateY(0deg);
+                                background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000);
+                                background-size: 200% 100%;
+                                animation: rainbow-border-animation 3s linear infinite;
+                                padding: 0;
+                                box-sizing: border-box;
                             "
                         >
-                            <img
-                                src={matched_tag.image_path.clone()}
+                            {{
+                                // Force use composite image - no fallback to original
+                                let image_src = if let Some(url) = composite_image_url.as_ref() {
+                                    web_sys::console::log_1(&format!("🖼️ RENDER: Using composite image (length: {})", url.len()).into());
+                                    url.clone()
+                                } else {
+                                    web_sys::console::warn_1(&"⚠️ RENDER: Composite image not ready yet, using placeholder".into());
+                                    // Use a transparent 1x1 pixel as placeholder until composite is ready
+                                    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==".to_string()
+                                };
+                                
+                                // Create a unique key that changes when composite image is ready
+                                let image_key = composite_image_url.as_ref()
+                                    .map(|url| format!("composite-{}", url.len()))
+                                    .unwrap_or_else(|| "composite-loading".to_string());
+                                
+                                html! {
+                                    <img
+                                        key={image_key}
+                                        src={image_src.clone()}
                                 alt={matched_tag.name.clone()}
+                                        onload={Callback::from(move |_| {
+                                            web_sys::console::log_1(&"✅ Image loaded successfully!".into());
+                                        })}
+                                        onerror={Callback::from(move |_| {
+                                            web_sys::console::error_1(&"❌ Image failed to load!".into());
+                                        })}
                                 style="
                                     width: 100%;
                                     height: 100%;
-                                    object-fit: cover;
-                                    border-radius: 16px;
-                                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-                                    border: 3px solid rgba(255, 255, 255, 0.3);
+                                    object-fit: contain;
+                                    border-radius: 0;
+                                    box-shadow: none;
+                                    border: none;
+                                    padding: 0;
+                                    margin: 0;
+                                    display: block;
                                 "
                             />
+                                }
+                            }}
                         </div>
                         <div
                             class="tarot-card-back"
@@ -1907,15 +2643,15 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                 backface-visibility: hidden;
                                 -webkit-backface-visibility: hidden;
                                 transform: rotateY(180deg);
-                                border-radius: 16px;
-                                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+                                border-radius: 0;
+                                box-shadow: none;
                                 background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000);
                                 background-size: 200% 100%;
                                 animation: rainbow-border-animation 3s linear infinite;
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
-                                padding: 2px;
+                                padding: 0;
                                 box-sizing: border-box;
                             "
                         >
@@ -1923,13 +2659,13 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                 position: relative;
                                 width: 100%;
                                 height: 100%;
-                                border-radius: 14px;
+                                border-radius: 0;
                                 background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
                                 display: flex;
                                 flex-direction: column;
                                 align-items: center;
                                 justify-content: center;
-                                padding: 40px;
+                                padding: 30px;
                                 box-sizing: border-box;
                             ">
                                 <img
@@ -1939,20 +2675,20 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                     style="
                                         width: 100%;
                                         height: auto;
-                                        max-width: 200px;
+                                        max-width: 250px;
                                         object-fit: contain;
                                         filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.6)) drop-shadow(-1px -1px 2px rgba(255, 255, 255, 0.4)) brightness(1.1) contrast(1.2);
                                         opacity: 0.95;
-                                        margin-bottom: 24px;
+                                        margin-bottom: 16px;
                                     "
                                 />
                                 <p style="
-                                    font-size: 14px;
+                                    font-size: 13px;
                                     font-weight: 400;
                                     color: rgba(255, 255, 255, 0.9);
                                     text-align: center;
                                     margin: 0;
-                                    line-height: 1.5;
+                                    line-height: 1.4;
                                     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
                                 ">{"Click to flip"}</p>
                             </div>
@@ -1964,7 +2700,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                 <div style="
                     display: flex;
                     flex-direction: column;
-                    gap: 12px;
+                    gap: 8px;
                     align-items: center;
                     width: 100%;
                     max-width: 300px;

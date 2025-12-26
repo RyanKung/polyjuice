@@ -11,4 +11,8 @@ path = "src/lib.rs"
 worker = "0.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+base64 = "0.21"
+image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
+rusttype = "0.9"
+imageproc = "0.23"
 
