@@ -755,7 +755,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                                     annual_report.as_ref().map(|r| &r.follower_growth),
                                                 ) {
                                                     html! {
-                                                        <ReportCard>
+                                                        <ReportCard is_own_report={is_own_report}>
                                                             <IdentitySection
                                                                 profile={p.clone()}
                                                                 temporal={temporal.clone()}
@@ -775,7 +775,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                                     &*profile,
                                                 ) {
                                                     html! {
-                                                        <ReportCard>
+                                                        <ReportCard is_own_report={is_own_report}>
                                                             <FollowerGrowthSection
                                                                 followers={followers.clone()}
                                                                 temporal={temporal.clone()}
@@ -791,7 +791,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                     // Section 3: Top Interactive Users Card (renumbered from Section 3.6)
                                     {if let Some(engagement) = annual_report.as_ref().map(|r| &r.engagement) {
                                         html! {
-                                            <ReportCard>
+                                            <ReportCard is_own_report={is_own_report}>
                                                 <TopInteractiveUsersSection
                                                     engagement={engagement.clone()}
                                                     current_user_fid={current_user_fid}
@@ -814,7 +814,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                     top_verbs: Vec::new(),
                                 });
                                 html! {
-                                    <ReportCard>
+                                    <ReportCard is_own_report={is_own_report}>
                                         <StyleSection
                                             style={style.clone()}
                                             casts_stats={casts}
@@ -845,7 +845,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                             top_verbs: Vec::new(),
                                         });
                                         html! {
-                                            <ReportCard>
+                                            <ReportCard is_own_report={is_own_report}>
                                                 <PersonalityTagSection
                                                     temporal={temporal.clone()}
                                                     engagement={engagement.clone()}
