@@ -2068,12 +2068,12 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         let profile = props.profile.clone();
         let temporal = props.temporal.clone();
         let engagement = props.engagement.clone();
-        let followers = props.followers.clone();
+        let follower_growth = props.follower_growth.clone();
         let share_url_with_params_for_effect = share_url_with_params.clone();
         let base_share_url_for_effect = base_share_url.clone();
         
         use_effect_with(
-            (tarot_url.clone(), profile.clone(), temporal.clone(), engagement.clone(), followers.clone()),
+            (tarot_url.clone(), profile.clone(), temporal.clone(), engagement.clone(), follower_growth.clone()),
             move |_| {
                 web_sys::console::log_1(&"🎨 Starting image composition...".into());
                 if let Some(tarot_url) = tarot_url.clone() {
@@ -2126,9 +2126,9 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                         // Get user info and stats
                         let fid = profile.as_ref().map(|p| p.fid).unwrap_or(0);
                         let username = profile.as_ref().and_then(|p| p.username.as_deref());
-                        let total_casts = temporal.as_ref().map(|t| t.total_casts).unwrap_or(0);
-                        let total_reactions = engagement.as_ref().map(|e| e.reactions_received).unwrap_or(0);
-                        let total_followers = followers.current_followers;
+                        let total_casts = temporal.total_casts;
+                        let total_reactions = engagement.reactions_received;
+                        let total_followers = follower_growth.current_followers;
                         
                         let params_base64 = encode_image_params_for_share(
                             fid,
