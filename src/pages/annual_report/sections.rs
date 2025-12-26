@@ -1994,9 +1994,6 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                 backface-visibility: hidden;
                                 -webkit-backface-visibility: hidden;
                                 transform: rotateY(0deg);
-                                background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000);
-                                background-size: 200% 100%;
-                                animation: rainbow-border-animation 3s linear infinite;
                                 padding: 0;
                                 box-sizing: border-box;
                             "
@@ -2036,9 +2033,6 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                 transform: rotateY(180deg);
                                 border-radius: 0;
                                 box-shadow: none;
-                                background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000);
-                                background-size: 200% 100%;
-                                animation: rainbow-border-animation 3s linear infinite;
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
@@ -2237,14 +2231,6 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                     }
                 }
                 
-                @keyframes rainbow-border-animation {
-                    0% {
-                        background-position: 0% 50%;
-                    }
-                    100% {
-                        background-position: 200% 50%;
-                    }
-                }
             "#}</style>
             <script>{r#"
                 (function() {
