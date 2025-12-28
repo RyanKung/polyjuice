@@ -32,7 +32,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
     let is_farcaster_env = props.is_farcaster_env;
     let share_url = props.share_url.clone();
     let current_user_fid = props.current_user_fid;
-    let farcaster_context = props.farcaster_context.clone();
+    let _farcaster_context = props.farcaster_context.clone();
 
     // Check if viewing own report
     // Only consider it as own report if current_user_fid is Some and matches the fid
@@ -142,7 +142,9 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                     &"✅ Successfully parsed annual report".into(),
                                 );
                                 // Use total_casts_in_year if available for logging
-                                let total_casts = report.temporal_activity.total_casts_in_year
+                                let total_casts = report
+                                    .temporal_activity
+                                    .total_casts_in_year
                                     .unwrap_or(report.temporal_activity.total_casts);
                                 // Calculate total engagement from individual components
                                 let total_engagement = report.engagement.reactions_received
@@ -161,9 +163,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 loading_status.set("Loading profile...".to_string());
                                 let profile_endpoint =
                                     create_profile_endpoint(&fid.to_string(), true);
-                                let farcaster_context_for_profile = farcaster_context.clone();
-                                let is_own_report_for_profile = current_user_fid == Some(fid);
-                                if let Ok(mut p) = make_request_with_payment::<ProfileWithRegistration>(
+                                if let Ok(p) = make_request_with_payment::<ProfileWithRegistration>(
                                     &api_url_clone,
                                     &profile_endpoint,
                                     None,
@@ -174,56 +174,11 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 .await
                                 {
                                     web_sys::console::log_1(
-                                        &format!("📥 Profile loaded from API: FID={}, pfp_url={:?}", 
-                                            p.fid, p.pfp_url).into()
-                                    );
-                                    
-                                    // In Farcaster environment, prioritize Farcaster context avatar
-                                    // especially when viewing own report
-                                    if is_farcaster_env {
-                                        if let Some(context) = &farcaster_context_for_profile {
-                                            if let Some(user) = &context.user {
-                                                let should_use_farcaster_avatar = if is_own_report_for_profile {
-                                                    // For own report, always prefer Farcaster context avatar if available
-                                                    true
-                                                } else {
-                                                    // For others' reports, only use if API returned empty
-                                                    p.pfp_url.is_none() || p.pfp_url.as_ref().map(|s| s.is_empty()).unwrap_or(true)
-                                                };
-                                                
-                                                if should_use_farcaster_avatar {
-                                                    if let Some(farcaster_pfp) = &user.pfp_url {
-                                                        if !farcaster_pfp.is_empty() {
-                                                            web_sys::console::log_1(
-                                                                &format!("✅ Using Farcaster context avatar: {} (is_own_report={})", 
-                                                                    farcaster_pfp, is_own_report_for_profile).into()
-                                                            );
-                                                            p.pfp_url = Some(farcaster_pfp.clone());
-                                                        } else {
-                                                            web_sys::console::warn_1(
-                                                                &"⚠️ Farcaster context pfp_url is empty".into()
-                                                            );
-                                                        }
-                                                    } else {
-                                                        web_sys::console::warn_1(
-                                                            &"⚠️ Farcaster context user has no pfp_url".into()
-                                                        );
-                                                    }
-                                                }
-                                            } else {
-                                                web_sys::console::warn_1(
-                                                    &"⚠️ Farcaster context has no user".into()
-                                                );
-                                            }
-                                        } else {
-                                            web_sys::console::warn_1(
-                                                &"⚠️ No Farcaster context available".into()
-                                            );
-                                        }
-                                    }
-                                    
-                                    web_sys::console::log_1(
-                                        &format!("📤 Final profile pfp_url: {:?}", p.pfp_url).into()
+                                        &format!(
+                                            "📥 Profile loaded from API: FID={}, pfp_url={:?}",
+                                            p.fid, p.pfp_url
+                                        )
+                                        .into(),
                                     );
                                     profile.set(Some(p));
                                 }
@@ -613,8 +568,9 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                             });
 
                             // Calculate personality tag image (reuse helper functions from sections module)
-                            use super::sections::{calculate_personality_tag, get_image_url};
-                            let (_tag_name, image_path, _description) = calculate_personality_tag(
+                            // Note: image_url is no longer used as ember provides its own image
+                            use super::sections::calculate_personality_tag;
+                            let (_tag_name, _image_path, _description) = calculate_personality_tag(
                                 temporal,
                                 engagement,
                                 style,
@@ -622,7 +578,6 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 &casts,
                                 fid,
                             );
-                            let image_url = get_image_url(&image_path);
 
                             // Get username for button text (this is the owner of the report being viewed)
                             let username = profile.as_ref()
@@ -668,18 +623,6 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                             text-align: center;
                                             padding: 40px;
                                         ">
-                                            <img
-                                                src={image_url.clone()}
-                                                alt="Personality Tag"
-                                                style="
-                                                    width: 300px;
-                                                    height: 400px;
-                                                    object-fit: cover;
-                                                    border-radius: 16px;
-                                                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-                                                    border: 3px solid rgba(255, 255, 255, 0.3);
-                                                "
-                                            />
                                             <button
                                                 onclick={Callback::from({
                                                     let show_content_clone = show_content_clone.clone();
