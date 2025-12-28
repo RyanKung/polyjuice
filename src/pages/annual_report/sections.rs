@@ -1362,40 +1362,92 @@ pub(crate) fn calculate_personality_tag(
     (name.to_string(), image_path, description.to_string())
 }
 
-// Helper function to encode image URLs and user stats as base64url for sharing
-// Uses short field names and compact JSON to minimize URL length
+// Helper function to get zodiac index (0-11) from zodiac name
+fn get_zodiac_index(zodiac_name: &str) -> u8 {
+    match zodiac_name {
+        "Capricorn" => 0,
+        "Aquarius" => 1,
+        "Pisces" => 2,
+        "Aries" => 3,
+        "Taurus" => 4,
+        "Gemini" => 5,
+        "Cancer" => 6,
+        "Leo" => 7,
+        "Virgo" => 8,
+        "Libra" => 9,
+        "Scorpio" => 10,
+        "Sagittarius" => 11,
+        _ => 0, // Default to Capricorn
+    }
+}
+
+// Helper function to encode user stats as compact binary format for sharing
+// Format: [0-7]: FID (i64, little-endian), [8]: Zodiac (u8, 0-11), [9]: Social type (u8, 0=silent, 1=social),
+//         [10-13]: Total casts (u32), [14-17]: Total reactions (u32), [18-21]: Total followers (u32)
+// Total: 22 bytes -> ~30 chars in base64url
 pub(crate) fn encode_image_params_for_share(
     fid: i64,
-    username: Option<&str>,
-    avatar_url: Option<&str>,
+    _username: Option<&str>,
+    _avatar_url: Option<&str>,
     zodiac_url: &str,
     social_type_url: &str,
     total_casts: usize,
     total_reactions: usize,
     total_followers: usize,
 ) -> String {
-    use serde_json::json;
     use base64::engine::general_purpose::STANDARD_NO_PAD;
     use base64::Engine;
     
-    // Create a JSON object with short field names to minimize size
-    let params = json!({
-        "f": fid,           // fid
-        "u": username.unwrap_or(""),  // username
-        "a": avatar_url.unwrap_or(""), // avatar
-        "z": zodiac_url,    // zodiac
-        "s": social_type_url, // social_type
-        "c": total_casts,    // total_casts
-        "r": total_reactions, // total_reactions
-        "w": total_followers, // total_followers (w = followers)
-    });
+    // Extract zodiac name from URL (e.g., "/imgs/zodiac/capricorn.png" -> "capricorn")
+    let zodiac_name = zodiac_url
+        .split('/')
+        .last()
+        .and_then(|s| s.strip_suffix(".png"))
+        .unwrap_or("capricorn");
     
-    // Serialize to compact JSON (no whitespace)
-    let json_str = serde_json::to_string(&params)
-        .unwrap_or_else(|_| "{}".to_string());
+    // Convert zodiac name to capitalized format for index lookup
+    let zodiac_capitalized = if !zodiac_name.is_empty() {
+        let mut chars = zodiac_name.chars();
+        match chars.next() {
+            None => String::new(),
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        }
+    } else {
+        "Capricorn".to_string()
+    };
+    
+    let zodiac_index = get_zodiac_index(&zodiac_capitalized);
+    
+    // Extract social type from URL (0 = silent, 1 = social)
+    let social_type_index = if social_type_url.contains("social.png") {
+        1u8
+    } else {
+        0u8 // silent
+    };
+    
+    // Pack into binary format
+    let mut bytes = Vec::with_capacity(22);
+    
+    // FID as i64 (8 bytes, little-endian)
+    bytes.extend_from_slice(&fid.to_le_bytes());
+    
+    // Zodiac index (1 byte)
+    bytes.push(zodiac_index);
+    
+    // Social type index (1 byte)
+    bytes.push(social_type_index);
+    
+    // Total casts as u32 (4 bytes, little-endian)
+    bytes.extend_from_slice(&(total_casts as u32).to_le_bytes());
+    
+    // Total reactions as u32 (4 bytes, little-endian)
+    bytes.extend_from_slice(&(total_reactions as u32).to_le_bytes());
+    
+    // Total followers as u32 (4 bytes, little-endian)
+    bytes.extend_from_slice(&(total_followers as u32).to_le_bytes());
     
     // Encode to base64url (URL-safe, no padding)
-    let base64url = STANDARD_NO_PAD.encode(json_str.as_bytes())
+    let base64url = STANDARD_NO_PAD.encode(&bytes)
         .replace('+', "-")
         .replace('/', "_");
     
@@ -1573,22 +1625,18 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                     get_image_url("/imgs/social_type/slient.png")
                 };
                 
-                // Get avatar URL
-                let avatar_url = profile.as_ref()
-                    .and_then(|p| p.pfp_url.as_ref())
-                    .map(|url| url.clone());
-                
                 // Get user info and stats
                 let fid = profile.as_ref().map(|p| p.fid).unwrap_or(0);
-                let username = profile.as_ref().and_then(|p| p.username.as_deref());
                 let total_casts = temporal.total_casts;
                 let total_reactions = engagement.reactions_received;
                 let total_followers = follower_growth.current_followers;
                 
+                // Encode params (only fid, zodiac index, social_type index, and stats)
+                // Username and avatar will be fetched by worker from API
                 let params_base64 = encode_image_params_for_share(
                     fid,
-                    username,
-                    avatar_url.as_deref(),
+                    None, // Username will be fetched by worker
+                    None, // Avatar will be fetched by worker
                     &zodiac_url,
                     &social_type_url,
                     total_casts,

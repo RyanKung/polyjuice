@@ -154,16 +154,97 @@ fn extract_fid_from_path(pathname: &str) -> Option<i64> {
 #[derive(Debug)]
 struct ImageParams {
     fid: i64,
-    username: String,
-    avatar: Option<String>,
-    zodiac: String,
-    social_type: String,
+    zodiac_index: u8,      // 0-11
+    social_type_index: u8, // 0=silent, 1=social
     total_casts: usize,
     total_reactions: usize,
     total_followers: usize,
 }
 
-/// Decode base64 params and extract image URLs, user info, and stats
+/// Profile data fetched from API
+#[derive(Debug, serde::Deserialize)]
+struct ProfileApiResponse {
+    fid: i64,
+    username: Option<String>,
+    display_name: Option<String>,
+    pfp_url: Option<String>,
+}
+
+/// Get zodiac image URL from index (0-11)
+fn get_zodiac_url_from_index(index: u8, base_url: &str) -> String {
+    let zodiacs = [
+        "capricorn", "aquarius", "pisces", "aries", "taurus", "gemini",
+        "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius",
+    ];
+    let zodiac_name = if (index as usize) < zodiacs.len() {
+        zodiacs[index as usize]
+    } else {
+        "capricorn"
+    };
+    format!("{}/imgs/zodiac/{}.png", base_url, zodiac_name)
+}
+
+/// Get social type image URL from index (0=silent, 1=social)
+fn get_social_type_url_from_index(index: u8, base_url: &str) -> String {
+    if index == 1 {
+        format!("{}/imgs/social_type/social.png", base_url)
+    } else {
+        format!("{}/imgs/social_type/slient.png", base_url)
+    }
+}
+
+/// Fetch profile from API
+async fn fetch_profile_from_api(fid: i64, api_url: &str) -> Result<(Option<String>, Option<String>), String> {
+    let url = format!("{}/api/profiles/fid/{}", api_url.trim_end_matches('/'), fid);
+    
+    console_log!("📡 Fetching profile for FID {} from: {}", fid, url);
+    
+    let request = Request::new(&url, Method::Get)
+        .map_err(|e| format!("Failed to create request: {:?}", e))?;
+    
+    let mut response = Fetch::Request(request)
+        .send()
+        .await
+        .map_err(|e| format!("Fetch failed: {:?}", e))?;
+    
+    if response.status_code() != 200 {
+        console_log!("⚠️ Profile API returned status: {}", response.status_code());
+        return Ok((None, None)); // Return None if not found
+    }
+    
+    let text = response.text().await
+        .map_err(|e| format!("Failed to read response: {:?}", e))?;
+    
+    // Try to parse as ApiResponse<ProfileData>
+    let api_response: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+    
+    // Extract profile data
+    let profile = api_response.get("data")
+        .or_else(|| api_response.get("profile"));
+    
+    if let Some(profile_data) = profile {
+        let username = profile_data.get("username")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        
+        let avatar_url = profile_data.get("pfp_url")
+            .or_else(|| profile_data.get("avatar"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        
+        console_log!("✅ Fetched profile: username={:?}, avatar={:?}", username, avatar_url);
+        Ok((username, avatar_url))
+    } else {
+        console_log!("⚠️ No profile data in API response");
+        Ok((None, None))
+    }
+}
+
+/// Decode base64 params from compact binary format
+/// Format: [0-7]: FID (i64, little-endian), [8]: Zodiac (u8, 0-11), [9]: Social type (u8, 0=silent, 1=social),
+///         [10-13]: Total casts (u32), [14-17]: Total reactions (u32), [18-21]: Total followers (u32)
 fn decode_image_params(params_base64: &str) -> Result<ImageParams, String> {
     use base64::engine::general_purpose;
     use base64::Engine;
@@ -185,64 +266,47 @@ fn decode_image_params(params_base64: &str) -> Result<ImageParams, String> {
         })
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
     
-    // Parse JSON
-    let json_str = String::from_utf8(decoded_bytes)
-        .map_err(|e| format!("Failed to convert to string: {}", e))?;
+    // Check minimum length (22 bytes)
+    if decoded_bytes.len() < 22 {
+        return Err(format!("Invalid params length: {} bytes (expected 22)", decoded_bytes.len()));
+    }
     
-    let params: serde_json::Value = serde_json::from_str(&json_str)
-        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+    // Parse binary format
+    // FID (8 bytes, little-endian)
+    let fid_bytes: [u8; 8] = [
+        decoded_bytes[0], decoded_bytes[1], decoded_bytes[2], decoded_bytes[3],
+        decoded_bytes[4], decoded_bytes[5], decoded_bytes[6], decoded_bytes[7],
+    ];
+    let fid = i64::from_le_bytes(fid_bytes);
     
-    // Support both short field names (new format) and long field names (old format for backward compatibility)
-    let fid = params.get("f")
-        .or_else(|| params.get("fid"))
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    // Zodiac index (1 byte)
+    let zodiac_index = decoded_bytes[8];
     
-    let username = params.get("u")
-        .or_else(|| params.get("username"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    // Social type index (1 byte)
+    let social_type_index = decoded_bytes[9];
     
-    let avatar = params.get("a")
-        .or_else(|| params.get("avatar"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .filter(|s| !s.is_empty());
+    // Total casts (4 bytes, little-endian)
+    let casts_bytes: [u8; 4] = [
+        decoded_bytes[10], decoded_bytes[11], decoded_bytes[12], decoded_bytes[13],
+    ];
+    let total_casts = u32::from_le_bytes(casts_bytes) as usize;
     
-    let zodiac = params.get("z")
-        .or_else(|| params.get("zodiac"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| "Missing 'zodiac'/'z' in params".to_string())?
-        .to_string();
+    // Total reactions (4 bytes, little-endian)
+    let reactions_bytes: [u8; 4] = [
+        decoded_bytes[14], decoded_bytes[15], decoded_bytes[16], decoded_bytes[17],
+    ];
+    let total_reactions = u32::from_le_bytes(reactions_bytes) as usize;
     
-    let social_type = params.get("s")
-        .or_else(|| params.get("social_type"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| "Missing 'social_type'/'s' in params".to_string())?
-        .to_string();
-    
-    let total_casts = params.get("c")
-        .or_else(|| params.get("total_casts"))
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as usize;
-    
-    let total_reactions = params.get("r")
-        .or_else(|| params.get("total_reactions"))
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as usize;
-    
-    let total_followers = params.get("w")
-        .or_else(|| params.get("total_followers"))
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as usize;
+    // Total followers (4 bytes, little-endian)
+    let followers_bytes: [u8; 4] = [
+        decoded_bytes[18], decoded_bytes[19], decoded_bytes[20], decoded_bytes[21],
+    ];
+    let total_followers = u32::from_le_bytes(followers_bytes) as usize;
     
     Ok(ImageParams {
         fid,
-        username,
-        avatar,
-        zodiac,
-        social_type,
+        zodiac_index,
+        social_type_index,
         total_casts,
         total_reactions,
         total_followers,
@@ -739,6 +803,8 @@ async fn composite_tarot_with_badges(
 async fn generate_report_card(
     tarot_url: &str,
     params: &ImageParams,
+    base_url: &str,
+    api_url: &str,
 ) -> Result<Vec<u8>, String> {
     use rusttype::{Font, Scale};
     use imageproc::drawing::draw_text_mut;
@@ -844,8 +910,17 @@ async fn generate_report_card(
     let avatar_y = content_start_y + top_padding as f32;
     let avatar_x = left_padding as f32;
     
+    // Fetch profile from API
+    let (username, avatar_url) = match fetch_profile_from_api(params.fid, api_url).await {
+        Ok(profile) => profile,
+        Err(e) => {
+            console_log!("⚠️ Failed to fetch profile: {}", e);
+            (None, None)
+        }
+    };
+    
     // 1. Avatar (top-left)
-    if let Some(ref avatar_url) = params.avatar {
+    if let Some(ref avatar_url) = avatar_url {
         match fetch_image_data(avatar_url).await {
             Ok(avatar_data) => {
                 if let Ok(avatar_img) = image::load_from_memory(&avatar_data) {
@@ -859,14 +934,16 @@ async fn generate_report_card(
     }
     
     // 2. Username (right of avatar, vertically centered with avatar)
-    if !params.username.is_empty() {
-        let username_text = format!("@{}", params.username);
-        let scale = Scale::uniform(username_font_size);
-        let v_metrics = font.v_metrics(scale);
-        // Center username vertically with avatar
-        let username_baseline_y = avatar_y + (avatar_size as f32 / 2.0) - (v_metrics.ascent - v_metrics.descent) / 2.0;
-        let username_x = avatar_x + avatar_size as f32 + avatar_text_gap as f32;
-        draw_text_mut(&mut canvas, Rgba([255, 255, 255, 255]), username_x as i32, username_baseline_y as i32, scale, &font, &username_text);
+    if let Some(ref username) = username {
+        if !username.is_empty() {
+            let username_text = format!("@{}", username);
+            let scale = Scale::uniform(username_font_size);
+            let v_metrics = font.v_metrics(scale);
+            // Center username vertically with avatar
+            let username_baseline_y = avatar_y + (avatar_size as f32 / 2.0) - (v_metrics.ascent - v_metrics.descent) / 2.0;
+            let username_x = avatar_x + avatar_size as f32 + avatar_text_gap as f32;
+            draw_text_mut(&mut canvas, Rgba([255, 255, 255, 255]), username_x as i32, username_baseline_y as i32, scale, &font, &username_text);
+        }
     }
     
     // 3. FID (below avatar, left-aligned with avatar)
@@ -907,7 +984,9 @@ async fn generate_report_card(
     }
     
     // 6. Badges (bottom, already calculated above)
-    match fetch_image_data(&params.zodiac).await {
+    // Get zodiac URL from index
+    let zodiac_url = get_zodiac_url_from_index(params.zodiac_index, base_url);
+    match fetch_image_data(&zodiac_url).await {
         Ok(zodiac_data) => {
             if let Ok(zodiac_img) = image::load_from_memory(&zodiac_data) {
                 let zodiac_rgba = zodiac_img.to_rgba8();
@@ -918,7 +997,9 @@ async fn generate_report_card(
         Err(e) => console_log!("⚠️ Failed to fetch zodiac badge: {}", e),
     }
     
-    match fetch_image_data(&params.social_type).await {
+    // Get social type URL from index
+    let social_type_url = get_social_type_url_from_index(params.social_type_index, base_url);
+    match fetch_image_data(&social_type_url).await {
         Ok(social_data) => {
             if let Ok(social_img) = image::load_from_memory(&social_data) {
                 let social_rgba = social_img.to_rgba8();
@@ -974,10 +1055,8 @@ async fn handle_generate_image(
         .map_err(|e| format!("Failed to decode params: {}", e))?;
     
     console_log!("Generating report card for FID: {}", params.fid);
-    console_log!("Username: {}", params.username);
-    console_log!("Avatar URL: {:?}", params.avatar);
-    console_log!("Zodiac URL: {}", params.zodiac);
-    console_log!("Social type URL: {}", params.social_type);
+    console_log!("Zodiac index: {}", params.zodiac_index);
+    console_log!("Social type index: {}", params.social_type_index);
     console_log!("Stats: {} casts, {} reactions, {} followers", 
         params.total_casts, params.total_reactions, params.total_followers);
     
@@ -987,6 +1066,12 @@ async fn handle_generate_image(
         .map(|v| v.to_string())
         .unwrap_or_else(|_| "https://miniapp.polyjuice.io".to_string());
     
+    // Get API URL for fetching profile
+    let api_url = env
+        .var("API_URL")
+        .map(|v| v.to_string())
+        .unwrap_or_else(|_| "https://api.polyjuice.io".to_string());
+    
     // Calculate tarot card based on FID
     let (_tarot_name, tarot_filename) = calculate_tarot_card(params.fid);
     let tarot_image_url = format!("{}/imgs/tarot/{}", base_url, tarot_filename);
@@ -995,6 +1080,8 @@ async fn handle_generate_image(
     let png_bytes = generate_report_card(
         &tarot_image_url,
         &params,
+        &base_url,
+        &api_url,
     ).await
     .map_err(|e| format!("Failed to generate report card: {}", e))?;
     
