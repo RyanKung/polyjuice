@@ -79,8 +79,32 @@ pub fn convert_annual_report_response(
 
     // Convert "activity" to "temporal_activity"
     let activity = api_data.get("activity").ok_or("Missing 'activity' field")?;
-    let temporal_activity = serde_json::from_value::<TemporalActivityResponse>(activity.clone())
+    
+    // Parse temporal_activity and convert Farcaster timestamps to Unix timestamps
+    // Note: API may return mixed timestamp formats:
+    // - Some fields (like registered_at) may already be Unix timestamps (from processed data)
+    // - Other fields (like first_cast.timestamp) may be Farcaster timestamps (directly from protocol)
+    // We normalize all timestamps to Unix format for consistent display
+    let mut temporal_activity: TemporalActivityResponse = serde_json::from_value(activity.clone())
         .map_err(|e| format!("Failed to parse temporal_activity: {}", e))?;
+    
+    // Convert first_cast timestamp from Farcaster to Unix if needed
+    // Farcaster timestamps: relative to 2021-01-01, typically < 1_000_000_000 seconds
+    // Unix timestamps: relative to 1970-01-01, typically > 1_600_000_000 seconds (after 2021)
+    if let Some(ref mut first_cast) = temporal_activity.first_cast {
+        if first_cast.timestamp < 1_000_000_000 {
+            // This is likely a Farcaster timestamp, convert it
+            first_cast.timestamp = farcaster_to_unix(first_cast.timestamp);
+        }
+    }
+    
+    // Convert last_cast timestamp from Farcaster to Unix if needed
+    if let Some(ref mut last_cast) = temporal_activity.last_cast {
+        if last_cast.timestamp < 1_000_000_000 {
+            // This is likely a Farcaster timestamp, convert it
+            last_cast.timestamp = farcaster_to_unix(last_cast.timestamp);
+        }
+    }
 
     // Convert "social_growth" to "follower_growth"
     let social_growth = api_data
@@ -115,11 +139,22 @@ pub fn convert_annual_report_response(
         .map_err(|e| format!("Failed to parse follower_growth: {}", e))?;
 
     // Parse engagement
-    let engagement = api_data
+    let engagement_raw = api_data
         .get("engagement")
         .ok_or("Missing 'engagement' field")?;
-    let engagement = serde_json::from_value::<EngagementResponse>(engagement.clone())
+    
+    // Parse and convert timestamps in engagement data
+    // Note: most_popular_cast.timestamp may also be in Farcaster format
+    let mut engagement: EngagementResponse = serde_json::from_value(engagement_raw.clone())
         .map_err(|e| format!("Failed to parse engagement: {}", e))?;
+    
+    // Convert most_popular_cast timestamp from Farcaster to Unix if needed
+    if let Some(ref mut popular_cast) = engagement.most_popular_cast {
+        if popular_cast.timestamp < 1_000_000_000 {
+            // This is likely a Farcaster timestamp, convert it
+            popular_cast.timestamp = farcaster_to_unix(popular_cast.timestamp);
+        }
+    }
 
     // Parse content_style - require all fields
     let content_style_raw = api_data

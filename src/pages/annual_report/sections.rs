@@ -232,17 +232,17 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
         });
 
     // Get first cast date
-    // Note: first_cast.timestamp is already a Unix timestamp, not Farcaster timestamp
+    // Note: first_cast.timestamp should be Unix timestamp (converted in utils.rs if needed)
     let first_cast_date = props
         .temporal
         .first_cast
         .as_ref()
         .map(|cast| {
-            // first_cast.timestamp is already Unix timestamp, use directly
+            // Convert timestamp to JavaScript Date (expects milliseconds since Unix epoch)
             let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
                 cast.timestamp as f64 * 1000.0,
             ));
-            let month = date.get_month() as u32 + 1;
+            let month = date.get_month() as u32 + 1; // get_month returns 0-11
             let day = date.get_date() as u32;
             let year = date.get_full_year();
             format!("{}/{:02}/{:02}", year, month, day)
