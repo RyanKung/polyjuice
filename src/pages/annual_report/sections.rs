@@ -72,33 +72,54 @@ pub fn AnnualReportCover(props: &AnnualReportCoverProps) -> Html {
                 text-align: center;
                 max-width: 600px;
             ">
-                if let Some(pfp_url) = &props.profile.pfp_url {
-                    <img
-                        src={pfp_url.clone()}
-                        alt="Profile"
-                        style="
+                {if let Some(pfp_url) = &props.profile.pfp_url {
+                    if !pfp_url.is_empty() {
+                        html! {
+                            <img
+                                src={pfp_url.clone()}
+                                alt="Profile"
+                                style="
+                                    width: 100px;
+                                    height: 100px;
+                                    border-radius: 50%;
+                                    border: 3px solid rgba(255, 255, 255, 0.3);
+                                    margin-bottom: 20px;
+                                    object-fit: cover;
+                                "
+                            />
+                        }
+                    } else {
+                        html! {
+                            <div style="
+                                width: 100px;
+                                height: 100px;
+                                border-radius: 50%;
+                                border: 3px solid rgba(255, 255, 255, 0.3);
+                                margin: 0 auto 20px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 50px;
+                                background: rgba(255, 255, 255, 0.1);
+                            ">{"👤"}</div>
+                        }
+                    }
+                } else {
+                    html! {
+                        <div style="
                             width: 100px;
                             height: 100px;
                             border-radius: 50%;
                             border: 3px solid rgba(255, 255, 255, 0.3);
-                            margin-bottom: 20px;
-                            object-fit: cover;
-                        "
-                    />
-                } else {
-                    <div style="
-                        width: 100px;
-                        height: 100px;
-                        border-radius: 50%;
-                        border: 3px solid rgba(255, 255, 255, 0.3);
-                        margin: 0 auto 20px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 50px;
-                        background: rgba(255, 255, 255, 0.1);
-                    ">{"👤"}</div>
-                }
+                            margin: 0 auto 20px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 50px;
+                            background: rgba(255, 255, 255, 0.1);
+                        ">{"👤"}</div>
+                    }
+                }}
                 <div class="cover-info">
                     <h1 style="
                         font-size: 36px;
@@ -295,18 +316,34 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
                                         justify-content: center;
                                     ">
                                         {if let Some(pfp_url) = &props.profile.pfp_url {
-                                            html! {
-                                                <img
-                                                    src={pfp_url.clone()}
-                                                    alt="Avatar"
-                                                    style="
+                                            if !pfp_url.is_empty() {
+                                                html! {
+                                                    <img
+                                                        src={pfp_url.clone()}
+                                                        alt="Avatar"
+                                                        style="
+                                                            width: 100%;
+                                                            height: 100%;
+                                                            object-fit: cover;
+                                                        "
+                                                    />
+                                                }
+                                            } else {
+                                                html! {
+                                                    <div style="
                                                         width: 100%;
                                                         height: 100%;
-                                                        object-fit: cover;
-                                                    "
-                                                />
+                                                        display: flex;
+                                                        align-items: center;
+                                                        justify-content: center;
+                                                        font-size: 20px;
+                                                        color: white;
+                                                    ">
+                                                        {"👤"}
+                                                    </div>
+                                                }
                                             }
-            } else {
+                                        } else {
                                             html! {
                                                 <div style="
                                                     width: 100%;
@@ -530,16 +567,32 @@ pub fn FollowerGrowthSection(props: &FollowerGrowthSectionProps) -> Html {
                                         justify-content: center;
                                     ">
                                         {if let Some(pfp_url) = &props.profile.pfp_url {
-                            html! {
-                                                <img
-                                                    src={pfp_url.clone()}
-                                                    alt="Avatar"
-                                                    style="
+                                            if !pfp_url.is_empty() {
+                                                html! {
+                                                    <img
+                                                        src={pfp_url.clone()}
+                                                        alt="Avatar"
+                                                        style="
+                                                            width: 100%;
+                                                            height: 100%;
+                                                            object-fit: cover;
+                                                        "
+                                                    />
+                                                }
+                                            } else {
+                                                html! {
+                                                    <div style="
                                                         width: 100%;
                                                         height: 100%;
-                                                        object-fit: cover;
-                                                    "
-                                                />
+                                                        display: flex;
+                                                        align-items: center;
+                                                        justify-content: center;
+                                                        font-size: 20px;
+                                                        color: white;
+                                                    ">
+                                                        {"👤"}
+                                                    </div>
+                                                }
                                             }
                                         } else {
                                             html! {
@@ -972,16 +1025,33 @@ pub fn StyleSection(props: &StyleSectionProps) -> Html {
                                 (container_size * 0.25) as u32
                             )}>
                                 {if let Some(pfp_url) = &props.profile.pfp_url {
-                                    html! {
-                                        <img
-                                            src={pfp_url.clone()}
-                                            alt="Avatar"
-                                            style="
+                                    if !pfp_url.is_empty() {
+                                        html! {
+                                            <img
+                                                src={pfp_url.clone()}
+                                                alt="Avatar"
+                                                style="
+                                                    width: 100%;
+                                                    height: 100%;
+                                                    object-fit: cover;
+                                                "
+                                            />
+                                        }
+                                    } else {
+                                        html! {
+                                            <div style="
                                                 width: 100%;
                                                 height: 100%;
-                                                object-fit: cover;
-                                            "
-                                        />
+                                                background: rgba(255, 255, 255, 0.2);
+                                                display: flex;
+                                                align-items: center;
+                                                justify-content: center;
+                                                font-size: 48px;
+                                                color: white;
+                                            ">
+                                                {"👤"}
+                                            </div>
+                                        }
                                     }
                                 } else {
                                     html! {

@@ -833,6 +833,7 @@ fn App() -> Html {
                                                         is_farcaster_env={*is_farcaster_env}
                                                         share_url={share_url}
                                                         current_user_fid={current_user_fid}
+                                                        farcaster_context={(*farcaster_context).clone()}
                                                     />
                                                 </div>
                                             }

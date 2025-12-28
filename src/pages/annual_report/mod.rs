@@ -5,6 +5,7 @@ pub mod utils;
 
 use yew::prelude::*;
 
+use crate::farcaster;
 use crate::wallet::WalletAccount;
 
 #[derive(Properties, PartialEq, Clone)]
@@ -15,6 +16,7 @@ pub struct AnnualReportPageProps {
     pub is_farcaster_env: bool,
     pub share_url: Option<String>,
     pub current_user_fid: Option<i64>,
+    pub farcaster_context: Option<farcaster::MiniAppContext>,
 }
 
 pub use components::*;

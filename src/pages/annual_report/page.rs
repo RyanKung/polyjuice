@@ -32,6 +32,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
     let is_farcaster_env = props.is_farcaster_env;
     let share_url = props.share_url.clone();
     let current_user_fid = props.current_user_fid;
+    let farcaster_context = props.farcaster_context.clone();
 
     // Check if viewing own report
     // Only consider it as own report if current_user_fid is Some and matches the fid
@@ -153,7 +154,8 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 loading_status.set("Loading profile...".to_string());
                                 let profile_endpoint =
                                     create_profile_endpoint(&fid.to_string(), true);
-                                if let Ok(p) = make_request_with_payment::<ProfileWithRegistration>(
+                                let farcaster_context_for_profile = farcaster_context.clone();
+                                if let Ok(mut p) = make_request_with_payment::<ProfileWithRegistration>(
                                     &api_url_clone,
                                     &profile_endpoint,
                                     None,
@@ -163,6 +165,26 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 )
                                 .await
                                 {
+                                    // In Farcaster environment, if pfp_url is missing/empty, use Farcaster context
+                                    if is_farcaster_env {
+                                        if p.pfp_url.is_none() || p.pfp_url.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
+                                            if let Some(context) = &farcaster_context_for_profile {
+                                                if let Some(user) = &context.user {
+                                                    // Only update if FID matches (own profile) or if viewing own report
+                                                    if user.fid == Some(fid) || user.fid == current_user_fid {
+                                                        if let Some(farcaster_pfp) = &user.pfp_url {
+                                                            if !farcaster_pfp.is_empty() {
+                                                                p.pfp_url = Some(farcaster_pfp.clone());
+                                                                web_sys::console::log_1(
+                                                                    &format!("✅ Using Farcaster context avatar for FID {}", fid).into()
+                                                                );
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                     profile.set(Some(p));
                                 }
 
