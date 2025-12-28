@@ -330,7 +330,6 @@ pub struct EngagementResponse {
     pub reactions_received: usize,
     pub recasts_received: usize,
     pub replies_received: usize,
-    pub total_engagement: usize,
     pub most_popular_cast: Option<PopularCast>,
     pub top_reactors: Vec<TopReactor>,
 }

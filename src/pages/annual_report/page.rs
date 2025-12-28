@@ -141,10 +141,17 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 web_sys::console::log_1(
                                     &"✅ Successfully parsed annual report".into(),
                                 );
+                                // Use total_casts_in_year if available for logging
+                                let total_casts = report.temporal_activity.total_casts_in_year
+                                    .unwrap_or(report.temporal_activity.total_casts);
+                                // Calculate total engagement from individual components
+                                let total_engagement = report.engagement.reactions_received
+                                    + report.engagement.recasts_received
+                                    + report.engagement.replies_received;
                                 web_sys::console::log_1(
                                     &format!(
-                                        "📊 Annual report data: FID={}, Year={}, Engagement={}",
-                                        report.fid, report.year, report.engagement.total_engagement
+                                        "📊 Annual report data: FID={}, Year={}, Total Casts={}, Total Engagement={}",
+                                        report.fid, report.year, total_casts, total_engagement
                                     )
                                     .into(),
                                 );
@@ -155,6 +162,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 let profile_endpoint =
                                     create_profile_endpoint(&fid.to_string(), true);
                                 let farcaster_context_for_profile = farcaster_context.clone();
+                                let is_own_report_for_profile = current_user_fid == Some(fid);
                                 if let Ok(mut p) = make_request_with_payment::<ProfileWithRegistration>(
                                     &api_url_clone,
                                     &profile_endpoint,
@@ -165,26 +173,58 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 )
                                 .await
                                 {
-                                    // In Farcaster environment, if pfp_url is missing/empty, use Farcaster context
+                                    web_sys::console::log_1(
+                                        &format!("📥 Profile loaded from API: FID={}, pfp_url={:?}", 
+                                            p.fid, p.pfp_url).into()
+                                    );
+                                    
+                                    // In Farcaster environment, prioritize Farcaster context avatar
+                                    // especially when viewing own report
                                     if is_farcaster_env {
-                                        if p.pfp_url.is_none() || p.pfp_url.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
-                                            if let Some(context) = &farcaster_context_for_profile {
-                                                if let Some(user) = &context.user {
-                                                    // Only update if FID matches (own profile) or if viewing own report
-                                                    if user.fid == Some(fid) || user.fid == current_user_fid {
-                                                        if let Some(farcaster_pfp) = &user.pfp_url {
-                                                            if !farcaster_pfp.is_empty() {
-                                                                p.pfp_url = Some(farcaster_pfp.clone());
-                                                                web_sys::console::log_1(
-                                                                    &format!("✅ Using Farcaster context avatar for FID {}", fid).into()
-                                                                );
-                                                            }
+                                        if let Some(context) = &farcaster_context_for_profile {
+                                            if let Some(user) = &context.user {
+                                                let should_use_farcaster_avatar = if is_own_report_for_profile {
+                                                    // For own report, always prefer Farcaster context avatar if available
+                                                    true
+                                                } else {
+                                                    // For others' reports, only use if API returned empty
+                                                    p.pfp_url.is_none() || p.pfp_url.as_ref().map(|s| s.is_empty()).unwrap_or(true)
+                                                };
+                                                
+                                                if should_use_farcaster_avatar {
+                                                    if let Some(farcaster_pfp) = &user.pfp_url {
+                                                        if !farcaster_pfp.is_empty() {
+                                                            web_sys::console::log_1(
+                                                                &format!("✅ Using Farcaster context avatar: {} (is_own_report={})", 
+                                                                    farcaster_pfp, is_own_report_for_profile).into()
+                                                            );
+                                                            p.pfp_url = Some(farcaster_pfp.clone());
+                                                        } else {
+                                                            web_sys::console::warn_1(
+                                                                &"⚠️ Farcaster context pfp_url is empty".into()
+                                                            );
                                                         }
+                                                    } else {
+                                                        web_sys::console::warn_1(
+                                                            &"⚠️ Farcaster context user has no pfp_url".into()
+                                                        );
                                                     }
                                                 }
+                                            } else {
+                                                web_sys::console::warn_1(
+                                                    &"⚠️ Farcaster context has no user".into()
+                                                );
                                             }
+                                        } else {
+                                            web_sys::console::warn_1(
+                                                &"⚠️ No Farcaster context available".into()
+                                            );
                                         }
                                     }
+                                    
+                                    web_sys::console::log_1(
+                                        &format!("📤 Final profile pfp_url: {:?}", p.pfp_url).into()
+                                    );
                                     profile.set(Some(p));
                                 }
 

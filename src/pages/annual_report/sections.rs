@@ -1553,9 +1553,13 @@ fn build_share_text(
     let mut text = String::from("My Annual Report: This year I ");
 
     if let Some(r) = report {
+        // Use total_casts_in_year if available, otherwise fallback to total_casts
+        // This matches what's displayed in the report
+        let total_casts = r.temporal_activity.total_casts_in_year
+            .unwrap_or(r.temporal_activity.total_casts);
         text.push_str(&format!(
             "Published {} Casts this year, ",
-            r.engagement.total_engagement
+            total_casts
         ));
         text.push_str(&format!(
             "Received {} likes, ",
@@ -1687,19 +1691,25 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                     })
                     .unwrap_or_else(|| get_image_url("/imgs/zodiac/capricorn.png"));
                 
-                // Get social type image URL
-                let total_casts = engagement.total_engagement;
+                // Get user info and stats - use the same fields as displayed in the report
+                let fid = profile.as_ref().map(|p| p.fid).unwrap_or(0);
+                
+                // Use total_casts_in_year if available, otherwise fallback to total_casts
+                // This matches what's displayed in FollowerGrowthSection
+                let total_casts = temporal.total_casts_in_year.unwrap_or(temporal.total_casts);
+                
+                // Use reactions_received for total reactions
+                let total_reactions = engagement.reactions_received;
+                
+                // Use current_followers for total followers
+                let total_followers = follower_growth.current_followers;
+                
+                // Get social type image URL based on total casts (same logic as FollowerGrowthSection)
                 let social_type_url = if total_casts >= 200 {
                     get_image_url("/imgs/social_type/social.png")
                 } else {
                     get_image_url("/imgs/social_type/slient.png")
                 };
-                
-                // Get user info and stats
-                let fid = profile.as_ref().map(|p| p.fid).unwrap_or(0);
-                let total_casts = temporal.total_casts;
-                let total_reactions = engagement.reactions_received;
-                let total_followers = follower_growth.current_followers;
                 
                 // Encode params (only fid, zodiac index, social_type index, and stats)
                 // Username and avatar will be fetched by worker from API
@@ -2071,6 +2081,43 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                 width: 100%;
                 max-width: 800px;
             ">
+                // Text above the card - changes based on flip state
+                <div style="
+                    margin-bottom: 24px;
+                    min-height: 60px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    {if *is_flipped {
+                        html! {
+                            <p style="
+                                font-size: 18px;
+                                font-weight: 500;
+                                color: rgba(255, 255, 255, 0.95);
+                                margin: 0;
+                                line-height: 1.6;
+                                max-width: 600px;
+                                text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+                            ">
+                                {format!("{}: {}", matched_tag.name.clone(), matched_tag.description.clone())}
+                            </p>
+                        }
+                    } else {
+                        html! {
+                            <p style="
+                                font-size: 24px;
+                                font-weight: 600;
+                                color: white;
+                                margin: 0;
+                                text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+                            ">
+                                {"Claim Your 2025 Tarot"}
+                            </p>
+                        }
+                    }}
+                </div>
+                
                 <div
                     class="tarot-card"
                     onclick={on_card_click.clone()}
