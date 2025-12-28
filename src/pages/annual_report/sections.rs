@@ -2071,21 +2071,6 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                 width: 100%;
                 max-width: 800px;
             ">
-                <h2 style="
-                    font-size: 32px;
-                    font-weight: 700;
-                    color: white;
-                    margin: 0 0 8px 0;
-                    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-                ">{matched_tag.name.clone()}</h2>
-
-                <p style="
-                    font-size: 16px;
-                    color: rgba(255, 255, 255, 0.9);
-                    margin: 0 0 16px 0;
-                    line-height: 1.5;
-                ">{matched_tag.description.clone()}</p>
-
                 <div
                     class="tarot-card"
                     onclick={on_card_click.clone()}
