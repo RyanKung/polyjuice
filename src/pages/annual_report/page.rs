@@ -175,12 +175,35 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 {
                                     web_sys::console::log_1(
                                         &format!(
-                                            "📥 Profile loaded from API: FID={}, pfp_url={:?}",
-                                            p.fid, p.pfp_url
+                                            "📥 Profile loaded from API: FID={}, pfp_url={:?}, pfp_url length={}",
+                                            p.fid,
+                                            p.pfp_url,
+                                            p.pfp_url.as_ref().map(|s| s.len()).unwrap_or(0)
                                         )
                                         .into(),
                                     );
+                                    // Log if pfp_url is empty or None
+                                    if p.pfp_url.is_none() {
+                                        web_sys::console::warn_1(
+                                            &"⚠️ Profile pfp_url is None".into(),
+                                        );
+                                    } else if let Some(ref url) = p.pfp_url {
+                                        if url.is_empty() {
+                                            web_sys::console::warn_1(
+                                                &"⚠️ Profile pfp_url is empty string".into(),
+                                            );
+                                        } else {
+                                            web_sys::console::log_1(
+                                                &format!("✅ Profile pfp_url is valid: {}", url)
+                                                    .into(),
+                                            );
+                                        }
+                                    }
                                     profile.set(Some(p));
+                                } else {
+                                    web_sys::console::error_1(
+                                        &"❌ Failed to load profile from API".into(),
+                                    );
                                 }
 
                                 // Load casts stats for additional data

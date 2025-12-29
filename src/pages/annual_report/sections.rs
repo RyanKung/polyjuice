@@ -73,7 +73,7 @@ pub fn AnnualReportCover(props: &AnnualReportCoverProps) -> Html {
                 max-width: 600px;
             ">
                 {if let Some(pfp_url) = &props.profile.pfp_url {
-                    if !pfp_url.is_empty() {
+                    if !pfp_url.is_empty() && pfp_url.trim() != "" {
                         html! {
                             <img
                                 src={pfp_url.clone()}
@@ -86,6 +86,9 @@ pub fn AnnualReportCover(props: &AnnualReportCoverProps) -> Html {
                                     margin-bottom: 20px;
                                     object-fit: cover;
                                 "
+                                onerror={Callback::from(|_| {
+                                    web_sys::console::error_1(&"❌ Failed to load profile image".into());
+                                })}
                             />
                         }
                     } else {
