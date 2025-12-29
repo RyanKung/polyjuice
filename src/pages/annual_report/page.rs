@@ -160,9 +160,20 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 annual_report.set(Some(report));
 
                                 // Load profile for display purposes
+                                web_sys::console::log_1(&"🔍 About to load profile...".into());
                                 loading_status.set("Loading profile...".to_string());
+                                web_sys::console::log_1(
+                                    &"🔍 Loading status set, creating profile endpoint...".into(),
+                                );
                                 let profile_endpoint =
                                     create_profile_endpoint(&fid.to_string(), true);
+                                web_sys::console::log_1(
+                                    &format!(
+                                        "🔍 Profile endpoint created: {}",
+                                        profile_endpoint.path
+                                    )
+                                    .into(),
+                                );
                                 if let Ok(p) = make_request_with_payment::<ProfileWithRegistration>(
                                     &api_url_clone,
                                     &profile_endpoint,
