@@ -1529,11 +1529,9 @@ pub(crate) fn encode_image_params_for_share(
         .replace('/', "_")
 }
 
-// Build version for cache busting (set at compile time)
-const BUILD_VERSION: &str = match option_env!("BUILD_VERSION") {
-    Some(v) => v,
-    None => "0",
-};
+// Build version for cache busting (generated at compile time by build.rs)
+// The version file is generated in OUT_DIR and included at compile time
+const BUILD_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/build_version.txt"));
 
 // Helper function to convert relative image path to absolute URL with cache busting
 pub fn get_image_url(image_path: &str) -> String {

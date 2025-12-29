@@ -613,11 +613,9 @@ fn get_all_supported_wallets(
     all_wallets
 }
 
-// Build version for cache busting (set at compile time)
-const BUILD_VERSION: &str = match option_env!("BUILD_VERSION") {
-    Some(v) => v,
-    None => "0",
-};
+// Build version for cache busting (generated at compile time by build.rs)
+// The version file is generated in OUT_DIR and included at compile time
+const BUILD_VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/build_version.txt"));
 
 // Helper function to add version parameter to image URL for cache busting
 fn add_version_to_url(url: &str) -> String {

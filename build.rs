@@ -75,14 +75,22 @@ fn main() {
         }
     }
 
-    // Generate build version for cache busting
-    // Use timestamp as version number (seconds since epoch)
+    // Generate build version file for cache busting
+    // Use timestamp in milliseconds as version number
     let build_version = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs();
-    println!("cargo:rustc-env=BUILD_VERSION={}", build_version);
+        .as_millis();
+    
+    // Write version to a file that will be included at compile time
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let version_file = format!("{}/build_version.txt", out_dir);
+    fs::write(&version_file, build_version.to_string())
+        .expect("Failed to write build version file");
     println!("cargo:warning=Generated BUILD_VERSION: {}", build_version);
+    
+    // Force rebuild every time to ensure BUILD_VERSION is always fresh
+    println!("cargo:rerun-if-changed=build.rs");
 
     // Re-run if .env changes
     println!("cargo:rerun-if-changed=.env");

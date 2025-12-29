@@ -650,7 +650,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
 
     // Generate background image URL with cache busting
     let bg_image_url = get_image_url("/imgs/report-bg.png");
-
+    
     html! {
         <div class="annual-report-page" style={format!("
             width: 100vw;
