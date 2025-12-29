@@ -198,9 +198,11 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
 
                                 // Create a new status callback for reload (in case it's still pending)
                                 let pending_job_reload = pending_job_reload_clone.clone();
+                                let data_loading_complete_for_reload = data_loading_complete_clone.clone();
                                 let status_callback_reload: StatusCallback =
                                     Rc::new(Box::new(move |status, job_key, message| {
-                                        if status != "completed" {
+                                        // Only update pending job if data hasn't been loaded yet
+                                        if status != "completed" && !*data_loading_complete_for_reload {
                                             let new_job = PendingJob {
                                                 job_key: job_key.clone(),
                                                 job_type: "annual_report".to_string(),
@@ -209,6 +211,15 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                                 message: Some(message.clone()),
                                             };
                                             pending_job_reload.set(Some(new_job));
+                                        } else if *data_loading_complete_for_reload {
+                                            // Data already loaded, ignore status updates
+                                            web_sys::console::log_1(
+                                                &format!(
+                                                    "ℹ️ Ignoring reload status update '{}' - data already loaded",
+                                                    status
+                                                )
+                                                .into(),
+                                            );
                                         }
                                     }));
 
@@ -292,6 +303,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                                 is_loading_clone.set(false);
                                                 data_loading_complete_clone.set(true);
                                                 loading_status_clone.set("Complete!".to_string());
+                                                pending_job_reload_clone.set(None); // Clear pending job when data is loaded
                                             }
                                             Err(e) => {
                                                 web_sys::console::error_1(
@@ -301,6 +313,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                                 data_loading_complete_clone.set(true);
                                                 loading_status_clone
                                                     .set(format!("Failed to parse: {}", e));
+                                                pending_job_reload_clone.set(None); // Clear pending job even on error
                                             }
                                         }
                                     }
@@ -313,19 +326,33 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                         data_loading_complete_clone.set(true);
                                         loading_status_clone
                                             .set(format!("Failed to reload: {}", e));
+                                        pending_job_reload_clone.set(None); // Clear pending job even on error
                                     }
                                 }
                             });
                         } else {
-                            // Update pending job state
-                            let new_job = PendingJob {
-                                job_key: job_key.clone(),
-                                job_type: "annual_report".to_string(),
-                                status: Some(status.clone()),
-                                started_at: Some(js_sys::Date::now() as u64),
-                                message: Some(message.clone()),
-                            };
-                            pending_job_for_callback.set(Some(new_job));
+                            // Only update pending job state if data hasn't been loaded yet
+                            // This prevents re-setting pending_job after data has already been loaded
+                            if !*data_loading_complete_for_callback {
+                                // Update pending job state
+                                let new_job = PendingJob {
+                                    job_key: job_key.clone(),
+                                    job_type: "annual_report".to_string(),
+                                    status: Some(status.clone()),
+                                    started_at: Some(js_sys::Date::now() as u64),
+                                    message: Some(message.clone()),
+                                };
+                                pending_job_for_callback.set(Some(new_job));
+                            } else {
+                                // Data already loaded, ignore status updates from background polling
+                                web_sys::console::log_1(
+                                    &format!(
+                                        "ℹ️ Ignoring status update '{}' - data already loaded",
+                                        status
+                                    )
+                                    .into(),
+                                );
+                            }
                         }
                     },
                 ));
