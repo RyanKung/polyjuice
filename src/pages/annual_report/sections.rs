@@ -1784,7 +1784,6 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         let is_sharing = is_sharing.clone();
         let share_status = share_status.clone();
         let text_for_share = share_text_content.clone();
-        let image_url = personality_tag_image_url.clone();
         let url_for_share = share_url_with_params.clone();
 
         Callback::from(move |_| {
@@ -1795,18 +1794,11 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             let share_status_clone = share_status.clone();
             let is_sharing_clone = is_sharing.clone();
 
-            // Build embeds: include both image URL and share URL
-            let mut embeds = Vec::new();
-            if let Some(img_url) = &image_url {
-                embeds.push(img_url.clone());
-            }
-            if let Some(url_str) = url_for_share.as_ref() {
-                embeds.push(url_str.clone());
-            }
-            let embeds_option = if embeds.is_empty() {
-                None
+            // Build embeds: include only share URL
+            let embeds_option = if let Some(url_str) = url_for_share.as_ref() {
+                Some(vec![url_str.clone()])
             } else {
-                Some(embeds)
+                None
             };
 
             spawn_local(async move {
