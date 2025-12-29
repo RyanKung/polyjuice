@@ -75,6 +75,15 @@ fn main() {
         }
     }
 
+    // Generate build version for cache busting
+    // Use timestamp as version number (seconds since epoch)
+    let build_version = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    println!("cargo:rustc-env=BUILD_VERSION={}", build_version);
+    println!("cargo:warning=Generated BUILD_VERSION: {}", build_version);
+
     // Re-run if .env changes
     println!("cargo:rerun-if-changed=.env");
 }

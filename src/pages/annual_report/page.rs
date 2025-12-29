@@ -648,8 +648,11 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
         0
     };
 
+    // Generate background image URL with cache busting
+    let bg_image_url = get_image_url("/imgs/report-bg.png");
+
     html! {
-        <div class="annual-report-page" style="
+        <div class="annual-report-page" style={format!("
             width: 100vw;
             height: 100vh;
             position: fixed;
@@ -670,13 +673,13 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
             -khtml-user-drag: none;
             -moz-user-drag: none;
             -o-user-drag: none;
-            background-image: url('/imgs/report-bg.png');
+            background-image: url('{}');
             background-size: cover;
             background-position: center center;
             background-repeat: no-repeat;
             background-color: #667eea;
             background-attachment: fixed;
-        "
+        ", bg_image_url)}
         oncopy={Callback::from(|e: web_sys::Event| {
             e.prevent_default();
         })}

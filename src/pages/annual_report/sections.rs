@@ -225,13 +225,13 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
             let birthday_date = format!("{}/{:02}/{:02}", year, month, day);
             // Build image URL from zodiac name (convert to lowercase)
             let zodiac_lower = zodiac.to_lowercase();
-            let zodiac_image_url = format!("/imgs/zodiac/{}.png", zodiac_lower);
+            let zodiac_image_url = get_image_url(&format!("/imgs/zodiac/{}.png", zodiac_lower));
             (birthday_date, zodiac_image_url, zodiac_info)
         })
         .unwrap_or_else(|| {
             (
                 "N/A".to_string(),
-                "/imgs/zodiac/capricorn.png".to_string(),
+                get_image_url("/imgs/zodiac/capricorn.png"),
                 "N/A".to_string(),
             )
         });
@@ -500,9 +500,9 @@ pub fn FollowerGrowthSection(props: &FollowerGrowthSectionProps) -> Html {
 
     // Determine social type image and title based on total casts
     let (social_type_image, section_title) = if total_casts >= 200 {
-        ("/imgs/social_type/social.png", "Social Butterfly")
+        (get_image_url("/imgs/social_type/social.png"), "Social Butterfly")
     } else {
-        ("/imgs/social_type/slient.png", "Man of Few Words")
+        (get_image_url("/imgs/social_type/slient.png"), "Man of Few Words")
     };
 
     html! {
@@ -1529,21 +1529,42 @@ pub(crate) fn encode_image_params_for_share(
         .replace('/', "_")
 }
 
-// Helper function to convert relative image path to absolute URL
-pub(crate) fn get_image_url(image_path: &str) -> String {
+// Build version for cache busting (set at compile time)
+const BUILD_VERSION: &str = match option_env!("BUILD_VERSION") {
+    Some(v) => v,
+    None => "0",
+};
+
+// Helper function to convert relative image path to absolute URL with cache busting
+pub fn get_image_url(image_path: &str) -> String {
     if image_path.starts_with("http://") || image_path.starts_with("https://") {
-        return image_path.to_string();
+        // For external URLs, add version parameter if not already present
+        if image_path.contains('?') {
+            return format!("{}&v={}", image_path, BUILD_VERSION);
+        } else {
+            return format!("{}?v={}", image_path, BUILD_VERSION);
+        }
     }
 
     // Get current origin
     if let Some(window) = web_sys::window() {
         if let Ok(origin) = window.location().origin() {
-            return format!("{}{}", origin, image_path);
+            let full_url = format!("{}{}", origin, image_path);
+            // Add version parameter for cache busting
+            if full_url.contains('?') {
+                return format!("{}&v={}", full_url, BUILD_VERSION);
+            } else {
+                return format!("{}?v={}", full_url, BUILD_VERSION);
+            }
         }
     }
 
-    // Fallback to relative path
-    image_path.to_string()
+    // Fallback to relative path with version parameter
+    if image_path.contains('?') {
+        format!("{}&v={}", image_path, BUILD_VERSION)
+    } else {
+        format!("{}?v={}", image_path, BUILD_VERSION)
+    }
 }
 
 // Fetch image data from URL and return as Vec<u8>
@@ -2233,7 +2254,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                 box-sizing: border-box;
                             ">
                                 <img
-                                    src="/imgs/polyjuice.png"
+                                    src={get_image_url("/imgs/polyjuice.png")}
                                     alt="Polyjuice"
                                     class="embossed-logo"
                                     style="

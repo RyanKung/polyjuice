@@ -613,17 +613,36 @@ fn get_all_supported_wallets(
     all_wallets
 }
 
-// Get wallet icon URL by wallet name
-// Uses local logo files from imgs directory
-fn get_wallet_icon_url(name: &str) -> String {
-    match name {
-        "Rabby" => "/imgs/rabby-logo.png".to_string(),
-        "Base" => "/imgs/base-logo.png".to_string(),
-        "Phantom" => "/imgs/phantom-logo.png".to_string(),
-        "MetaMask" => "/imgs/metamask-logo.svg".to_string(),
-        "Rainbow" => "/imgs/rainbow-logo.png".to_string(),
-        _ => String::new(),
+// Build version for cache busting (set at compile time)
+const BUILD_VERSION: &str = match option_env!("BUILD_VERSION") {
+    Some(v) => v,
+    None => "0",
+};
+
+// Helper function to add version parameter to image URL for cache busting
+fn add_version_to_url(url: &str) -> String {
+    if url.is_empty() {
+        return String::new();
     }
+    if url.contains('?') {
+        format!("{}&v={}", url, BUILD_VERSION)
+    } else {
+        format!("{}?v={}", url, BUILD_VERSION)
+    }
+}
+
+// Get wallet icon URL by wallet name
+// Uses local logo files from imgs directory with cache busting
+fn get_wallet_icon_url(name: &str) -> String {
+    let path = match name {
+        "Rabby" => "/imgs/rabby-logo.png",
+        "Base" => "/imgs/base-logo.png",
+        "Phantom" => "/imgs/phantom-logo.png",
+        "MetaMask" => "/imgs/metamask-logo.svg",
+        "Rainbow" => "/imgs/rainbow-logo.png",
+        _ => "",
+    };
+    add_version_to_url(path)
 }
 
 // Get provider name from provider object
