@@ -1764,7 +1764,6 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         let is_sharing = is_sharing.clone();
         let share_status = share_status.clone();
         let text_for_share = share_text_content.clone();
-        let image_url = personality_tag_image_url.clone();
         let url_for_share = share_url_with_params.clone();
 
         Callback::from(move |_| {
@@ -1775,12 +1774,9 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             let share_status_clone = share_status.clone();
             let is_sharing_clone = is_sharing.clone();
 
-            // Build embeds: only include share URL, not image (ember will provide image)
-            let embeds_option = if let Some(url_str) = url_for_share.as_ref() {
-                Some(vec![url_str.clone()])
-            } else {
-                None
-            };
+            // Build embeds: only include share URL (worker will generate image from meta tags)
+            // The share URL contains params, and worker will generate the image via /api/generate?params=...
+            let embeds_option = url_for_share.as_ref().map(|url| vec![url.clone()]);
 
             spawn_local(async move {
                 match farcaster::compose_cast(&text_clone, embeds_option).await {

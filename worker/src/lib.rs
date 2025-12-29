@@ -62,9 +62,10 @@ fn generate_annual_report_meta_tags(fid: i64, base_url: &str, pathname: &str, pa
     };
     let target_url = format!("{}{}", base_url, pathname);
 
-    // Create embed JSON matching the format from embed.rs (without imageUrl, ember will provide image)
+    // Create embed JSON matching the format from embed.rs
     let embed_json = json!({
         "version": "1",
+        "imageUrl": image_url,
         "button": {
             "title": "View Annual Report",
             "action": {
@@ -79,9 +80,10 @@ fn generate_annual_report_meta_tags(fid: i64, base_url: &str, pathname: &str, pa
 
     let embed_json_str = serde_json::to_string(&embed_json).unwrap_or_default();
 
-    // Generate frame JSON (for backward compatibility, without imageUrl)
+    // Generate frame JSON (for backward compatibility)
     let frame_json = json!({
         "version": "1",
+        "imageUrl": image_url,
         "button": {
             "title": "View Annual Report",
             "action": {
@@ -96,18 +98,20 @@ fn generate_annual_report_meta_tags(fid: i64, base_url: &str, pathname: &str, pa
 
     let frame_json_str = serde_json::to_string(&frame_json).unwrap_or_default();
 
-    // Generate Open Graph meta tags (without image URLs, ember will provide image)
+    // Generate Open Graph meta tags as well
     format!(
         r#"<meta name="fc:miniapp" content='{}' />
 <meta name="fc:frame" content='{}' />
 <meta property="og:title" content="2025 Annual Report - Polyjuice" />
 <meta property="og:description" content="View my Farcaster 2025 Annual Report" />
+<meta property="og:image" content="{}" />
 <meta property="og:url" content="{}" />
 <meta property="og:type" content="website" />
-<meta name="twitter:card" content="summary" />
+<meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="2025 Annual Report - Polyjuice" />
-<meta name="twitter:description" content="View my Farcaster 2025 Annual Report" />"#,
-        embed_json_str, frame_json_str, target_url
+<meta name="twitter:description" content="View my Farcaster 2025 Annual Report" />
+<meta name="twitter:image" content="{}" />"#,
+        embed_json_str, frame_json_str, image_url, target_url, image_url
     )
 }
 
