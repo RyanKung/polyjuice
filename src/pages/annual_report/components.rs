@@ -47,14 +47,21 @@ pub fn ReportCard(props: &ReportCardProps) -> Html {
     };
 
     // Add style tag to override child padding when not own report
+    // But preserve top padding for all pages to avoid header overlap
     let child_override_style = if !props.is_own_report {
         html! {
             <style>{r#"
                 .annual-report-card > * {
                     padding: 0 !important;
                 }
-                .annual-report-card .report-card-content {
-                    padding: 0 !important;
+                .annual-report-card .report-card-content:not(.cover-page-content) {
+                    padding-top: 100px !important;
+                    padding-left: 40px !important;
+                    padding-right: 40px !important;
+                    padding-bottom: 40px !important;
+                }
+                .annual-report-card .cover-page-content {
+                    padding: 80px 40px 40px 40px !important;
                 }
             "#}</style>
         }

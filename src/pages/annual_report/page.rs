@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
@@ -11,12 +13,14 @@ use super::ReportCard;
 use crate::models::AnnualReportResponse;
 use crate::models::CastsStatsResponse;
 use crate::models::EngagementResponse;
+use crate::models::PendingJob;
 use crate::models::ProfileWithRegistration;
 use crate::services::create_annual_report_endpoint;
 use crate::services::create_casts_stats_endpoint;
 use crate::services::create_profile_endpoint;
 use crate::services::get_2025_timestamps;
 use crate::services::make_request_with_payment;
+use crate::services::StatusCallback;
 
 /// Annual Report page component
 #[function_component]
@@ -26,6 +30,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
     let casts_stats = use_state(|| None::<CastsStatsResponse>);
     let engagement_2024 = use_state(|| None::<EngagementResponse>);
     let is_loading = use_state(|| false); // Track if data is still loading
+    let pending_job = use_state(|| None::<PendingJob>); // Track pending job status
     let fid = props.fid;
     let api_url = props.api_url.clone();
     let wallet_account = props.wallet_account.clone();
@@ -53,6 +58,46 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
     let current_page = use_state(|| 0);
     let scroll_container_ref = use_node_ref();
 
+    // Helper function to parse JOB_STATUS error format
+    fn parse_job_status_error(
+        error: &str,
+        default_job_key: String,
+    ) -> Option<(String, String, String)> {
+        if !error.starts_with("JOB_STATUS:") {
+            return None;
+        }
+
+        let parts: Vec<&str> = error.split(":JOB_KEY:").collect();
+        if parts.len() != 2 {
+            return None;
+        }
+
+        let status_part = parts[0].strip_prefix("JOB_STATUS:").unwrap_or("");
+        let rest = parts[1];
+        let key_parts: Vec<&str> = rest.split(":MESSAGE:").collect();
+
+        let status = if !status_part.is_empty() {
+            status_part.to_string()
+        } else {
+            "pending".to_string()
+        };
+
+        let job_key = if !key_parts.is_empty() && !key_parts[0].is_empty() {
+            key_parts[0].to_string()
+        } else {
+            default_job_key
+        };
+
+        let message = if key_parts.len() >= 2 {
+            key_parts[1].to_string()
+        } else {
+            "Annual report is still processing. You can come back later to check the results."
+                .to_string()
+        };
+
+        Some((status, job_key, message))
+    }
+
     // Load annual report data in background
     {
         let annual_report = annual_report.clone();
@@ -62,6 +107,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
         let is_loading = is_loading.clone();
         let data_loading_complete = data_loading_complete.clone();
         let loading_status = loading_status.clone();
+        let pending_job = pending_job.clone();
         let api_url_clone = api_url.clone();
         let wallet_account_clone = wallet_account.clone();
         let scroll_container_ref_for_loading = scroll_container_ref.clone();
@@ -75,6 +121,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
             let is_loading = is_loading.clone();
             let data_loading_complete = data_loading_complete.clone();
             let loading_status = loading_status.clone();
+            let pending_job = pending_job.clone();
             let api_url_clone = api_url_clone.clone();
             let wallet_account_clone = wallet_account_clone.clone();
             let scroll_container_ref = scroll_container_ref_for_loading.clone();
@@ -102,13 +149,194 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                     .into(),
                 );
 
+                // Create status callback to update pending job state
+                let pending_job_for_callback = pending_job.clone();
+                let annual_report_for_callback = annual_report.clone();
+                let profile_for_callback = profile.clone();
+                let casts_stats_for_callback = casts_stats.clone();
+                let is_loading_for_callback = is_loading.clone();
+                let data_loading_complete_for_callback = data_loading_complete.clone();
+                let loading_status_for_callback = loading_status.clone();
+                let api_url_for_reload = api_url_clone.clone();
+                let wallet_account_for_reload = wallet_account_clone.clone();
+                let fid_for_reload = fid;
+                let status_callback: StatusCallback = Rc::new(Box::new(
+                    move |status, job_key, message| {
+                        web_sys::console::log_1(
+                            &format!(
+                                "📊 Annual report job status update: {} (job_key: {})",
+                                status, job_key
+                            )
+                            .into(),
+                        );
+
+                        if status == "completed" {
+                            // Job completed, reload the data
+                            web_sys::console::log_1(
+                                &"✅ Annual report job completed, reloading data...".into(),
+                            );
+                            pending_job_for_callback.set(None);
+                            is_loading_for_callback.set(true);
+                            loading_status_for_callback.set("Loading annual report...".to_string());
+
+                            // Reload the annual report data
+                            let annual_report_clone = annual_report_for_callback.clone();
+                            let profile_clone = profile_for_callback.clone();
+                            let casts_stats_clone = casts_stats_for_callback.clone();
+                            let is_loading_clone = is_loading_for_callback.clone();
+                            let data_loading_complete_clone =
+                                data_loading_complete_for_callback.clone();
+                            let loading_status_clone = loading_status_for_callback.clone();
+                            let api_url_reload = api_url_for_reload.clone();
+                            let wallet_account_reload = wallet_account_for_reload.clone();
+                            let fid_reload = fid_for_reload;
+                            let pending_job_reload_clone = pending_job_for_callback.clone();
+
+                            wasm_bindgen_futures::spawn_local(async move {
+                                let annual_report_endpoint =
+                                    create_annual_report_endpoint(fid_reload, 2025);
+
+                                // Create a new status callback for reload (in case it's still pending)
+                                let pending_job_reload = pending_job_reload_clone.clone();
+                                let status_callback_reload: StatusCallback =
+                                    Rc::new(Box::new(move |status, job_key, message| {
+                                        if status != "completed" {
+                                            let new_job = PendingJob {
+                                                job_key: job_key.clone(),
+                                                job_type: "annual_report".to_string(),
+                                                status: Some(status.clone()),
+                                                started_at: Some(js_sys::Date::now() as u64),
+                                                message: Some(message.clone()),
+                                            };
+                                            pending_job_reload.set(Some(new_job));
+                                        }
+                                    }));
+
+                                match make_request_with_payment::<serde_json::Value>(
+                                    &api_url_reload,
+                                    &annual_report_endpoint,
+                                    None,
+                                    wallet_account_reload.as_ref(),
+                                    None,
+                                    Some(status_callback_reload),
+                                )
+                                .await
+                                {
+                                    Ok(json) => {
+                                        let api_data = if let Some(data) = json.get("data") {
+                                            data.clone()
+                                        } else {
+                                            json.clone()
+                                        };
+
+                                        match convert_annual_report_response(api_data) {
+                                            Ok(report) => {
+                                                web_sys::console::log_1(
+                                                &"✅ Successfully loaded annual report after polling".into(),
+                                            );
+                                                annual_report_clone.set(Some(report));
+
+                                                // Load profile
+                                                let profile_endpoint = create_profile_endpoint(
+                                                    &fid_reload.to_string(),
+                                                    true,
+                                                );
+                                                if let Ok(p) = make_request_with_payment::<
+                                                    ProfileWithRegistration,
+                                                >(
+                                                    &api_url_reload,
+                                                    &profile_endpoint,
+                                                    None,
+                                                    wallet_account_reload.as_ref(),
+                                                    None,
+                                                    None,
+                                                )
+                                                .await
+                                                {
+                                                    profile_clone.set(Some(p));
+                                                }
+
+                                                // Load casts stats
+                                                let (start_2025, end_2025) = get_2025_timestamps();
+                                                let casts_endpoint = create_casts_stats_endpoint(
+                                                    fid_reload,
+                                                    Some(start_2025),
+                                                    Some(end_2025),
+                                                );
+                                                if let Ok(json_data) =
+                                                    make_request_with_payment::<serde_json::Value>(
+                                                        &api_url_reload,
+                                                        &casts_endpoint,
+                                                        None,
+                                                        wallet_account_reload.as_ref(),
+                                                        None,
+                                                        None,
+                                                    )
+                                                    .await
+                                                {
+                                                    if let Some(outer_data) = json_data.get("data")
+                                                    {
+                                                        let actual_data = outer_data
+                                                            .get("data")
+                                                            .unwrap_or(outer_data);
+                                                        if let Ok(stats) = serde_json::from_value::<
+                                                            CastsStatsResponse,
+                                                        >(
+                                                            actual_data.clone()
+                                                        ) {
+                                                            casts_stats_clone.set(Some(stats));
+                                                        }
+                                                    }
+                                                }
+
+                                                is_loading_clone.set(false);
+                                                data_loading_complete_clone.set(true);
+                                                loading_status_clone.set("Complete!".to_string());
+                                            }
+                                            Err(e) => {
+                                                web_sys::console::error_1(
+                                                &format!("❌ Failed to parse annual report after polling: {}", e).into(),
+                                            );
+                                                is_loading_clone.set(false);
+                                                data_loading_complete_clone.set(true);
+                                                loading_status_clone
+                                                    .set(format!("Failed to parse: {}", e));
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        web_sys::console::error_1(
+                                            &format!("❌ Failed to reload annual report: {}", e)
+                                                .into(),
+                                        );
+                                        is_loading_clone.set(false);
+                                        data_loading_complete_clone.set(true);
+                                        loading_status_clone
+                                            .set(format!("Failed to reload: {}", e));
+                                    }
+                                }
+                            });
+                        } else {
+                            // Update pending job state
+                            let new_job = PendingJob {
+                                job_key: job_key.clone(),
+                                job_type: "annual_report".to_string(),
+                                status: Some(status.clone()),
+                                started_at: Some(js_sys::Date::now() as u64),
+                                message: Some(message.clone()),
+                            };
+                            pending_job_for_callback.set(Some(new_job));
+                        }
+                    },
+                ));
+
                 match make_request_with_payment::<serde_json::Value>(
                     &api_url_clone,
                     &annual_report_endpoint,
                     None,
                     wallet_account_clone.as_ref(),
                     None,
-                    None,
+                    Some(status_callback.clone()),
                 )
                 .await
                 {
@@ -142,7 +370,9 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                     &"✅ Successfully parsed annual report".into(),
                                 );
                                 // Use total_casts_in_year if available for logging
-                                let total_casts = report.temporal_activity.total_casts_in_year
+                                let total_casts = report
+                                    .temporal_activity
+                                    .total_casts_in_year
                                     .unwrap_or(report.temporal_activity.total_casts);
                                 // Calculate total engagement from individual components
                                 let total_engagement = report.engagement.reactions_received
@@ -167,55 +397,60 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                     &format!("🔍 Profile loading check: fid={}, current_user_fid={:?}, is_own_report={}", 
                                         fid, current_user_fid, is_own_report_for_profile).into()
                                 );
-                                if let Ok(mut p) = make_request_with_payment::<ProfileWithRegistration>(
-                                    &api_url_clone,
-                                    &profile_endpoint,
-                                    None,
-                                    wallet_account_clone.as_ref(),
-                                    None,
-                                    None,
-                                )
-                                .await
+                                if let Ok(mut p) =
+                                    make_request_with_payment::<ProfileWithRegistration>(
+                                        &api_url_clone,
+                                        &profile_endpoint,
+                                        None,
+                                        wallet_account_clone.as_ref(),
+                                        None,
+                                        None,
+                                    )
+                                    .await
                                 {
                                     web_sys::console::log_1(
                                         &format!("📥 Profile loaded from API: FID={}, pfp_url={:?}, is_own_report={}, current_user_fid={:?}", 
                                             p.fid, p.pfp_url, is_own_report_for_profile, current_user_fid).into()
                                     );
-                                    
+
                                     // In Farcaster environment, prioritize Farcaster context avatar
                                     // especially when viewing own report
                                     if is_farcaster_env {
                                         web_sys::console::log_1(
-                                            &format!("🔍 Checking Farcaster context for avatar...").into()
+                                            &"🔍 Checking Farcaster context for avatar...".into(),
                                         );
                                         if let Some(context) = &farcaster_context_for_profile {
                                             web_sys::console::log_1(
-                                                &format!("✅ Farcaster context found").into()
+                                                &"✅ Farcaster context found".into(),
                                             );
                                             if let Some(user) = &context.user {
                                                 web_sys::console::log_1(
                                                     &format!("✅ Farcaster user found: FID={:?}, pfp_url={:?}", 
                                                         user.fid, user.pfp_url).into()
                                                 );
-                                                
+
                                                 // Check if we should use Farcaster avatar
-                                                let api_pfp_empty = p.pfp_url.is_none() || 
-                                                    p.pfp_url.as_ref().map(|s| s.is_empty()).unwrap_or(true);
-                                                
-                                                let should_use_farcaster_avatar = if is_own_report_for_profile {
-                                                    // For own report, always prefer Farcaster context avatar if available
-                                                    web_sys::console::log_1(
+                                                let api_pfp_empty = p.pfp_url.is_none()
+                                                    || p.pfp_url
+                                                        .as_ref()
+                                                        .map(|s| s.is_empty())
+                                                        .unwrap_or(true);
+
+                                                let should_use_farcaster_avatar =
+                                                    if is_own_report_for_profile {
+                                                        // For own report, always prefer Farcaster context avatar if available
+                                                        web_sys::console::log_1(
                                                         &"✅ Own report detected, will use Farcaster avatar if available".into()
                                                     );
-                                                    true
-                                                } else {
-                                                    // For others' reports, only use if API returned empty
-                                                    web_sys::console::log_1(
+                                                        true
+                                                    } else {
+                                                        // For others' reports, only use if API returned empty
+                                                        web_sys::console::log_1(
                                                         &format!("ℹ️ Not own report, API pfp empty: {}", api_pfp_empty).into()
                                                     );
-                                                    api_pfp_empty
-                                                };
-                                                
+                                                        api_pfp_empty
+                                                    };
+
                                                 if should_use_farcaster_avatar {
                                                     if let Some(farcaster_pfp) = &user.pfp_url {
                                                         if !farcaster_pfp.is_empty() {
@@ -242,18 +477,19 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                                 }
                                             } else {
                                                 web_sys::console::warn_1(
-                                                    &"⚠️ Farcaster context has no user".into()
+                                                    &"⚠️ Farcaster context has no user".into(),
                                                 );
                                             }
                                         } else {
                                             web_sys::console::warn_1(
-                                                &"⚠️ No Farcaster context available".into()
+                                                &"⚠️ No Farcaster context available".into(),
                                             );
                                         }
                                     }
-                                    
+
                                     web_sys::console::log_1(
-                                        &format!("📤 Final profile pfp_url: {:?}", p.pfp_url).into()
+                                        &format!("📤 Final profile pfp_url: {:?}", p.pfp_url)
+                                            .into(),
                                     );
                                     profile.set(Some(p));
                                 }
@@ -294,6 +530,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 is_loading.set(false);
                                 data_loading_complete.set(true); // Mark data loading as complete
                                 loading_status.set("Complete!".to_string());
+                                pending_job.set(None); // Clear pending job when data is loaded
 
                                 // Setup scroll listener after data is loaded
                                 let scroll_container_ref_clone = scroll_container_ref.clone();
@@ -367,12 +604,36 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                         }
                     }
                     Err(e) => {
-                        web_sys::console::error_1(
-                            &format!("❌ Failed to load annual report: {}", e).into(),
-                        );
-                        is_loading.set(false);
-                        data_loading_complete.set(true); // Mark as complete even on error
-                        loading_status.set("Failed to load annual report".to_string());
+                        // Check for JOB_STATUS error format (pending job)
+                        if let Some((status, job_key, message)) =
+                            parse_job_status_error(&e, format!("annual_report:{}", fid))
+                        {
+                            web_sys::console::log_1(
+                                &format!(
+                                    "⏳ Annual report status: {} (job_key: {})",
+                                    status, job_key
+                                )
+                                .into(),
+                            );
+                            let new_job = PendingJob {
+                                job_key,
+                                job_type: "annual_report".to_string(),
+                                status: Some(status),
+                                started_at: Some(js_sys::Date::now() as u64),
+                                message: Some(message),
+                            };
+                            pending_job.set(Some(new_job));
+                            is_loading.set(false);
+                            data_loading_complete.set(true); // Mark as complete so UI can show pending state
+                            loading_status.set("Annual report is being generated...".to_string());
+                        } else {
+                            web_sys::console::error_1(
+                                &format!("❌ Failed to load annual report: {}", e).into(),
+                            );
+                            is_loading.set(false);
+                            data_loading_complete.set(true); // Mark as complete even on error
+                            loading_status.set(format!("Failed to load annual report: {}", e));
+                        }
                     }
                 }
             });
@@ -394,6 +655,8 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
             position: fixed;
             top: 0;
             left: 0;
+            right: 0;
+            bottom: 0;
             overflow: hidden;
             margin: 0;
             padding: 0;
@@ -407,6 +670,12 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
             -khtml-user-drag: none;
             -moz-user-drag: none;
             -o-user-drag: none;
+            background-image: url('/imgs/report-bg.png');
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            background-color: #667eea;
+            background-attachment: fixed;
         "
         oncopy={Callback::from(|e: web_sys::Event| {
             e.prevent_default();
@@ -427,22 +696,6 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                 // Show intro screen first (only for own report and when not showing content yet)
                 if is_own_report && !*show_content && !*has_clicked_begin {
                     <>
-                        // Fixed background image at bottom
-                        <img
-                            src="/imgs/report-bg-0.png"
-                            alt=""
-                            style="
-                                position: fixed;
-                                bottom: 0;
-                                left: 0;
-                                width: 100vw;
-                                height: auto;
-                                z-index: 0;
-                                pointer-events: none;
-                                object-fit: contain;
-                                object-position: bottom center;
-                            "
-                        />
                         <div style="
                             position: fixed;
                             top: 0;
@@ -515,7 +768,27 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                         "}</style>
                         </div>
                     </>
-                } else if *is_loading && *has_clicked_begin {
+                } else if (*is_loading && (!is_own_report || *has_clicked_begin)) || pending_job.is_some() {
+                {{
+                    // Get user info for display when viewing someone else's report
+                    let display_username = if !is_own_report {
+                        profile.as_ref()
+                            .and_then(|p| p.username.as_ref())
+                            .cloned()
+                            .unwrap_or_else(|| format!("FID {}", fid))
+                    } else {
+                        String::new()
+                    };
+
+                    let display_pfp = if !is_own_report {
+                        profile.as_ref()
+                            .and_then(|p| p.pfp_url.as_ref())
+                            .cloned()
+                    } else {
+                        None
+                    };
+
+                    html! {
                 <div style="
                     position: fixed;
                     top: 0;
@@ -525,17 +798,57 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     z-index: 1000;
                 ">
                     <div style="
                         display: flex;
                         flex-direction: column;
                         align-items: center;
-                        gap: 24px;
+                                gap: 32px;
                         text-align: center;
                         padding: 40px;
                     ">
+                                // Show user avatar when viewing someone else's report
+                                {if !is_own_report && display_pfp.is_some() {
+                                    html! {
+                                        <div style="
+                                            width: 80px;
+                                            height: 80px;
+                                            border-radius: 50%;
+                                            border: 3px solid rgba(255, 255, 255, 0.3);
+                                            overflow: hidden;
+                                            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+                                        ">
+                                            <img
+                                                src={display_pfp.unwrap()}
+                                                alt="Profile"
+                                                style="
+                                                    width: 100%;
+                                                    height: 100%;
+                                                    object-fit: cover;
+                                                "
+                                            />
+                                        </div>
+                                    }
+                                } else if !is_own_report {
+                                    html! {
+                                        <div style="
+                                            width: 80px;
+                                            height: 80px;
+                                            border-radius: 50%;
+                                            border: 3px solid rgba(255, 255, 255, 0.3);
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                            font-size: 40px;
+                                            background: rgba(255, 255, 255, 0.1);
+                                            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+                                        ">{"👤"}</div>
+                                    }
+                                } else {
+                                    html! {}
+                                }}
+
                         // Animated spinner
                         <div style="
                             width: 60px;
@@ -545,6 +858,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                             border-radius: 50%;
                             animation: spin 1s linear infinite;
                         "></div>
+
                         // Loading text
                         <div style="
                             display: flex;
@@ -557,14 +871,33 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 color: white;
                                 margin: 0;
                                 text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-                            ">{"Loading Annual Report"}</p>
+                            ">{
+                                if pending_job.is_some() {
+                                            if !is_own_report && !display_username.is_empty() {
+                                                format!("Generating {}'s Annual Report", display_username)
+                                } else {
+                                                "Generating Annual Report".to_string()
+                                            }
+                                        } else if !is_own_report && !display_username.is_empty() {
+                                            format!("Loading {}'s Annual Report", display_username)
+                                        } else {
+                                            "Loading Annual Report".to_string()
+                                        }
+                            }</p>
                             <p style="
                                 font-size: 16px;
                                 font-weight: 400;
                                 color: rgba(255, 255, 255, 0.9);
                                 margin: 0;
-                            ">{(*loading_status).clone()}</p>
+                            ">{
+                                if let Some(job) = pending_job.as_ref() {
+                                    job.message.as_deref().unwrap_or("Processing in background...")
+                                } else {
+                                    (*loading_status).as_str()
+                                }
+                            }</p>
                         </div>
+
                         // Progress dots animation
                         <div style="
                             display: flex;
@@ -597,6 +930,7 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                             "></div>
                         </div>
                     </div>
+
                     // CSS animations
                     <style>{"
                         @keyframes spin {
@@ -615,6 +949,8 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                         }
                     "}</style>
                 </div>
+                    }
+                }}
                 } else {
                 <>
                     // Show error if annual report failed to load
@@ -659,25 +995,14 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                 .and_then(|p| p.username.as_ref()).cloned()
                                 .unwrap_or_else(|| format!("FID {}", fid));
 
+                            // Get user avatar for display
+                            let display_pfp = profile.as_ref()
+                                .and_then(|p| p.pfp_url.as_ref())
+                                .cloned();
+
                             let show_content_clone = show_content.clone();
                             html! {
                                 <>
-                                    // Fixed background image at bottom (similar to intro screen)
-                                    <img
-                                        src="/imgs/report-bg-0.png"
-                                        alt=""
-                                        style="
-                                            position: fixed;
-                                            bottom: 0;
-                                            left: 0;
-                                            width: 100vw;
-                                            height: auto;
-                                            z-index: 0;
-                                            pointer-events: none;
-                                            object-fit: contain;
-                                            object-position: bottom center;
-                                        "
-                                    />
                                     <div style="
                                         position: fixed;
                                         top: 0;
@@ -698,6 +1023,45 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                                             text-align: center;
                                             padding: 40px;
                                         ">
+                                            // Show user avatar (same style as loading page)
+                                            {if display_pfp.is_some() {
+                                                html! {
+                                                    <div style="
+                                                        width: 80px;
+                                                        height: 80px;
+                                                        border-radius: 50%;
+                                                        border: 3px solid rgba(255, 255, 255, 0.3);
+                                                        overflow: hidden;
+                                                        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+                                                    ">
+                                                        <img
+                                                            src={display_pfp.unwrap()}
+                                                            alt="Profile"
+                                                            style="
+                                                                width: 100%;
+                                                                height: 100%;
+                                                                object-fit: cover;
+                                                            "
+                                                        />
+                                                    </div>
+                                                }
+                                            } else {
+                                                html! {
+                                                    <div style="
+                                                        width: 80px;
+                                                        height: 80px;
+                                                        border-radius: 50%;
+                                                        border: 3px solid rgba(255, 255, 255, 0.3);
+                                                        display: flex;
+                                                        align-items: center;
+                                                        justify-content: center;
+                                                        font-size: 40px;
+                                                        background: rgba(255, 255, 255, 0.1);
+                                                        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+                                                    ">{"👤"}</div>
+                                                }
+                                            }}
+
                                             <button
                                                 onclick={Callback::from({
                                                     let show_content_clone = show_content_clone.clone();
@@ -742,22 +1106,6 @@ pub fn AnnualReportPage(props: &AnnualReportPageProps) -> Html {
                 } else {
                         html! {
                             <>
-                                // Fixed background image at bottom
-                                <img
-                                    src="/imgs/report-bg.png"
-                                    alt=""
-                                    style="
-                                        position: fixed;
-                                        bottom: 0;
-                                        left: 0;
-                                        width: 100vw;
-                                        height: 100vh;
-                                        z-index: 0;
-                                        pointer-events: none;
-                                        object-fit: cover;
-                                        object-position: bottom center;
-                                    "
-                                />
                                 // Horizontal scrolling container
                                 <div
                                     ref={scroll_container_ref.clone()}

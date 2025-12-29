@@ -21,7 +21,7 @@ pub struct ContextUser {
     pub fid: Option<i64>,
     pub username: Option<String>,
     pub display_name: Option<String>, // Maps to "displayName" in JSON
-    pub pfp_url: Option<String>, // Maps to "pfpUrl" in JSON
+    pub pfp_url: Option<String>,      // Maps to "pfpUrl" in JSON
 }
 
 impl ContextUser {
@@ -312,7 +312,27 @@ pub async fn get_context() -> Result<MiniAppContext, String> {
                 .map_err(|_| "Failed to stringify user".to_string())?
                 .as_string()
                 .ok_or("User stringify failed".to_string())?;
-            serde_json::from_str::<ContextUser>(&user_str).ok()
+
+            // Debug: log the raw JSON string to verify field names
+            web_sys::console::log_1(&format!("🔍 Raw user JSON from SDK: {}", user_str).into());
+
+            let parsed_user = serde_json::from_str::<ContextUser>(&user_str);
+            match parsed_user {
+                Ok(u) => {
+                    web_sys::console::log_1(
+                        &format!("✅ Parsed ContextUser: fid={:?}, username={:?}, display_name={:?}, pfp_url={:?}", 
+                            u.fid, u.username, u.display_name, u.pfp_url).into()
+                    );
+                    Some(u)
+                }
+                Err(e) => {
+                    web_sys::console::error_1(
+                        &format!("❌ Failed to parse ContextUser: {}, JSON: {}", e, user_str)
+                            .into(),
+                    );
+                    None
+                }
+            }
         } else {
             None
         }

@@ -27,6 +27,34 @@ pub fn Header(props: &HeaderProps) -> Html {
     let user_profile = use_state(|| None::<ProfileData>);
     let is_loading_profile = use_state(|| false);
 
+    // Log Farcaster context for debugging
+    {
+        let farcaster_context = props.farcaster_context.clone();
+        let is_farcaster_env = props.is_farcaster_env;
+        use_effect_with((farcaster_context.clone(), is_farcaster_env), move |_| {
+            if is_farcaster_env {
+                if let Some(context) = &farcaster_context {
+                    if let Some(user) = &context.user {
+                        web_sys::console::log_1(
+                            &format!(
+                                "🔍 Header use_effect: Farcaster user FID={:?}, pfp_url={:?}",
+                                user.fid, user.pfp_url
+                            )
+                            .into(),
+                        );
+                    } else {
+                        web_sys::console::warn_1(
+                            &"⚠️ Header use_effect: No user in context".into(),
+                        );
+                    }
+                } else {
+                    web_sys::console::warn_1(&"⚠️ Header use_effect: No Farcaster context".into());
+                }
+            }
+            || ()
+        });
+    }
+
     // Fetch user profile when FID is available
     {
         let wallet_account = props.wallet_account.clone();
@@ -141,14 +169,28 @@ pub fn Header(props: &HeaderProps) -> Html {
                                         <div class="avatar-container" style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #007AFF; padding: 2px; display: flex; align-items: center; justify-content: center; background: white;">
                                             {
                                                 if let Some(pfp_url) = &user.pfp_url {
-                                                    html! {
-                                                        <img
-                                                            src={pfp_url.clone()}
-                                                            alt="Avatar"
-                                                            style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"
-                                                        />
+                                                    if !pfp_url.is_empty() {
+                                                        html! {
+                                                            <img
+                                                                src={pfp_url.clone()}
+                                                                alt="Avatar"
+                                                                style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"
+                                                            />
+                                                        }
+                                                    } else {
+                                                        web_sys::console::warn_1(
+                                                            &"⚠️ Header: pfp_url is empty string".into()
+                                                        );
+                                                        html! {
+                                                            <div style="width: 100%; height: 100%; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                                                                {"👤"}
+                                                            </div>
+                                                        }
                                                     }
                                                 } else {
+                                                    web_sys::console::warn_1(
+                                                        &"⚠️ Header: pfp_url is None".into()
+                                                    );
                                                     html! {
                                                         <div style="width: 100%; height: 100%; border-radius: 50%; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 20px;">
                                                             {"👤"}

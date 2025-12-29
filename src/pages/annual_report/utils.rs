@@ -1,3 +1,5 @@
+use js_sys;
+
 use crate::models::AnnualReportResponse;
 use crate::models::ContentStyleResponse;
 use crate::models::DomainStatusResponse;
@@ -8,6 +10,10 @@ use crate::models::TemporalActivityResponse;
 /// Farcaster epoch: 2021-01-01 00:00:00 UTC
 const FARCASTER_EPOCH: i64 = 1_609_459_200;
 
+/// Minimum valid Unix timestamp for Farcaster (2020-01-01 00:00:00 UTC)
+/// Farcaster was launched in 2020, so registration dates before this are invalid
+const FARCASTER_MIN_TIMESTAMP: i64 = 1_577_836_800;
+
 /// Convert Farcaster timestamp to Unix timestamp
 pub fn farcaster_to_unix(farcaster_timestamp: i64) -> i64 {
     farcaster_timestamp + FARCASTER_EPOCH
@@ -17,6 +23,33 @@ pub fn farcaster_to_unix(farcaster_timestamp: i64) -> i64 {
 #[allow(dead_code)]
 pub fn unix_to_farcaster(unix_timestamp: i64) -> i64 {
     unix_timestamp - FARCASTER_EPOCH
+}
+
+/// Safely normalize a timestamp that may be in either Farcaster or Unix format
+/// Returns a Unix timestamp that is guaranteed to be:
+/// - Between 2020-01-01 and current time
+/// - If out of range, returns None
+pub fn normalize_registration_timestamp(maybe_timestamp: i64) -> Option<i64> {
+    // Get current time in seconds
+    let current_time = (js_sys::Date::now() / 1000.0) as i64;
+
+    // If timestamp is less than 1 billion, it's likely a Farcaster timestamp
+    // (Farcaster timestamps are typically small numbers since epoch is 2021-01-01)
+    let unix_timestamp = if maybe_timestamp < 1_000_000_000 {
+        // This is likely a Farcaster timestamp, convert it
+        farcaster_to_unix(maybe_timestamp)
+    } else {
+        // Assume it's already a Unix timestamp
+        maybe_timestamp
+    };
+
+    // Validate: Farcaster registration cannot be before 2020 or after current time
+    if unix_timestamp < FARCASTER_MIN_TIMESTAMP || unix_timestamp > current_time {
+        // Invalid timestamp, return None
+        None
+    } else {
+        Some(unix_timestamp)
+    }
 }
 
 /// Helper function to extract data from nested API response structure
@@ -79,7 +112,7 @@ pub fn convert_annual_report_response(
 
     // Convert "activity" to "temporal_activity"
     let activity = api_data.get("activity").ok_or("Missing 'activity' field")?;
-    
+
     // Parse temporal_activity and convert Farcaster timestamps to Unix timestamps
     // Note: API may return mixed timestamp formats:
     // - Some fields (like registered_at) may already be Unix timestamps (from processed data)
@@ -87,7 +120,7 @@ pub fn convert_annual_report_response(
     // We normalize all timestamps to Unix format for consistent display
     let mut temporal_activity: TemporalActivityResponse = serde_json::from_value(activity.clone())
         .map_err(|e| format!("Failed to parse temporal_activity: {}", e))?;
-    
+
     // Convert first_cast timestamp from Farcaster to Unix if needed
     // Farcaster timestamps: relative to 2021-01-01, typically < 1_000_000_000 seconds
     // Unix timestamps: relative to 1970-01-01, typically > 1_600_000_000 seconds (after 2021)
@@ -97,7 +130,7 @@ pub fn convert_annual_report_response(
             first_cast.timestamp = farcaster_to_unix(first_cast.timestamp);
         }
     }
-    
+
     // Convert last_cast timestamp from Farcaster to Unix if needed
     if let Some(ref mut last_cast) = temporal_activity.last_cast {
         if last_cast.timestamp < 1_000_000_000 {
@@ -142,12 +175,12 @@ pub fn convert_annual_report_response(
     let engagement_raw = api_data
         .get("engagement")
         .ok_or("Missing 'engagement' field")?;
-    
+
     // Parse and convert timestamps in engagement data
     // Note: most_popular_cast.timestamp may also be in Farcaster format
     let mut engagement: EngagementResponse = serde_json::from_value(engagement_raw.clone())
         .map_err(|e| format!("Failed to parse engagement: {}", e))?;
-    
+
     // Convert most_popular_cast timestamp from Farcaster to Unix if needed
     if let Some(ref mut popular_cast) = engagement.most_popular_cast {
         if popular_cast.timestamp < 1_000_000_000 {

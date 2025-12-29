@@ -4,6 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_futures::JsFuture;
 use yew::prelude::*;
 
+use super::utils::normalize_registration_timestamp;
 use crate::farcaster;
 use crate::models::AnnualReportResponse;
 use crate::models::CastsStatsResponse;
@@ -58,7 +59,7 @@ pub struct AnnualReportCoverProps {
 #[function_component]
 pub fn AnnualReportCover(props: &AnnualReportCoverProps) -> Html {
     html! {
-        <div class="report-card-content" style="
+        <div class="report-card-content cover-page-content" style="
             width: 100%;
             height: 100%;
             display: flex;
@@ -202,17 +203,21 @@ fn get_far_zodiac_sign(fid: i64) -> &'static str {
 #[function_component]
 pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
     // Get registration date and calculate zodiac signs
-    // Note: registered_at is already a Unix timestamp, not Farcaster timestamp
+    // Normalize timestamp (may be Farcaster or Unix format) and validate range
     let (birthday_date, zodiac_image_url, zodiac_info) = props
         .profile
         .registered_at
-        .map(|timestamp| {
-            // registered_at is already Unix timestamp, use directly
+        .and_then(|timestamp| {
+            // Normalize timestamp: convert from Farcaster to Unix if needed, and validate range
+            normalize_registration_timestamp(timestamp)
+        })
+        .map(|unix_timestamp| {
+            // Convert Unix timestamp (in seconds) to JavaScript Date (expects milliseconds)
             let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
-                timestamp as f64 * 1000.0,
+                unix_timestamp as f64 * 1000.0,
             ));
-            let month = date.get_month() as u32 + 1; // get_month returns 0-11
-            let day = date.get_date() as u32;
+            let month = date.get_month() + 1; // get_month returns 0-11
+            let day = date.get_date();
             let year = date.get_full_year();
             let zodiac = get_zodiac_sign(month, day);
             let far_zodiac = get_far_zodiac_sign(props.profile.fid);
@@ -242,8 +247,8 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
             let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
                 cast.timestamp as f64 * 1000.0,
             ));
-            let month = date.get_month() as u32 + 1; // get_month returns 0-11
-            let day = date.get_date() as u32;
+            let month = date.get_month() + 1; // get_month returns 0-11
+            let day = date.get_date();
             let year = date.get_full_year();
             format!("{}/{:02}/{:02}", year, month, day)
         })
@@ -1455,6 +1460,7 @@ fn get_zodiac_index(zodiac_name: &str) -> u8 {
 // Format: [0-7]: FID (i64, little-endian), [8]: Zodiac (u8, 0-11), [9]: Social type (u8, 0=silent, 1=social),
 //         [10-13]: Total casts (u32), [14-17]: Total reactions (u32), [18-21]: Total followers (u32)
 // Total: 22 bytes -> ~30 chars in base64url
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn encode_image_params_for_share(
     fid: i64,
     _username: Option<&str>,
@@ -1467,14 +1473,14 @@ pub(crate) fn encode_image_params_for_share(
 ) -> String {
     use base64::engine::general_purpose::STANDARD_NO_PAD;
     use base64::Engine;
-    
+
     // Extract zodiac name from URL (e.g., "/imgs/zodiac/capricorn.png" -> "capricorn")
     let zodiac_name = zodiac_url
         .split('/')
-        .last()
+        .next_back()
         .and_then(|s| s.strip_suffix(".png"))
         .unwrap_or("capricorn");
-    
+
     // Convert zodiac name to capitalized format for index lookup
     let zodiac_capitalized = if !zodiac_name.is_empty() {
         let mut chars = zodiac_name.chars();
@@ -1485,43 +1491,42 @@ pub(crate) fn encode_image_params_for_share(
     } else {
         "Capricorn".to_string()
     };
-    
+
     let zodiac_index = get_zodiac_index(&zodiac_capitalized);
-    
+
     // Extract social type from URL (0 = silent, 1 = social)
     let social_type_index = if social_type_url.contains("social.png") {
         1u8
     } else {
         0u8 // silent
     };
-    
+
     // Pack into binary format
     let mut bytes = Vec::with_capacity(22);
-    
+
     // FID as i64 (8 bytes, little-endian)
     bytes.extend_from_slice(&fid.to_le_bytes());
-    
+
     // Zodiac index (1 byte)
     bytes.push(zodiac_index);
-    
+
     // Social type index (1 byte)
     bytes.push(social_type_index);
-    
+
     // Total casts as u32 (4 bytes, little-endian)
     bytes.extend_from_slice(&(total_casts as u32).to_le_bytes());
-    
+
     // Total reactions as u32 (4 bytes, little-endian)
     bytes.extend_from_slice(&(total_reactions as u32).to_le_bytes());
-    
+
     // Total followers as u32 (4 bytes, little-endian)
     bytes.extend_from_slice(&(total_followers as u32).to_le_bytes());
-    
+
     // Encode to base64url (URL-safe, no padding)
-    let base64url = STANDARD_NO_PAD.encode(&bytes)
+    STANDARD_NO_PAD
+        .encode(&bytes)
         .replace('+', "-")
-        .replace('/', "_");
-    
-    base64url
+        .replace('/', "_")
 }
 
 // Helper function to convert relative image path to absolute URL
@@ -1555,12 +1560,11 @@ fn build_share_text(
     if let Some(r) = report {
         // Use total_casts_in_year if available, otherwise fallback to total_casts
         // This matches what's displayed in the report
-        let total_casts = r.temporal_activity.total_casts_in_year
+        let total_casts = r
+            .temporal_activity
+            .total_casts_in_year
             .unwrap_or(r.temporal_activity.total_casts);
-        text.push_str(&format!(
-            "Published {} Casts this year, ",
-            total_casts
-        ));
+        text.push_str(&format!("Published {} Casts this year, ", total_casts));
         text.push_str(&format!(
             "Received {} likes, ",
             r.engagement.reactions_received
@@ -1627,7 +1631,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
     let base_share_url = props.share_url.clone();
     let is_own_report = props.is_own_report;
     let current_user_fid = props.current_user_fid;
-    
+
     // State for share URL with encoded params
     let share_url_with_params = use_state(|| base_share_url.clone());
 
@@ -1661,7 +1665,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
     } else {
         (None, None)
     };
-    
+
     // Encode image URLs and stats as base64 params and update share URL
     {
         let profile = props.profile.clone();
@@ -1670,47 +1674,57 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         let follower_growth = props.follower_growth.clone();
         let share_url_with_params_for_effect = share_url_with_params.clone();
         let base_share_url_for_effect = base_share_url.clone();
-        
+
         use_effect_with(
-            (profile.clone(), temporal.clone(), engagement.clone(), follower_growth.clone()),
+            (
+                profile.clone(),
+                temporal.clone(),
+                engagement.clone(),
+                follower_growth.clone(),
+            ),
             move |_| {
                 // Get zodiac image URL
-                // Note: registered_at is already a Unix timestamp, not Farcaster timestamp
-                let zodiac_url = profile.as_ref()
+                // Normalize timestamp (may be Farcaster or Unix format) and validate range
+                let zodiac_url = profile
+                    .as_ref()
                     .and_then(|p| p.registered_at)
-                    .map(|timestamp| {
-                        // registered_at is already Unix timestamp, use directly
+                    .and_then(|timestamp| {
+                        // Normalize timestamp: convert from Farcaster to Unix if needed, and validate range
+                        normalize_registration_timestamp(timestamp)
+                    })
+                    .map(|unix_timestamp| {
+                        // Convert Unix timestamp (in seconds) to JavaScript Date (expects milliseconds)
                         let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(
-                            timestamp as f64 * 1000.0,
+                            unix_timestamp as f64 * 1000.0,
                         ));
-                        let month = date.get_month() as u32 + 1;
-                        let day = date.get_date() as u32;
+                        let month = date.get_month() + 1;
+                        let day = date.get_date();
                         let zodiac = get_zodiac_sign(month, day);
                         let zodiac_lower = zodiac.to_lowercase();
                         get_image_url(&format!("/imgs/zodiac/{}.png", zodiac_lower))
                     })
                     .unwrap_or_else(|| get_image_url("/imgs/zodiac/capricorn.png"));
-                
+
                 // Get user info and stats - use the same fields as displayed in the report
                 let fid = profile.as_ref().map(|p| p.fid).unwrap_or(0);
-                
+
                 // Use total_casts_in_year if available, otherwise fallback to total_casts
                 // This matches what's displayed in FollowerGrowthSection
                 let total_casts = temporal.total_casts_in_year.unwrap_or(temporal.total_casts);
-                
+
                 // Use reactions_received for total reactions
                 let total_reactions = engagement.reactions_received;
-                
+
                 // Use current_followers for total followers
                 let total_followers = follower_growth.current_followers;
-                
+
                 // Get social type image URL based on total casts (same logic as FollowerGrowthSection)
                 let social_type_url = if total_casts >= 200 {
                     get_image_url("/imgs/social_type/social.png")
                 } else {
                     get_image_url("/imgs/social_type/slient.png")
                 };
-                
+
                 // Encode params (only fid, zodiac index, social_type index, and stats)
                 // Username and avatar will be fetched by worker from API
                 let params_base64 = encode_image_params_for_share(
@@ -1723,7 +1737,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                     total_reactions,
                     total_followers,
                 );
-                
+
                 // Append params to share URL
                 if let Some(base_url) = base_share_url_for_effect {
                     let url_with_params = format!("{}?params={}", base_url, params_base64);
@@ -1734,7 +1748,11 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
     }
 
     // Share text for display and copying (use URL with params)
-    let share_url_for_text = share_url_with_params.as_ref().as_ref().as_ref().map(|s| s.as_str());
+    let share_url_for_text = share_url_with_params
+        .as_ref()
+        .as_ref()
+        .as_ref()
+        .map(|s| s.as_str());
     let share_text_content = build_share_text(
         &props.profile,
         &props.annual_report,
@@ -1757,7 +1775,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             let text_clone = text_for_share.clone();
             let share_status_clone = share_status.clone();
             let is_sharing_clone = is_sharing.clone();
-            
+
             // Build embeds: include both image URL and share URL
             let mut embeds = Vec::new();
             if let Some(img_url) = &image_url {
@@ -1766,7 +1784,11 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             if let Some(url_str) = url_for_share.as_ref() {
                 embeds.push(url_str.clone());
             }
-            let embeds_option = if embeds.is_empty() { None } else { Some(embeds) };
+            let embeds_option = if embeds.is_empty() {
+                None
+            } else {
+                Some(embeds)
+            };
 
             spawn_local(async move {
                 match farcaster::compose_cast(&text_clone, embeds_option).await {
@@ -2159,7 +2181,7 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                                 // Use original tarot card URL directly
                                 let image_src = personality_tag_image_url.clone()
                                     .unwrap_or_else(|| "".to_string());
-                                
+
                                 html! {
                                     <img
                                         src={image_src.clone()}
@@ -2479,4 +2501,3 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
         </div>
     }
 }
-
