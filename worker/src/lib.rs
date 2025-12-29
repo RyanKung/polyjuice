@@ -62,10 +62,9 @@ fn generate_annual_report_meta_tags(fid: i64, base_url: &str, pathname: &str, pa
     };
     let target_url = format!("{}{}", base_url, pathname);
 
-    // Create embed JSON matching the format from embed.rs
+    // Create embed JSON matching the format from embed.rs (without imageUrl, ember will provide image)
     let embed_json = json!({
         "version": "1",
-        "imageUrl": image_url,
         "button": {
             "title": "View Annual Report",
             "action": {
@@ -80,10 +79,9 @@ fn generate_annual_report_meta_tags(fid: i64, base_url: &str, pathname: &str, pa
 
     let embed_json_str = serde_json::to_string(&embed_json).unwrap_or_default();
 
-    // Generate frame JSON (for backward compatibility)
+    // Generate frame JSON (for backward compatibility, without imageUrl)
     let frame_json = json!({
         "version": "1",
-        "imageUrl": image_url,
         "button": {
             "title": "View Annual Report",
             "action": {
@@ -98,20 +96,18 @@ fn generate_annual_report_meta_tags(fid: i64, base_url: &str, pathname: &str, pa
 
     let frame_json_str = serde_json::to_string(&frame_json).unwrap_or_default();
 
-    // Generate Open Graph meta tags as well
+    // Generate Open Graph meta tags (without image URLs, ember will provide image)
     format!(
         r#"<meta name="fc:miniapp" content='{}' />
 <meta name="fc:frame" content='{}' />
 <meta property="og:title" content="2025 Annual Report - Polyjuice" />
 <meta property="og:description" content="View my Farcaster 2025 Annual Report" />
-<meta property="og:image" content="{}" />
 <meta property="og:url" content="{}" />
 <meta property="og:type" content="website" />
-<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:card" content="summary" />
 <meta name="twitter:title" content="2025 Annual Report - Polyjuice" />
-<meta name="twitter:description" content="View my Farcaster 2025 Annual Report" />
-<meta name="twitter:image" content="{}" />"#,
-        embed_json_str, frame_json_str, image_url, target_url, image_url
+<meta name="twitter:description" content="View my Farcaster 2025 Annual Report" />"#,
+        embed_json_str, frame_json_str, target_url
     )
 }
 
@@ -937,12 +933,12 @@ async fn generate_report_card(
     if let Some(ref username) = username {
         if !username.is_empty() {
             let username_text = format!("@{}", username);
-            let scale = Scale::uniform(username_font_size);
-            let v_metrics = font.v_metrics(scale);
-            // Center username vertically with avatar
-            let username_baseline_y = avatar_y + (avatar_size as f32 / 2.0) - (v_metrics.ascent - v_metrics.descent) / 2.0;
-            let username_x = avatar_x + avatar_size as f32 + avatar_text_gap as f32;
-            draw_text_mut(&mut canvas, Rgba([255, 255, 255, 255]), username_x as i32, username_baseline_y as i32, scale, &font, &username_text);
+        let scale = Scale::uniform(username_font_size);
+        let v_metrics = font.v_metrics(scale);
+        // Center username vertically with avatar
+        let username_baseline_y = avatar_y + (avatar_size as f32 / 2.0) - (v_metrics.ascent - v_metrics.descent) / 2.0;
+        let username_x = avatar_x + avatar_size as f32 + avatar_text_gap as f32;
+        draw_text_mut(&mut canvas, Rgba([255, 255, 255, 255]), username_x as i32, username_baseline_y as i32, scale, &font, &username_text);
         }
     }
     

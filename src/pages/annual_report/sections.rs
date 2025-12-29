@@ -75,37 +75,37 @@ pub fn AnnualReportCover(props: &AnnualReportCoverProps) -> Html {
                 {if let Some(pfp_url) = &props.profile.pfp_url {
                     if !pfp_url.is_empty() && pfp_url.trim() != "" {
                         html! {
-                            <img
-                                src={pfp_url.clone()}
-                                alt="Profile"
-                                style="
-                                    width: 100px;
-                                    height: 100px;
-                                    border-radius: 50%;
-                                    border: 3px solid rgba(255, 255, 255, 0.3);
-                                    margin-bottom: 20px;
-                                    object-fit: cover;
-                                "
+                    <img
+                        src={pfp_url.clone()}
+                        alt="Profile"
+                        style="
+                            width: 100px;
+                            height: 100px;
+                            border-radius: 50%;
+                            border: 3px solid rgba(255, 255, 255, 0.3);
+                            margin-bottom: 20px;
+                            object-fit: cover;
+                        "
                                 onerror={Callback::from(|_| {
                                     web_sys::console::error_1(&"❌ Failed to load profile image".into());
                                 })}
-                            />
+                    />
                         }
-                    } else {
+                } else {
                         html! {
-                            <div style="
-                                width: 100px;
-                                height: 100px;
-                                border-radius: 50%;
-                                border: 3px solid rgba(255, 255, 255, 0.3);
-                                margin: 0 auto 20px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 50px;
-                                background: rgba(255, 255, 255, 0.1);
-                            ">{"👤"}</div>
-                        }
+                    <div style="
+                        width: 100px;
+                        height: 100px;
+                        border-radius: 50%;
+                        border: 3px solid rgba(255, 255, 255, 0.3);
+                        margin: 0 auto 20px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 50px;
+                        background: rgba(255, 255, 255, 0.1);
+                    ">{"👤"}</div>
+                }
                     }
                 } else {
                     html! {
@@ -323,16 +323,16 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
                                     ">
                                         {if let Some(pfp_url) = &props.profile.pfp_url {
                                             if !pfp_url.is_empty() {
-                                                html! {
-                                                    <img
-                                                        src={pfp_url.clone()}
-                                                        alt="Avatar"
-                                                        style="
-                                                            width: 100%;
-                                                            height: 100%;
-                                                            object-fit: cover;
-                                                        "
-                                                    />
+                                            html! {
+                                                <img
+                                                    src={pfp_url.clone()}
+                                                    alt="Avatar"
+                                                    style="
+                                                        width: 100%;
+                                                        height: 100%;
+                                                        object-fit: cover;
+                                                    "
+                                                />
                                                 }
                                             } else {
                                                 html! {
@@ -349,7 +349,7 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
                                                     </div>
                                                 }
                                             }
-                                        } else {
+            } else {
                                             html! {
                                                 <div style="
                                                     width: 100%;
@@ -574,16 +574,16 @@ pub fn FollowerGrowthSection(props: &FollowerGrowthSectionProps) -> Html {
                                     ">
                                         {if let Some(pfp_url) = &props.profile.pfp_url {
                                             if !pfp_url.is_empty() {
-                                                html! {
-                                                    <img
-                                                        src={pfp_url.clone()}
-                                                        alt="Avatar"
-                                                        style="
-                                                            width: 100%;
-                                                            height: 100%;
-                                                            object-fit: cover;
-                                                        "
-                                                    />
+                            html! {
+                                                <img
+                                                    src={pfp_url.clone()}
+                                                    alt="Avatar"
+                                                    style="
+                                                        width: 100%;
+                                                        height: 100%;
+                                                        object-fit: cover;
+                                                    "
+                                                />
                                                 }
                                             } else {
                                                 html! {
@@ -1032,16 +1032,16 @@ pub fn StyleSection(props: &StyleSectionProps) -> Html {
                             )}>
                                 {if let Some(pfp_url) = &props.profile.pfp_url {
                                     if !pfp_url.is_empty() {
-                                        html! {
-                                            <img
-                                                src={pfp_url.clone()}
-                                                alt="Avatar"
-                                                style="
-                                                    width: 100%;
-                                                    height: 100%;
-                                                    object-fit: cover;
-                                                "
-                                            />
+                                    html! {
+                                        <img
+                                            src={pfp_url.clone()}
+                                            alt="Avatar"
+                                            style="
+                                                width: 100%;
+                                                height: 100%;
+                                                object-fit: cover;
+                                            "
+                                        />
                                         }
                                     } else {
                                         html! {
@@ -1775,18 +1775,11 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
             let share_status_clone = share_status.clone();
             let is_sharing_clone = is_sharing.clone();
 
-            // Build embeds: include both image URL and share URL
-            let mut embeds = Vec::new();
-            if let Some(img_url) = &image_url {
-                embeds.push(img_url.clone());
-            }
-            if let Some(url_str) = url_for_share.as_ref() {
-                embeds.push(url_str.clone());
-            }
-            let embeds_option = if embeds.is_empty() {
-                None
+            // Build embeds: only include share URL, not image (ember will provide image)
+            let embeds_option = if let Some(url_str) = url_for_share.as_ref() {
+                Some(vec![url_str.clone()])
             } else {
-                Some(embeds)
+                None
             };
 
             spawn_local(async move {
@@ -2130,9 +2123,9 @@ pub fn PersonalityTagSection(props: &PersonalityTagSectionProps) -> Html {
                             <p style="
                                 font-size: 20px;
                                 font-weight: 600;
-                                color: white;
+                    color: white;
                                 margin: 0;
-                                text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+                    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
                                 padding: 0 20px;
                             ">
                                 {"Claim Your 2025 Tarot"}
