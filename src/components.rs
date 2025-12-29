@@ -227,3 +227,54 @@ pub fn BottomTab(props: &BottomTabProps) -> Html {
         </div>
     }
 }
+
+#[derive(Properties, PartialEq, Clone)]
+pub struct AnnualReportModalProps {
+    pub on_claim: Callback<()>,
+    pub on_close: Callback<()>,
+}
+
+/// Annual Report Modal component
+#[function_component]
+pub fn AnnualReportModal(props: &AnnualReportModalProps) -> Html {
+    html! {
+        <div 
+            class="annual-report-modal-overlay" 
+            onclick={props.on_close.clone().reform(|_| ())} 
+            style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 10001; display: flex; align-items: center; justify-content: center;"
+        >
+            <div 
+                class="annual-report-modal" 
+                onclick={Callback::from(|e: web_sys::MouseEvent| e.stop_propagation())} 
+                style="background: white; border-radius: 16px; padding: 0; max-width: 400px; width: 90%; position: relative; overflow: hidden;"
+            >
+                // Close button (X) in top-left
+                <button 
+                    onclick={props.on_close.clone().reform(|_| ())} 
+                    style="position: absolute; top: 12px; left: 12px; background: rgba(0, 0, 0, 0.5); border: none; color: white; font-size: 20px; cursor: pointer; padding: 4px 10px; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: background-color 0.2s;"
+                >
+                    {"✕"}
+                </button>
+                
+                // Preview image
+                <div style="width: 100%;">
+                    <img 
+                        src="/imgs/preview.png" 
+                        alt="Annual Report Preview" 
+                        style="width: 100%; height: auto; display: block;"
+                    />
+                </div>
+                
+                // Purple button
+                <div style="padding: 24px;">
+                    <button 
+                        onclick={props.on_claim.clone().reform(|_| ())} 
+                        style="width: 100%; padding: 14px 24px; background: #8B5CF6; border: none; border-radius: 8px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.2s;"
+                    >
+                        {"Claim Your Annual Report"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}

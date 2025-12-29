@@ -70,6 +70,7 @@ fn App() -> Html {
     let current_view = use_state(|| "profile".to_string()); // "profile" or "chat"
     let show_annual_report = use_state(|| false); // Whether to show annual report
     let annual_report_fid = use_state(|| None::<i64>); // FID for annual report
+    let show_annual_report_modal = use_state(|| false); // Whether to show annual report modal
 
     // Endpoint state management
     let endpoint_data = use_state(|| None::<EndpointData>);
@@ -651,6 +652,148 @@ fn App() -> Html {
         })
     };
 
+    // Show annual report modal when FID is available and user is on home page (search tab)
+    // Only show on home page, close when user navigates away
+    {
+        let show_annual_report_modal = show_annual_report_modal.clone();
+        let farcaster_context = farcaster_context.clone();
+        let wallet_account = wallet_account.clone();
+        let is_farcaster_env = is_farcaster_env.clone();
+        let active_tab = active_tab.clone();
+        let search_query = search_query.clone();
+        let show_annual_report = show_annual_report.clone();
+        let show_endpoint = show_endpoint.clone();
+        
+        use_effect_with(
+            (
+                (*farcaster_context).clone(),
+                (*wallet_account).clone(),
+                *is_farcaster_env,
+                (*active_tab).clone(),
+                (*search_query).clone(),
+                *show_annual_report,
+                *show_endpoint,
+            ),
+            move |(farcaster_context, wallet_account, is_farcaster_env, active_tab, search_query, show_annual_report, show_endpoint)| {
+                // Check if we're on the home page (search tab, no search query, no annual report, no endpoint)
+                let is_home_page = active_tab.as_str() == "search" 
+                    && search_query.is_none() 
+                    && !show_annual_report 
+                    && !show_endpoint;
+                
+                if is_home_page {
+                    // Check if we have a FID
+                    let fid = if *is_farcaster_env {
+                        farcaster_context
+                            .as_ref()
+                            .and_then(|ctx| ctx.user.as_ref())
+                            .and_then(|user| user.fid)
+                    } else {
+                        wallet_account
+                            .as_ref()
+                            .and_then(|acc| acc.fid)
+                    };
+
+                    if let Some(fid) = fid {
+                        // Check if user has already dismissed the modal for this FID
+                        let window = web_sys::window().unwrap();
+                        if let Ok(Some(storage)) = window.local_storage() {
+                            let dismissed_key = format!("annual_report_modal_dismissed_{}", fid);
+                            if let Ok(Some(_)) = storage.get_item(&dismissed_key) {
+                                // User has already dismissed the modal, don't show it again
+                                // But make sure modal is closed if it was open
+                                if *show_annual_report_modal {
+                                    show_annual_report_modal.set(false);
+                                }
+                                return;
+                            }
+                        }
+
+                        {
+                            let show_modal = show_annual_report_modal.clone();
+                            if !*show_modal {
+                                // Show modal after a short delay to ensure page is loaded
+                                spawn_local(async move {
+                                    gloo_timers::future::TimeoutFuture::new(500).await;
+                                    show_modal.set(true);
+                                });
+                            }
+                        }
+                    }
+                } else {
+                    // Not on home page, close modal if it's open
+                    if *show_annual_report_modal {
+                        show_annual_report_modal.set(false);
+                    }
+                }
+            },
+        );
+    }
+
+    // Handler for closing annual report modal
+    let on_close_annual_report_modal = {
+        let show_annual_report_modal = show_annual_report_modal.clone();
+        let farcaster_context = farcaster_context.clone();
+        let wallet_account = wallet_account.clone();
+        let is_farcaster_env = is_farcaster_env.clone();
+        Callback::from(move |_| {
+            show_annual_report_modal.set(false);
+            
+            // Save dismissal to localStorage so we don't show it again
+            let is_farcaster = *is_farcaster_env;
+            let fid = if is_farcaster {
+                (*farcaster_context)
+                    .as_ref()
+                    .and_then(|ctx| ctx.user.as_ref())
+                    .and_then(|user| user.fid)
+            } else {
+                (*wallet_account)
+                    .as_ref()
+                    .and_then(|acc| acc.fid)
+            };
+            
+            if let Some(fid) = fid {
+                let window = web_sys::window().unwrap();
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let dismissed_key = format!("annual_report_modal_dismissed_{}", fid);
+                    let _ = storage.set_item(&dismissed_key, "true");
+                }
+            }
+        })
+    };
+
+    // Handler for claiming annual report (navigate to annual report page)
+    let on_claim_annual_report = {
+        let show_annual_report_modal = show_annual_report_modal.clone();
+        let show_annual_report = show_annual_report.clone();
+        let annual_report_fid = annual_report_fid.clone();
+        let farcaster_context = farcaster_context.clone();
+        let wallet_account = wallet_account.clone();
+        let is_farcaster_env = is_farcaster_env.clone();
+        Callback::from(move |_| {
+            // Get FID from farcaster context or wallet account
+            let is_farcaster = *is_farcaster_env;
+            let fid = if is_farcaster {
+                (*farcaster_context)
+                    .as_ref()
+                    .and_then(|ctx| ctx.user.as_ref())
+                    .and_then(|user| user.fid)
+            } else {
+                (*wallet_account)
+                    .as_ref()
+                    .and_then(|acc| acc.fid)
+            };
+
+            if let Some(fid) = fid {
+                show_annual_report_modal.set(false);
+                annual_report_fid.set(Some(fid));
+                show_annual_report.set(true);
+                // Update URL to /annual-report/{fid}
+                crate::services::update_annual_report_url(fid);
+            }
+        })
+    };
+
     // Determine left action button based on current page state
     let left_action = if *show_annual_report {
         // Annual report page - show share button
@@ -948,6 +1091,13 @@ fn App() -> Html {
                         }
                     })}
                     on_close={on_close_wallet_list.clone()}
+                />
+            }
+            // Annual Report Modal
+            if *show_annual_report_modal {
+                <AnnualReportModal
+                    on_claim={on_claim_annual_report.clone()}
+                    on_close={on_close_annual_report_modal.clone()}
                 />
             }
         </div>
