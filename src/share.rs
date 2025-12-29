@@ -1,3 +1,4 @@
+use js_sys;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
@@ -168,13 +169,15 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
                                             if let Ok(promise) =
                                                 promise_val.dyn_into::<js_sys::Promise>()
                                             {
-                                                if wasm_bindgen_futures::JsFuture::from(promise)
+                                                match wasm_bindgen_futures::JsFuture::from(promise)
                                                     .await
-                                                    .is_ok()
                                                 {
-                                                    web_sys::console::log_1(
-                                                        &"URL copied to clipboard".into(),
-                                                    );
+                                                    Ok(_) => {
+                                                        web_sys::console::log_1(
+                                                            &"URL copied to clipboard".into(),
+                                                        );
+                                                    }
+                                                    Err(_) => {}
                                                 }
                                             }
                                         }

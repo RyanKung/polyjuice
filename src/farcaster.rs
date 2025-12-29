@@ -16,11 +16,12 @@ pub struct MiniAppContext {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ContextUser {
     pub fid: Option<i64>,
     pub username: Option<String>,
-    pub display_name: Option<String>,
-    pub pfp_url: Option<String>,
+    pub display_name: Option<String>, // Maps to "displayName" in JSON
+    pub pfp_url: Option<String>, // Maps to "pfpUrl" in JSON
 }
 
 impl ContextUser {
