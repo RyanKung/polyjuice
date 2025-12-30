@@ -161,6 +161,16 @@ pub struct IdentitySectionProps {
     pub followers: FollowerGrowthResponse,
 }
 
+// Helper function to truncate text to 20 characters with ellipsis
+fn truncate_text(text: &str, max_len: usize) -> String {
+    if text.chars().count() <= max_len {
+        text.to_string()
+    } else {
+        let truncated: String = text.chars().take(max_len).collect();
+        format!("{}...", truncated)
+    }
+}
+
 // Helper function to get zodiac sign from date (month and day)
 fn get_zodiac_sign(month: u32, day: u32) -> &'static str {
     match (month, day) {
@@ -396,7 +406,7 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
                                             line-height: 1.6;
                                             word-wrap: break-word;
                                         ">
-                                            {first_cast.text.clone()}
+                                            {truncate_text(&first_cast.text, 20)}
                                         </div>
                                     </div>
                                 </div>
@@ -647,7 +657,7 @@ pub fn FollowerGrowthSection(props: &FollowerGrowthSectionProps) -> Html {
                                             line-height: 1.6;
                                             word-wrap: break-word;
                                         ">
-                                            {popular_cast.text.clone()}
+                                            {truncate_text(&popular_cast.text, 20)}
                                         </div>
                                     </div>
                                 </div>

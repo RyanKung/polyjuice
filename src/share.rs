@@ -244,7 +244,15 @@ pub fn ShareButton(props: &ShareButtonProps) -> Html {
                                                 transition: background 0.2s;
                                             "
                                         >
-                                            <i class="fab fa-farcaster" style="color: #8A63D2; font-size: 18px;"></i>
+                                            <img
+                                                src="/imgs/farcaster.jpg"
+                                                alt="Farcaster"
+                                                style="
+                                                    width: 18px;
+                                                    height: 18px;
+                                                    object-fit: contain;
+                                                "
+                                            />
                                             <span>{"Share on Farcaster"}</span>
                                         </button>
                                     }
