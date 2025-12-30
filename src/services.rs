@@ -103,9 +103,11 @@ pub async fn handle_payment(
 /// Poll original API until completion with exponential backoff
 /// Supports long-running tasks (up to 10+ minutes)
 /// The API will return either pending status or actual data
+/// For POST requests, body should be provided to retry with the same request
 async fn poll_original_api<T>(
     api_url: &str,
     endpoint: &crate::api::EndpointInfo,
+    body: Option<String>,
     max_attempts: usize,
     initial_interval_ms: u64,
     on_status_detected: Option<StatusCallback>,
@@ -167,7 +169,7 @@ where
             .into(),
         );
 
-        match crate::api::make_request(api_url, endpoint, None, None).await {
+        match crate::api::make_request(api_url, endpoint, body.clone(), None).await {
             Ok(resp) => {
                 if resp.status == 200 {
                     // Parse response - could be pending status or actual data
@@ -495,12 +497,14 @@ where
                                                 let status_callback_for_poll =
                                                     on_status_detected.clone();
 
+                                                let body_clone = body.clone();
                                                 wasm_bindgen_futures::spawn_local(async move {
                                                     // Continue polling in the background
                                                     // The polling will call status_callback to update UI
                                                     let _ = poll_original_api::<serde_json::Value>(
                                                         &api_url_clone,
                                                         &endpoint_clone,
+                                                        body_clone,
                                                         200,
                                                         2000,
                                                         status_callback_for_poll,
@@ -535,6 +539,7 @@ where
                                                         return poll_original_api(
                                                             api_url,
                                                             endpoint,
+                                                            body.clone(),
                                                             200,
                                                             2000,
                                                             status_callback_clone,
@@ -582,6 +587,7 @@ where
                                                         let status_callback_for_poll =
                                                             on_status_detected.clone();
 
+                                                        let body_clone = body.clone();
                                                         wasm_bindgen_futures::spawn_local(
                                                             async move {
                                                                 // Poll in background to get updated data
@@ -591,6 +597,7 @@ where
                                                                 >(
                                                                     &api_url_clone,
                                                                     &endpoint_clone,
+                                                                    body_clone,
                                                                     200,
                                                                     2000,
                                                                     status_callback_for_poll,
@@ -643,7 +650,7 @@ where
                                         callback();
                                     }
                                     // Start polling the original API with exponential backoff
-                                    return poll_original_api(api_url, endpoint, 200, 2000, None)
+                                    return poll_original_api(api_url, endpoint, body.clone(), 200, 2000, None)
                                         .await;
                                 }
                             }
@@ -719,6 +726,19 @@ pub fn create_chat_message_endpoint() -> EndpointInfo {
         description: "Send chat message".to_string(),
         tier: "Premium".to_string(),
         requires_payment: true,
+        default_body: None,
+    }
+}
+
+/// Create get chat session endpoint info
+pub fn create_get_chat_session_endpoint(session_id: &str) -> EndpointInfo {
+    EndpointInfo {
+        path: format!("/api/chat/session?session_id={}", session_id),
+        method: "GET".to_string(),
+        name: "Get Chat Session".to_string(),
+        description: "Get chat session information".to_string(),
+        tier: "Premium".to_string(),
+        requires_payment: false,
         default_body: None,
     }
 }

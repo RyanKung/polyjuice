@@ -353,11 +353,14 @@ pub fn create_chat_message_handler(
 
                 let request_json = serde_json::to_string(&request).unwrap();
                 let chat_endpoint = create_chat_message_endpoint();
+                
+                // Remember the initial message count before sending (includes the user message we just added)
+                let initial_message_count = messages.len();
 
                 match make_request_with_payment::<ChatMessageResponse>(
                     &api_url,
                     &chat_endpoint,
-                    Some(request_json),
+                    Some(request_json.clone()),
                     wallet_account.as_ref(),
                     None,
                     None,
@@ -365,14 +368,122 @@ pub fn create_chat_message_handler(
                 .await
                 {
                     Ok(chat_data) => {
-                        let assistant_message = ChatMessage {
-                            role: "assistant".to_string(),
-                            content: chat_data.message,
-                            timestamp: 0,
-                        };
-                        messages.push(assistant_message);
-                        chat_messages.set(messages);
-                        chat_error.set(None);
+                        // Check if response indicates pending status
+                        // According to api.md, chat message API returns pending with message containing "Processing... Please check back later or poll for result"
+                        if chat_data.message.contains("Processing... Please check back later") || 
+                           chat_data.message.contains("Please check back later or poll for result") {
+                            web_sys::console::log_1(
+                                &"💬 Chat message API returned pending status, starting polling...".into(),
+                            );
+                            
+                            // Clear input box
+                            chat_message.set(String::new());
+                            
+                            // Start polling using GET /api/chat/session endpoint
+                            let api_url_clone = api_url.clone();
+                            let session_id = session.session_id.clone();
+                            let wallet_account_clone = wallet_account.clone();
+                            let chat_messages_clone = chat_messages.clone();
+                            let is_chat_loading_clone = is_chat_loading.clone();
+                            let chat_error_clone = chat_error.clone();
+                            let initial_message_count_clone = initial_message_count;
+                            
+                            spawn_local(async move {
+                                // Poll the chat session endpoint with exponential backoff
+                                let max_attempts = 200;
+                                let initial_interval_ms = 2000u64;
+                                let max_interval_ms = 15000u64;
+                                let mut current_interval = initial_interval_ms;
+                                
+                                for attempt in 0..max_attempts {
+                                    // Wait before polling (except first attempt)
+                                    if attempt > 0 {
+                                        current_interval = (current_interval * 2).min(max_interval_ms);
+                                        let promise = js_sys::Promise::new(&mut |resolve, _| {
+                                            let window = web_sys::window().unwrap();
+                                            window
+                                                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                                    &resolve,
+                                                    current_interval as i32,
+                                                )
+                                                .unwrap();
+                                        });
+                                        let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+                                    }
+                                    
+                                    web_sys::console::log_1(
+                                        &format!(
+                                            "📊 Polling chat session attempt {}/{}",
+                                            attempt + 1,
+                                            max_attempts
+                                        )
+                                        .into(),
+                                    );
+                                    
+                                    // Poll using GET /api/chat/session?session_id=xxx
+                                    let session_endpoint = create_get_chat_session_endpoint(&session_id);
+                                    match make_request_with_payment::<ChatSession>(
+                                        &api_url_clone,
+                                        &session_endpoint,
+                                        None, // GET request, no body
+                                        wallet_account_clone.as_ref(),
+                                        None,
+                                        None,
+                                    )
+                                    .await
+                                    {
+                                        Ok(session_data) => {
+                                            // Check if there are new messages in conversation_history
+                                            let current_messages_count = session_data.conversation_history.len();
+                                            
+                                            if current_messages_count > initial_message_count_clone {
+                                                // Got new messages, update UI with the full conversation_history
+                                                // This ensures we have the latest state from the server
+                                                chat_messages_clone.set(session_data.conversation_history);
+                                                chat_error_clone.set(None);
+                                                is_chat_loading_clone.set(false);
+                                                web_sys::console::log_1(&"✅ Chat message polling completed!".into());
+                                                return;
+                                            } else {
+                                                // No new messages yet, continue polling
+                                                continue;
+                                            }
+                                        }
+                                        Err(e) => {
+                                            // Check if it's a transient error or permanent error
+                                            if attempt < max_attempts - 1 {
+                                                // Continue polling on transient errors
+                                                web_sys::console::log_1(
+                                                    &format!("⚠️ Polling error (will retry): {}", e).into(),
+                                                );
+                                                continue;
+                                            } else {
+                                                // Final attempt failed
+                                                chat_error_clone.set(Some(e));
+                                                is_chat_loading_clone.set(false);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // Max attempts reached
+                                chat_error_clone.set(Some("Chat message polling timed out. Please try again later.".to_string()));
+                                is_chat_loading_clone.set(false);
+                            });
+                            // Return early - don't execute code after match (polling handles its own state)
+                            return;
+                        } else {
+                            // Not pending, use the response directly
+                            let assistant_message = ChatMessage {
+                                role: "assistant".to_string(),
+                                content: chat_data.message,
+                                timestamp: 0,
+                            };
+                            messages.push(assistant_message);
+                            chat_messages.set(messages);
+                            chat_error.set(None);
+                        }
                     }
                     Err(e) => {
                         chat_error.set(Some(e));
