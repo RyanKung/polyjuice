@@ -694,21 +694,7 @@ fn App() -> Html {
                             .and_then(|acc| acc.fid)
                     };
 
-                    if let Some(fid) = fid {
-                        // Check if user has already dismissed the modal for this FID
-                        let window = web_sys::window().unwrap();
-                        if let Ok(Some(storage)) = window.local_storage() {
-                            let dismissed_key = format!("annual_report_modal_dismissed_{}", fid);
-                            if let Ok(Some(_)) = storage.get_item(&dismissed_key) {
-                                // User has already dismissed the modal, don't show it again
-                                // But make sure modal is closed if it was open
-                                if *show_annual_report_modal {
-                                    show_annual_report_modal.set(false);
-                                }
-                                return;
-                            }
-                        }
-
+                    if fid.is_some() {
                         {
                             let show_modal = show_annual_report_modal.clone();
                             if !*show_modal {
@@ -733,32 +719,8 @@ fn App() -> Html {
     // Handler for closing annual report modal
     let on_close_annual_report_modal = {
         let show_annual_report_modal = show_annual_report_modal.clone();
-        let farcaster_context = farcaster_context.clone();
-        let wallet_account = wallet_account.clone();
-        let is_farcaster_env = is_farcaster_env.clone();
         Callback::from(move |_| {
             show_annual_report_modal.set(false);
-            
-            // Save dismissal to localStorage so we don't show it again
-            let is_farcaster = *is_farcaster_env;
-            let fid = if is_farcaster {
-                (*farcaster_context)
-                    .as_ref()
-                    .and_then(|ctx| ctx.user.as_ref())
-                    .and_then(|user| user.fid)
-            } else {
-                (*wallet_account)
-                    .as_ref()
-                    .and_then(|acc| acc.fid)
-            };
-            
-            if let Some(fid) = fid {
-                let window = web_sys::window().unwrap();
-                if let Ok(Some(storage)) = window.local_storage() {
-                    let dismissed_key = format!("annual_report_modal_dismissed_{}", fid);
-                    let _ = storage.set_item(&dismissed_key, "true");
-                }
-            }
         })
     };
 
