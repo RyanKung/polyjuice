@@ -161,7 +161,7 @@ pub struct IdentitySectionProps {
     pub followers: FollowerGrowthResponse,
 }
 
-// Helper function to truncate text to 20 characters with ellipsis
+// Helper function to truncate text to specified characters with ellipsis
 fn truncate_text(text: &str, max_len: usize) -> String {
     if text.chars().count() <= max_len {
         text.to_string()
@@ -169,6 +169,18 @@ fn truncate_text(text: &str, max_len: usize) -> String {
         let truncated: String = text.chars().take(max_len).collect();
         format!("{}...", truncated)
     }
+}
+
+// Helper function to normalize cast text: replace newlines with spaces and truncate
+fn normalize_and_truncate_cast(text: &str, max_len: usize) -> String {
+    // Replace all newline characters (both \n and \r\n) with spaces
+    let normalized: String = text
+        .replace("\r\n", " ")
+        .replace("\n", " ")
+        .replace("\r", " ");
+    
+    // Truncate the normalized text
+    truncate_text(&normalized, max_len)
 }
 
 // Helper function to get zodiac sign from date (month and day)
@@ -406,7 +418,7 @@ pub fn IdentitySection(props: &IdentitySectionProps) -> Html {
                                             line-height: 1.6;
                                             word-wrap: break-word;
                                         ">
-                                            {truncate_text(&first_cast.text, 20)}
+                                            {normalize_and_truncate_cast(&first_cast.text, 48)}
                                         </div>
                                     </div>
                                 </div>
@@ -657,7 +669,7 @@ pub fn FollowerGrowthSection(props: &FollowerGrowthSectionProps) -> Html {
                                             line-height: 1.6;
                                             word-wrap: break-word;
                                         ">
-                                            {truncate_text(&popular_cast.text, 20)}
+                                            {normalize_and_truncate_cast(&popular_cast.text, 48)}
                                         </div>
                                     </div>
                                 </div>
