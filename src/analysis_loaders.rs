@@ -1,6 +1,7 @@
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
+use crate::dashboard::Dashboard;
 use crate::models::*;
 use crate::services::*;
 use crate::wallet::WalletAccount;
@@ -357,6 +358,7 @@ pub fn MbtiAnalysisLoader(props: &MbtiAnalysisLoaderProps) -> Html {
 
     let fid = props.fid;
     let username = props.username.clone();
+    let api_url_for_effect = props.api_url.clone();
     let api_url = props.api_url.clone();
     let wallet_account = props.wallet_account.clone();
 
@@ -366,7 +368,7 @@ pub fn MbtiAnalysisLoader(props: &MbtiAnalysisLoaderProps) -> Html {
         let pending_job = pending_job.clone();
         let loading = loading.clone();
 
-        use_effect_with((fid, username.clone(), api_url.clone()), move |_| {
+        use_effect_with((fid, username.clone(), api_url_for_effect.clone()), move |_| {
             // Check if we already have data for this fid - only reload if fid changed
             let needs_load = mbti_data.as_ref().map(|d| d.fid != fid).unwrap_or(true);
             
@@ -383,7 +385,7 @@ pub fn MbtiAnalysisLoader(props: &MbtiAnalysisLoaderProps) -> Html {
             let loading_clone = loading.clone();
             let fid_clone = fid;
             let username_clone = username.clone();
-            let api_url_clone = api_url.clone();
+            let api_url_clone = api_url_for_effect.clone();
             let wallet_account_clone = wallet_account.clone();
 
             spawn_local(async move {
@@ -451,7 +453,17 @@ pub fn MbtiAnalysisLoader(props: &MbtiAnalysisLoaderProps) -> Html {
     // Render based on state
     if let Some(data) = (*mbti_data).as_ref() {
         html! {
-            <MbtiAnalysisView mbti={data.clone()} />
+            <>
+                <MbtiAnalysisView 
+                    mbti={data.clone()}
+                    fid={fid}
+                    api_url={api_url.clone()}
+                />
+                <Dashboard
+                    fid={fid}
+                    api_url={api_url.clone()}
+                />
+            </>
         }
     } else if let Some(job) = (*pending_job).as_ref() {
         let message = job.message.as_deref().unwrap_or("Loading MBTI analysis...");
@@ -540,6 +552,8 @@ fn SocialAnalysisView(props: &SocialAnalysisViewProps) -> Html {
 #[derive(Properties, PartialEq, Clone)]
 struct MbtiAnalysisViewProps {
     mbti: MbtiProfile,
+    fid: i64,
+    api_url: String,
 }
 
 #[function_component]

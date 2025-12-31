@@ -5,4 +5,4 @@ pub mod profile;
 // Re-export pages
 pub use about::AboutPage;
 pub use annual_report::AnnualReportPage;
-pub use profile::ProfilePage;
+// ProfilePage is no longer used - Profile tab now uses ProfileLoader

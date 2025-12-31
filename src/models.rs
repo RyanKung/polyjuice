@@ -69,6 +69,8 @@ pub struct UserMention {
     pub display_name: Option<String>,
     pub count: usize,
     pub category: String,
+    #[serde(default)]
+    pub pfp_url: Option<String>,
 }
 
 impl UserMention {

@@ -3,6 +3,16 @@ use yew::prelude::*;
 
 use crate::models::*;
 
+/// Truncate analysis text to max_length characters
+fn truncate_analysis(text: &str, max_length: usize) -> String {
+    if text.chars().count() <= max_length {
+        text.to_string()
+    } else {
+        let truncated: String = text.chars().take(max_length).collect();
+        format!("{}...", truncated.trim_end())
+    }
+}
+
 // MBTI type descriptions
 const MBTI_DESCRIPTIONS: &[(&str, &str)] = &[
     ("INTJ", "Architect - Strategic, analytical, and independent"),
@@ -47,10 +57,10 @@ pub struct MbtiRadarChartProps {
 /// E and I are opposite, S and N are opposite, T and F are opposite, J and P are opposite
 #[function_component]
 fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
-    // Radar chart configuration
-    let size = 280.0;
+    // Radar chart configuration - reduced size for compact layout
+    let size = 200.0;
     let center = size / 2.0;
-    let radius = 100.0;
+    let radius = 70.0;
 
     // Convert scores to individual dimension values
     // Score definition: 0.0 = first letter, 1.0 = second letter
@@ -151,7 +161,7 @@ fn MbtiRadarChart(props: &MbtiRadarChartProps) -> Html {
         .collect::<Vec<_>>();
 
     // Labels for all 8 dimensions
-    let label_offset = radius + 22.0;
+    let label_offset = radius + 18.0;
     let labels = [
         ("E", angle_to_coords(0.0, label_offset), "radar-label"),
         ("S", angle_to_coords(45.0, label_offset), "radar-label"),
@@ -303,32 +313,38 @@ pub fn MbtiAnalysis(props: &MbtiAnalysisProps) -> Html {
                 <p class="mbti-description">{description}</p>
             </div>
 
-            <div class="mbti-dimensions">
-                <h4>{"Personality Dimensions"}</h4>
-                <MbtiRadarChart
-                    ei_score={props.mbti.dimensions.ei_score}
-                    sn_score={props.mbti.dimensions.sn_score}
-                    tf_score={props.mbti.dimensions.tf_score}
-                    jp_score={props.mbti.dimensions.jp_score}
-                />
-            </div>
+            <div class="mbti-content-layout">
+                <div class="mbti-left-column">
+                    <div class="mbti-analysis-text">
+                        <h4>{"Analysis"}</h4>
+                        <p>{truncate_analysis(&props.mbti.analysis, 128)}</p>
+                    </div>
 
-            if !props.mbti.traits.is_empty() {
-                <div class="mbti-traits">
-                    <h4>{"Key Traits"}</h4>
-                    <div class="traits-list">
-                        {for props.mbti.traits.iter().map(|trait_name| {
-                            html! {
-                                <span class="trait-tag">{trait_name}</span>
-                            }
-                        })}
+                    if !props.mbti.traits.is_empty() {
+                        <div class="mbti-traits">
+                            <h4>{"Key Traits"}</h4>
+                            <div class="traits-list">
+                                {for props.mbti.traits.iter().map(|trait_name| {
+                                    html! {
+                                        <span class="trait-tag">{trait_name}</span>
+                                    }
+                                })}
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="mbti-right-column">
+                    <div class="mbti-dimensions">
+                        <h4>{"Personality Dimensions"}</h4>
+                        <MbtiRadarChart
+                            ei_score={props.mbti.dimensions.ei_score}
+                            sn_score={props.mbti.dimensions.sn_score}
+                            tf_score={props.mbti.dimensions.tf_score}
+                            jp_score={props.mbti.dimensions.jp_score}
+                        />
                     </div>
                 </div>
-            }
-
-            <div class="mbti-analysis-text">
-                <h4>{"Analysis"}</h4>
-                <p>{&props.mbti.analysis}</p>
             </div>
         </div>
     }
@@ -403,10 +419,6 @@ pub fn SocialAnalysis(props: &SocialAnalysisProps) -> Html {
                         </div>
                     </div>
                     <div class="interaction-item">
-                        <span class="interaction-label">{"Network Connector"}</span>
-                        <span class="interaction-value">{if props.social.interaction_style.network_connector { "Yes" } else { "No" }}</span>
-                    </div>
-                    <div class="interaction-item">
                         <span class="interaction-label">{"Community Role"}</span>
                         <span class="interaction-value">{&props.social.interaction_style.community_role}</span>
                     </div>
@@ -420,27 +432,31 @@ pub fn SocialAnalysis(props: &SocialAnalysisProps) -> Html {
                         {for props.social.most_mentioned_users.iter().take(5).map(|user| {
                             html! {
                                 <div class="mentioned-item">
-                                    <span class="mentioned-name">
-                                        {user.get_display_name()}
-                                    </span>
-                                    <span class="mentioned-count">{format!("{} mentions", user.count)}</span>
-                                    <span class="mentioned-category">{&user.category}</span>
+                                    <div class="mentioned-avatar">
+                                        {if let Some(pfp_url) = &user.pfp_url {
+                                            if !pfp_url.is_empty() {
+                                                html! {
+                                                    <img src={pfp_url.clone()} alt="Avatar" />
+                                                }
+                                            } else {
+                                                html! {
+                                                    <div class="mentioned-avatar-placeholder">{"👤"}</div>
+                                                }
+                                            }
+                                        } else {
+                                            html! {
+                                                <div class="mentioned-avatar-placeholder">{"👤"}</div>
+                                            }
+                                        }}
+                                    </div>
+                                    <div class="mentioned-info">
+                                        <span class="mentioned-name">
+                                            {user.get_display_name()}
+                                        </span>
+                                        <span class="mentioned-count">{format!("{} mentions", user.count)}</span>
+                                        <span class="mentioned-category">{&user.category}</span>
+                                    </div>
                                 </div>
-                            }
-                        })}
-                    </div>
-                </div>
-            }
-
-            if !props.social.word_cloud.top_words.is_empty() {
-                <div class="word-cloud">
-                    <h4>{"Top Words"}</h4>
-                    <div class="word-tags">
-                        {for props.social.word_cloud.top_words.iter().take(10).map(|word| {
-                            html! {
-                                <span class="word-tag" style={format!("font-size: {}px", (word.percentage * 20.0 + 12.0).clamp(10.0, 18.0))}>
-                                    {&word.word}
-                                </span>
                             }
                         })}
                     </div>

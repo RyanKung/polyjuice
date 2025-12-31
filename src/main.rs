@@ -950,23 +950,56 @@ fn App() -> Html {
                                             }
                                         }
                                     } else if (*active_tab).as_str() == "profile" {
-                                        html! {
-                                            <ProfilePage
-                                                wallet_account={(*wallet_account).clone()}
-                                                api_url={(*api_url).clone()}
-                                                is_farcaster_env={*is_farcaster_env}
-                                                farcaster_context={(*farcaster_context).clone()}
-                                                on_show_annual_report={Callback::from({
-                                                    let show_annual_report_clone = show_annual_report.clone();
-                                                    let annual_report_fid_clone = annual_report_fid.clone();
-                                                    move |fid: i64| {
-                                                        annual_report_fid_clone.set(Some(fid));
-                                                        show_annual_report_clone.set(true);
-                                                        // Update URL to /annual-report/{fid}
-                                                        crate::services::update_annual_report_url(fid);
+                                        {
+                                            // Get current user FID from Farcaster context or wallet
+                                            let current_fid = (*farcaster_context).as_ref()
+                                                .and_then(|ctx| ctx.user.as_ref())
+                                                .and_then(|u| u.fid)
+                                                .or_else(|| {
+                                                    (*wallet_account).as_ref()
+                                                        .and_then(|acc| acc.fid)
+                                                });
+                                            
+                                            html! {
+                                                <div class="results-page">
+                                                    if let Some(fid) = current_fid {
+                                                        <>
+                                                            // Annual Report Button
+                                                            <div class="annual-report-button-container">
+                                                                <button
+                                                                    class="annual-report-button"
+                                                                    onclick={Callback::from({
+                                                                        let show_annual_report_clone = show_annual_report.clone();
+                                                                        let annual_report_fid_clone = annual_report_fid.clone();
+                                                                        move |_| {
+                                                                            annual_report_fid_clone.set(Some(fid));
+                                                                            show_annual_report_clone.set(true);
+                                                                            // Update URL to /annual-report/{fid}
+                                                                            crate::services::update_annual_report_url(fid);
+                                                                        }
+                                                                    })}
+                                                                >
+                                                                    {"🎉 View 2025 Annual Report"}
+                                                                </button>
+                                                            </div>
+                                                            
+                                                            // Profile Loader (same as MBTI page)
+                                                            <ProfileLoader
+                                                                search_query={fid.to_string()}
+                                                                is_fid={true}
+                                                                api_url={(*api_url).clone()}
+                                                                wallet_account={(*wallet_account).clone()}
+                                                                on_profile_loaded={Callback::from(|_| {})}
+                                                            />
+                                                        </>
+                                                    } else {
+                                                        <div class="profile-empty">
+                                                            <p>{"No user profile available"}</p>
+                                                            <p class="profile-hint">{"Please open with Farcaster or connect a Farcaster-linked wallet"}</p>
+                                                        </div>
                                                     }
-                                                })}
-                                            />
+                                                </div>
+                                            }
                                         }
                                     } else if (*active_tab).as_str() == "search" {
                                         html! {

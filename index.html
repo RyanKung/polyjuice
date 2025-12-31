@@ -404,14 +404,14 @@
                  /* Results Page */
                  .results-page {
                      min-height: 100vh;
-                     padding: 20px;
+                     padding: 12px;
                      display: flex;
                      flex-direction: column;
-                     gap: 20px;
+                     gap: 16px;
                  }
 
                  .back-to-search {
-                     margin-bottom: 20px;
+                     margin-bottom: 12px;
                  }
 
                  .back-button {
@@ -455,7 +455,7 @@
 
 
                  .card-header {
-                     padding: 24px 24px 16px 24px;
+                     padding: 16px 20px 12px 20px;
                      border-bottom: 1px solid rgba(0,0,0,0.1);
                  }
 
@@ -463,7 +463,7 @@
                      font-size: 24px;
                      font-weight: 600;
                      color: #ffffff;
-                     margin: 0 0 8px 0;
+                     margin: 0 0 6px 0;
                      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
                      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
                  }
@@ -477,7 +477,7 @@
                  }
 
                  .card-content {
-                     padding: 20px 24px 24px 24px;
+                     padding: 12px 20px 16px 20px;
                      flex: 1;
                      display: flex;
                      flex-direction: column;
@@ -492,7 +492,7 @@
                  .profile-info {
                      display: flex;
                      gap: 20px;
-                     margin-bottom: 24px;
+                     margin-bottom: 16px;
                  }
 
                  .profile-picture {
@@ -560,30 +560,39 @@
                  /* MBTI Analysis */
                  .mbti-analysis {
                      margin-top: 24px;
-                     padding: 28px 24px 28px 24px;
-                     padding-right: 60px; /* Extra padding for dimension-result badges */
-                     background: rgba(255, 255, 255, 0.1);
-                     border-radius: 16px;
-                     backdrop-filter: blur(15px);
-                     -webkit-backdrop-filter: blur(15px);
-                     border: 1px solid rgba(255, 255, 255, 0.2);
-                     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-                     overflow: visible; /* Allow dimension-result to be visible */
+                     padding: 0;
+                     overflow: visible;
+                 }
+
+                 .mbti-content-layout {
+                     display: flex;
+                     gap: 20px;
+                     align-items: flex-start;
+                 }
+
+                 .mbti-left-column {
+                     flex: 1;
+                     min-width: 0;
+                 }
+
+                 .mbti-right-column {
+                     flex: 0 0 auto;
+                     width: 240px;
                  }
 
                  .mbti-header {
-                     margin-bottom: 28px;
+                     margin-bottom: 20px;
                      text-align: center;
-                     padding-bottom: 20px;
-                     border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+                     padding-bottom: 12px;
+                     border-bottom: none;
                  }
 
                  .mbti-type-badge {
                      display: flex;
                      justify-content: center;
                      align-items: center;
-                     gap: 14px;
-                     margin-bottom: 16px;
+                     gap: 10px;
+                     margin-bottom: 10px;
                      flex-wrap: wrap;
                  }
 
@@ -592,7 +601,7 @@
                      font-weight: 700;
                      color: #ffffff;
                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                     padding: 14px 28px;
+                     padding: 10px 20px;
                      border-radius: 14px;
                      letter-spacing: 3px;
                      text-shadow: 0 2px 6px rgba(0,0,0,0.3);
@@ -608,7 +617,7 @@
                  .mbti-confidence {
                      font-size: 11px;
                      font-weight: 600;
-                     padding: 8px 14px;
+                     padding: 6px 10px;
                      border-radius: 20px;
                      text-transform: uppercase;
                      letter-spacing: 0.8px;
@@ -643,18 +652,18 @@
                      font-style: italic;
                      text-shadow: 0 1px 3px rgba(0,0,0,0.2);
                      line-height: 1.5;
-                     padding: 0 12px;
+                     padding: 0 8px;
                  }
 
                  .mbti-dimensions {
-                     margin-top: 24px;
+                     margin-top: 0;
                  }
 
                  .mbti-dimensions h4 {
                      font-size: 18px;
                      font-weight: 600;
                      color: #ffffff;
-                     margin-bottom: 20px;
+                     margin-bottom: 12px;
                      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
                      letter-spacing: 0.3px;
                  }
@@ -664,13 +673,13 @@
                      display: flex;
                      flex-direction: column;
                      align-items: center;
-                     gap: 20px;
-                     margin-top: 16px;
+                     gap: 10px;
+                     margin-top: 8px;
                  }
 
                  .mbti-radar-chart {
                      width: 100%;
-                     max-width: 280px;
+                     max-width: 200px;
                      height: auto;
                  }
 
@@ -735,7 +744,7 @@
                  }
 
                  .radar-label {
-                     font-size: 15px;
+                     font-size: 13px;
                      font-weight: 500;
                  }
 
@@ -746,7 +755,7 @@
 
                  .radar-label-highlight {
                      fill: #ffffff !important;
-                     font-size: 18px !important;
+                     font-size: 15px !important;
                      font-weight: 700 !important;
                      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6) !important;
                  }
@@ -754,16 +763,16 @@
                  .radar-legend {
                      display: grid;
                      grid-template-columns: repeat(2, 1fr);
-                     gap: 12px;
+                     gap: 8px;
                      width: 100%;
-                     max-width: 280px;
+                     max-width: 200px;
                  }
 
                  .radar-legend-item {
                      display: flex;
                      justify-content: space-between;
                      align-items: center;
-                     padding: 8px 12px;
+                     padding: 6px 8px;
                      background: rgba(255, 255, 255, 0.1);
                      border-radius: 8px;
                      backdrop-filter: blur(10px);
@@ -772,14 +781,14 @@
                  }
 
                  .radar-legend-label {
-                     font-size: 13px;
+                     font-size: 12px;
                      font-weight: 600;
                      color: rgba(255, 255, 255, 0.9);
                      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
                  }
 
                  .radar-legend-value {
-                     font-size: 14px;
+                     font-size: 13px;
                      font-weight: 700;
                      color: #ffffff;
                      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -892,16 +901,16 @@
                  }
 
                  .mbti-traits {
-                     margin-top: 28px;
-                     padding-top: 24px;
-                     border-top: 1px solid rgba(255, 255, 255, 0.15);
+                     margin-top: 0;
+                     padding-top: 0;
+                     border-top: none;
                  }
 
                  .mbti-traits h4 {
                      font-size: 18px;
                      font-weight: 600;
                      color: #ffffff;
-                     margin-bottom: 16px;
+                     margin-bottom: 12px;
                      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
                      letter-spacing: 0.3px;
                  }
@@ -909,15 +918,15 @@
                  .traits-list {
                      display: flex;
                      flex-wrap: wrap;
-                     gap: 10px;
+                     gap: 6px;
                  }
 
                  .trait-tag {
                      display: inline-block;
-                     padding: 8px 16px;
+                     padding: 4px 8px;
                      background: rgba(255, 255, 255, 0.18);
-                     border-radius: 20px;
-                     font-size: 13px;
+                     border-radius: 16px;
+                     font-size: 12px;
                      font-weight: 500;
                      color: #ffffff;
                      border: 1px solid rgba(255, 255, 255, 0.3);
@@ -935,19 +944,16 @@
                  }
 
                  .mbti-analysis-text {
-                     margin-top: 28px;
-                     padding: 20px;
-                     background: rgba(255, 255, 255, 0.08);
-                     border-radius: 12px;
-                     border: 1px solid rgba(255, 255, 255, 0.15);
-                     box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+                     margin-top: 0;
+                     margin-bottom: 16px;
+                     padding: 0;
                  }
 
                  .mbti-analysis-text h4 {
                      font-size: 18px;
                      font-weight: 600;
                      color: #ffffff;
-                     margin-bottom: 14px;
+                     margin-bottom: 10px;
                      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
                      letter-spacing: 0.3px;
                  }
@@ -1109,25 +1115,62 @@
 
                  .mentioned-item {
                      display: flex;
-                     flex-direction: column;
+                     flex-direction: row;
                      align-items: center;
-                     padding: 6px 8px;
+                     gap: 12px;
+                     padding: 10px;
                      background: rgba(255,255,255,0.1);
                      border-radius: 8px;
                      backdrop-filter: blur(10px);
                      -webkit-backdrop-filter: blur(10px);
                      border: 1px solid rgba(255,255,255,0.2);
-                     min-width: 80px;
+                     margin-bottom: 8px;
+                 }
+
+                 .mentioned-avatar {
+                     width: 40px;
+                     height: 40px;
+                     border-radius: 50%;
+                     overflow: hidden;
+                     flex-shrink: 0;
+                     background: rgba(255, 255, 255, 0.1);
+                     display: flex;
+                     align-items: center;
+                     justify-content: center;
+                 }
+
+                 .mentioned-avatar img {
+                     width: 100%;
+                     height: 100%;
+                     object-fit: cover;
+                 }
+
+                 .mentioned-avatar-placeholder {
+                     width: 100%;
+                     height: 100%;
+                     display: flex;
+                     align-items: center;
+                     justify-content: center;
+                     font-size: 20px;
+                     color: rgba(255, 255, 255, 0.6);
+                 }
+
+                 .mentioned-info {
+                     display: flex;
+                     flex-direction: column;
+                     gap: 4px;
                      flex: 1;
+                     min-width: 0;
                  }
 
                  .mentioned-name {
-                     font-size: 12px;
+                     font-size: 14px;
                      color: #ffffff;
-                     font-weight: 500;
+                     font-weight: 600;
                      text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-                     text-align: center;
-                     margin-bottom: 2px;
+                     white-space: nowrap;
+                     overflow: hidden;
+                     text-overflow: ellipsis;
                  }
 
                  .mentioned-count {
@@ -1687,11 +1730,11 @@
                          padding: 6px 12px;
                      }
 
-                     .results-page {
-                         min-height: 100vh;
-                         padding: 16px;
-                         gap: 16px;
-                     }
+                    .results-page {
+                        min-height: 100vh;
+                        padding: 12px;
+                        gap: 12px;
+                    }
 
                      .back-button {
                          font-size: 16px;
@@ -1703,17 +1746,17 @@
                          border-radius: 16px;
                      }
 
-                     .card-header {
-                         padding: 20px 20px 12px 20px;
-                     }
+                    .card-header {
+                        padding: 12px 16px 8px 16px;
+                    }
 
                      .card-title h2 {
                          font-size: 20px;
                      }
 
-                     .card-content {
-                         padding: 16px 20px 20px 20px;
-                     }
+                    .card-content {
+                        padding: 10px 16px 12px 16px;
+                    }
 
                      .profile-info {
                          flex-direction: column;
@@ -1752,12 +1795,22 @@
                     /* MBTI Mobile Styles */
                     .mbti-analysis {
                         padding: 20px 16px 20px 16px;
-                        padding-right: 52px; /* Extra padding for dimension-result badges on mobile */
+                    }
+
+                    .mbti-content-layout {
+                        flex-direction: row;
+                        gap: 16px;
+                    }
+
+                    .mbti-right-column {
+                        width: 180px;
+                        flex-shrink: 0;
                     }
 
                     .mbti-header {
                         margin-bottom: 24px;
                         padding-bottom: 16px;
+                        border-bottom: none;
                     }
 
                     .mbti-type {
@@ -1777,22 +1830,22 @@
                     }
 
                     .mbti-dimensions h4 {
-                        font-size: 16px;
-                        margin-bottom: 18px;
+                        font-size: 14px;
+                        margin-bottom: 12px;
                     }
 
                     .mbti-radar-container {
-                        gap: 16px;
+                        gap: 12px;
                     }
 
                     .mbti-radar-chart {
-                        max-width: 240px;
+                        max-width: 180px;
                     }
 
                     .radar-legend {
                         grid-template-columns: repeat(2, 1fr);
-                        gap: 10px;
-                        max-width: 240px;
+                        gap: 8px;
+                        max-width: 180px;
                     }
 
                     .radar-legend-item {
@@ -1849,23 +1902,38 @@
                     }
 
                     .mbti-traits {
-                        margin-top: 24px;
-                        padding-top: 20px;
+                        margin-top: 0;
+                        padding-top: 0;
+                    }
+
+                    .mbti-analysis-text {
+                        margin-bottom: 20px;
+                        padding: 0;
+                    }
+
+                    .mbti-analysis-text h4 {
+                        font-size: 15px;
+                        margin-bottom: 12px;
+                    }
+
+                    .mbti-analysis-text p {
+                        font-size: 13px;
+                        line-height: 1.6;
                     }
 
                     .mbti-traits h4 {
-                        font-size: 16px;
-                        margin-bottom: 14px;
+                        font-size: 14px;
+                        margin-bottom: 12px;
                     }
 
                     .trait-tag {
-                        font-size: 12px;
-                        padding: 7px 14px;
+                        font-size: 11px;
+                        padding: 3px 8px;
                     }
 
                     .mbti-analysis-text {
                         margin-top: 24px;
-                        padding: 16px;
+                        padding: 0;
                     }
 
                     .mbti-analysis-text h4 {
@@ -1888,27 +1956,38 @@
                          height: 5px;
                      }
 
-                     .mentioned-item {
-                         flex-direction: column;
-                         align-items: center;
-                         gap: 2px;
-                         padding: 4px 6px;
-                         min-width: 70px;
-                     }
+                    .mentioned-item {
+                        flex-direction: row;
+                        align-items: center;
+                        gap: 10px;
+                        padding: 8px;
+                    }
+
+                    .mentioned-avatar {
+                        width: 36px;
+                        height: 36px;
+                    }
+
+                    .mentioned-avatar-placeholder {
+                        font-size: 18px;
+                    }
+
+                    .mentioned-info {
+                        flex: 1;
+                        min-width: 0;
+                    }
 
                      .mentioned-name {
-                         font-size: 11px;
-                         margin-bottom: 1px;
+                         font-size: 13px;
                      }
 
                      .mentioned-count {
-                         font-size: 9px;
-                         margin-bottom: 1px;
+                         font-size: 11px;
                      }
 
                      .mentioned-category {
-                         font-size: 9px;
-                         padding: 1px 3px;
+                         font-size: 10px;
+                         padding: 1px 4px;
                      }
 
                      .word-tags {
@@ -2764,7 +2843,7 @@
                 flex: 1;
                 display: flex;
                 flex-direction: column;
-                padding: 20px;
+                padding: 12px;
             }
 
             .profile-page-content {
@@ -2782,13 +2861,13 @@
                 box-shadow: 
                     0 8px 32px rgba(0, 0, 0, 0.15),
                     inset 0 1px 0 rgba(255, 255, 255, 0.3);
-                padding: 24px;
+                padding: 16px;
             }
 
             .profile-header {
                 display: flex;
                 align-items: center;
-                gap: 20px;
+                gap: 16px;
             }
 
             .profile-avatar {
@@ -2830,7 +2909,7 @@
 
             .profile-empty {
                 text-align: center;
-                padding: 60px 20px;
+                padding: 40px 16px;
             }
 
             .profile-empty p {
@@ -2845,27 +2924,11 @@
 
             /* Dashboard Styles */
             .dashboard-container {
-                margin-top: 24px;
-                background: rgba(255, 255, 255, 0.15);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 20px;
-                backdrop-filter: blur(25px);
-                -webkit-backdrop-filter: blur(25px);
-                box-shadow: 
-                    0 8px 32px rgba(0, 0, 0, 0.15),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-                padding: 24px;
-            }
-
-            .dashboard-title {
-                font-size: 20px;
-                font-weight: 600;
-                margin-bottom: 24px;
-                color: #ffffff;
+                margin-top: 16px;
             }
 
             .activity-chart-section {
-                margin-bottom: 32px;
+                margin-bottom: 20px;
             }
 
             .activity-chart-section h3 {

@@ -255,8 +255,6 @@ pub fn Dashboard(props: &DashboardProps) -> Html {
 
     html! {
         <div class="dashboard-container">
-            <h2 class="dashboard-title">{"Activity Dashboard"}</h2>
-
             if *is_loading {
                 <div class="loading-container">
                     <div class="skeleton-spinner"></div>
@@ -273,14 +271,6 @@ pub fn Dashboard(props: &DashboardProps) -> Html {
                         <h3>{"Daily Activity"}</h3>
                         <ActivityChart daily_stats={stats_data.daily_stats.clone()} />
                     </div>
-
-                    // Word cloud section
-                    if !stats_data.word_cloud.is_empty() {
-                        <div class="word-cloud-section">
-                            <h3>{"Keywords"}</h3>
-                            <WordCloud words={stats_data.word_cloud.clone()} />
-                        </div>
-                    }
                 </>
             }
         </div>
@@ -384,41 +374,3 @@ fn ActivityChart(props: &ActivityChartProps) -> Html {
     }
 }
 
-#[derive(Properties, PartialEq, Clone)]
-struct WordCloudProps {
-    words: Vec<crate::models::WordFrequency>,
-}
-
-#[function_component]
-fn WordCloud(props: &WordCloudProps) -> Html {
-    // Sort words by frequency and take top 50
-    let mut sorted_words = props.words.clone();
-    sorted_words.sort_by(|a, b| b.count.cmp(&a.count));
-    let top_words = sorted_words.into_iter().take(50).collect::<Vec<_>>();
-
-    // Calculate max count for font size scaling
-    let max_count = top_words.first().map(|w| w.count).unwrap_or(1);
-
-    html! {
-        <div class="word-cloud">
-            {for top_words.iter().map(|word| {
-                // Font size based on frequency (12px to 32px)
-                let font_size = 12.0 + (word.count as f32 / max_count as f32) * 20.0;
-                let opacity = 0.6 + (word.count as f32 / max_count as f32) * 0.4;
-
-                html! {
-                    <span
-                        class="word-cloud-item"
-                        style={format!(
-                            "font-size: {}px; opacity: {:.2};",
-                            font_size, opacity
-                        )}
-                        title={format!("{}: {} times", word.word, word.count)}
-                    >
-                        {&word.word}
-                    </span>
-                }
-            })}
-        </div>
-    }
-}
