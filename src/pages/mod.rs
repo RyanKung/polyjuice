@@ -1,8 +1,7 @@
 pub mod about;
 pub mod annual_report;
-pub mod profile;
+// profile module removed - Profile tab now uses ProfileLoader
 
 // Re-export pages
 pub use about::AboutPage;
 pub use annual_report::AnnualReportPage;
-// ProfilePage is no longer used - Profile tab now uses ProfileLoader
