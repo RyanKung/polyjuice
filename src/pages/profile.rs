@@ -22,15 +22,21 @@ pub struct ProfilePageProps {
 pub fn ProfilePage(props: &ProfilePageProps) -> Html {
     let user_context = use_state(|| props.farcaster_context.clone());
     let wallet_profile = use_state(|| None::<ProfileData>);
-    let is_loading = use_state(|| false);
+    // Initialize is_loading to false if farcaster_context is already provided
+    let is_loading = use_state(|| props.farcaster_context.is_none() && props.is_farcaster_env);
     let is_loading_wallet_profile = use_state(|| false);
 
     // Update user_context when farcaster_context prop changes
     {
         let user_context = user_context.clone();
+        let is_loading = is_loading.clone();
         let farcaster_context = props.farcaster_context.clone();
         use_effect_with(farcaster_context.clone(), move |_| {
             user_context.set(farcaster_context.clone());
+            // If farcaster_context is provided, we're done loading
+            if farcaster_context.is_some() {
+                is_loading.set(false);
+            }
             || ()
         });
     }

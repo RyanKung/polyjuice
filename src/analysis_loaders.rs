@@ -230,6 +230,15 @@ pub fn SocialAnalysisLoader(props: &SocialAnalysisLoaderProps) -> Html {
         let loading = loading.clone();
 
         use_effect_with((fid, username.clone(), api_url.clone()), move |_| {
+            // Check if we already have data for this fid - only reload if fid changed
+            let needs_load = social_data.as_ref().map(|d| d.fid != fid).unwrap_or(true);
+            
+            if !needs_load {
+                // We already have data for this fid, make sure loading is false
+                loading.set(false);
+                return;
+            }
+            
             loading.set(true);
 
             let social_data_clone = social_data.clone();
@@ -241,11 +250,16 @@ pub fn SocialAnalysisLoader(props: &SocialAnalysisLoaderProps) -> Html {
             let wallet_account_clone = wallet_account.clone();
 
             spawn_local(async move {
-                let is_fid = false; // Always use username for social endpoint
-                let endpoint = create_social_endpoint(
-                    &username_clone.unwrap_or_else(|| fid_clone.to_string()),
-                    is_fid,
-                );
+                // Determine if we should use fid or username
+                // Use fid if username is None or if username is a pure number (should be treated as fid)
+                let is_fid = username_clone.is_none() || 
+                    username_clone.as_ref().map(|u| u.trim().parse::<u64>().is_ok()).unwrap_or(false);
+                let query = if is_fid {
+                    fid_clone.to_string()
+                } else {
+                    username_clone.unwrap_or_else(|| fid_clone.to_string())
+                };
+                let endpoint = create_social_endpoint(&query, is_fid);
 
                 let result = make_request_with_payment::<SocialData>(
                     &api_url_clone,
@@ -353,6 +367,15 @@ pub fn MbtiAnalysisLoader(props: &MbtiAnalysisLoaderProps) -> Html {
         let loading = loading.clone();
 
         use_effect_with((fid, username.clone(), api_url.clone()), move |_| {
+            // Check if we already have data for this fid - only reload if fid changed
+            let needs_load = mbti_data.as_ref().map(|d| d.fid != fid).unwrap_or(true);
+            
+            if !needs_load {
+                // We already have data for this fid, make sure loading is false
+                loading.set(false);
+                return;
+            }
+            
             loading.set(true);
 
             let mbti_data_clone = mbti_data.clone();
@@ -364,11 +387,16 @@ pub fn MbtiAnalysisLoader(props: &MbtiAnalysisLoaderProps) -> Html {
             let wallet_account_clone = wallet_account.clone();
 
             spawn_local(async move {
-                let is_fid = false; // Always use username for MBTI endpoint
-                let endpoint = create_mbti_endpoint(
-                    &username_clone.unwrap_or_else(|| fid_clone.to_string()),
-                    is_fid,
-                );
+                // Determine if we should use fid or username
+                // Use fid if username is None or if username is a pure number (should be treated as fid)
+                let is_fid = username_clone.is_none() || 
+                    username_clone.as_ref().map(|u| u.trim().parse::<u64>().is_ok()).unwrap_or(false);
+                let query = if is_fid {
+                    fid_clone.to_string()
+                } else {
+                    username_clone.unwrap_or_else(|| fid_clone.to_string())
+                };
+                let endpoint = create_mbti_endpoint(&query, is_fid);
 
                 let result = make_request_with_payment::<MbtiProfile>(
                     &api_url_clone,
