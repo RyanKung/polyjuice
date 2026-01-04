@@ -92,10 +92,12 @@ pub fn ProfileLoader(props: &ProfileLoaderProps) -> Html {
                                     )
                                     .into(),
                                 );
+                                // Update loaded query first to prevent reloading
+                                loaded_query_for_spawn.set(Some(search_query_clone.clone()));
+                                // Set profile data first, then set loading to false
+                                // This ensures data is available when component re-renders
                                 profile_data_clone.set(Some(data.clone()));
                                 loading_clone.set(false);
-                                // Update loaded query to prevent reloading
-                                loaded_query_for_spawn.set(Some(search_query_clone.clone()));
                                 // Notify parent component if callback is provided
                                 if let Some(callback) = on_profile_loaded {
                                     callback.emit(data);
@@ -294,14 +296,93 @@ pub fn SocialAnalysisLoader(props: &SocialAnalysisLoaderProps) -> Html {
                                 .into(),
                             );
                             let new_job = PendingJob {
-                                job_key,
+                                job_key: job_key.clone(),
                                 job_type: "social".to_string(),
-                                status: Some(status),
+                                status: Some(status.clone()),
                                 started_at: Some(js_sys::Date::now() as u64),
-                                message: Some(message),
+                                message: Some(message.clone()),
                             };
                             pending_job_clone.set(Some(new_job));
                             loading_clone.set(false);
+                            
+                            // Start polling to check if data is ready
+                            // Clone values for polling task
+                            let social_data_for_poll = social_data_clone.clone();
+                            let pending_job_for_poll = pending_job_clone.clone();
+                            let loading_for_poll = loading_clone.clone();
+                            let api_url_for_poll = api_url_clone.clone();
+                            let endpoint_for_poll = endpoint.clone();
+                            let wallet_account_for_poll = wallet_account_clone.clone();
+                            let job_key_for_poll = job_key.clone();
+                            
+                            spawn_local(async move {
+                                // Poll every 4 seconds to check if data is ready
+                                let mut attempt = 0;
+                                let max_attempts = 200; // Max ~13 minutes
+                                
+                                loop {
+                                    if attempt >= max_attempts {
+                                        break;
+                                    }
+                                    
+                                    // Wait before polling (except first attempt)
+                                    if attempt > 0 {
+                                        let wait_time = 4000u64; // 4 seconds
+                                        let promise = js_sys::Promise::new(&mut |resolve, _| {
+                                            let window = web_sys::window().unwrap();
+                                            window
+                                                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                                    &resolve,
+                                                    wait_time as i32,
+                                                )
+                                                .unwrap();
+                                        });
+                                        let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+                                    }
+                                    
+                                    attempt += 1;
+                                    
+                                    // Try to fetch data
+                                    match make_request_with_payment::<SocialData>(
+                                        &api_url_for_poll,
+                                        &endpoint_for_poll,
+                                        None,
+                                        wallet_account_for_poll.as_ref(),
+                                        None,
+                                        None,
+                                    )
+                                    .await
+                                    {
+                                        Ok(data) => {
+                                            web_sys::console::log_1(
+                                                &format!("✅ Social data loaded via polling for FID={}", fid_clone).into(),
+                                            );
+                                            social_data_for_poll.set(Some(data));
+                                            pending_job_for_poll.set(None);
+                                            loading_for_poll.set(false);
+                                            break;
+                                        }
+                                        Err(e) => {
+                                            // Check if still pending/processing
+                                            if let Some((new_status, _, _)) =
+                                                parse_job_status_error(&e, job_key_for_poll.clone())
+                                            {
+                                                if new_status == "pending" || new_status == "processing" {
+                                                    // Still processing, continue polling
+                                                    continue;
+                                                } else {
+                                                    // Status changed but not completed, stop polling
+                                                    break;
+                                                }
+                                            } else {
+                                                // Not a JOB_STATUS error, might be a real error
+                                                // Continue polling in case it's temporary
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                }
+                            });
                         } else {
                             web_sys::console::log_1(&format!("❌ Social data error: {}", e).into());
                             loading_clone.set(false);
@@ -432,14 +513,93 @@ pub fn MbtiAnalysisLoader(props: &MbtiAnalysisLoaderProps) -> Html {
                                 .into(),
                             );
                             let new_job = PendingJob {
-                                job_key,
+                                job_key: job_key.clone(),
                                 job_type: "mbti".to_string(),
-                                status: Some(status),
+                                status: Some(status.clone()),
                                 started_at: Some(js_sys::Date::now() as u64),
-                                message: Some(message),
+                                message: Some(message.clone()),
                             };
                             pending_job_clone.set(Some(new_job));
                             loading_clone.set(false);
+                            
+                            // Start polling to check if data is ready
+                            // Clone values for polling task
+                            let mbti_data_for_poll = mbti_data_clone.clone();
+                            let pending_job_for_poll = pending_job_clone.clone();
+                            let loading_for_poll = loading_clone.clone();
+                            let api_url_for_poll = api_url_for_effect.clone();
+                            let endpoint_for_poll = endpoint.clone();
+                            let wallet_account_for_poll = wallet_account_clone.clone();
+                            let job_key_for_poll = job_key.clone();
+                            
+                            spawn_local(async move {
+                                // Poll every 4 seconds to check if data is ready
+                                let mut attempt = 0;
+                                let max_attempts = 200; // Max ~13 minutes
+                                
+                                loop {
+                                    if attempt >= max_attempts {
+                                        break;
+                                    }
+                                    
+                                    // Wait before polling (except first attempt)
+                                    if attempt > 0 {
+                                        let wait_time = 4000u64; // 4 seconds
+                                        let promise = js_sys::Promise::new(&mut |resolve, _| {
+                                            let window = web_sys::window().unwrap();
+                                            window
+                                                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                                    &resolve,
+                                                    wait_time as i32,
+                                                )
+                                                .unwrap();
+                                        });
+                                        let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+                                    }
+                                    
+                                    attempt += 1;
+                                    
+                                    // Try to fetch data
+                                    match make_request_with_payment::<MbtiProfile>(
+                                        &api_url_for_poll,
+                                        &endpoint_for_poll,
+                                        None,
+                                        wallet_account_for_poll.as_ref(),
+                                        None,
+                                        None,
+                                    )
+                                    .await
+                                    {
+                                        Ok(data) => {
+                                            web_sys::console::log_1(
+                                                &format!("✅ MBTI data loaded via polling for FID={}", fid_clone).into(),
+                                            );
+                                            mbti_data_for_poll.set(Some(data));
+                                            pending_job_for_poll.set(None);
+                                            loading_for_poll.set(false);
+                                            break;
+                                        }
+                                        Err(e) => {
+                                            // Check if still pending/processing
+                                            if let Some((new_status, _, _)) =
+                                                parse_job_status_error(&e, job_key_for_poll.clone())
+                                            {
+                                                if new_status == "pending" || new_status == "processing" {
+                                                    // Still processing, continue polling
+                                                    continue;
+                                                } else {
+                                                    // Status changed but not completed, stop polling
+                                                    break;
+                                                }
+                                            } else {
+                                                // Not a JOB_STATUS error, might be a real error
+                                                // Continue polling in case it's temporary
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                }
+                            });
                         } else {
                             web_sys::console::log_1(&format!("❌ MBTI data error: {}", e).into());
                             loading_clone.set(false);
